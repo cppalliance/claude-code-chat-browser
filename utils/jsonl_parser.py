@@ -180,6 +180,8 @@ def _process_assistant(entry: dict, messages: list, metadata: dict):
         metadata["api_errors"] += 1
 
     usage = msg.get("usage", {})
+    if not isinstance(usage, dict):
+        usage = {}
     metadata["total_input_tokens"] += usage.get("input_tokens") or 0
     metadata["total_output_tokens"] += usage.get("output_tokens") or 0
     metadata["total_cache_read_tokens"] += usage.get("cache_read_input_tokens") or 0
