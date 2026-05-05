@@ -107,6 +107,10 @@ claude-code-chat-browser/
 └── tests/
 ```
 
+## Continuous integration
+
+Every push and pull request runs **`pytest`** on **Ubuntu** (Python 3.12) via [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
 ## Exported Markdown Format
 
 Each exported session includes:
