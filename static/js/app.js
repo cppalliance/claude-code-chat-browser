@@ -1,5 +1,33 @@
 // Claude Code Chat Browser — Main JS
 
+// Highlight.js theme stylesheets, keyed by theme name. Both `href` and
+// `integrity` MUST be assigned together when swapping at runtime —
+// changing `href` while leaving a stale `integrity` would make the
+// browser refuse the new stylesheet and break the UI (issue #19).
+// Hashes verified against cdnjs's SRI API. The corresponding static
+// tag in static/index.html carries crossorigin="anonymous" which
+// persists across runtime href swaps.
+const HLJS_THEME_SHEETS = {
+    dark:  {
+        href:      'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs2015.min.css',
+        integrity: 'sha512-mtXspRdOWHCYp+f4c7CkWGYPPRAhq9X+xCvJMUBVAb6pqA4U8pxhT3RWT3LP3bKbiolYL2CkL1bSKZZO4eeTew==',
+    },
+    light: {
+        href:      'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css',
+        integrity: 'sha512-0aPQyyeZrWj9sCA46UlmWgKOP0mUipLQ6OZXu8l4IcAmD2u31EPEy9VcIMvl7SoAaKe8bLXZhYoMaE/in+gcgA==',
+    },
+};
+
+function applyHljsTheme(themeName) {
+    const link = document.getElementById('hljs-theme');
+    if (!link) return;
+    const sheet = HLJS_THEME_SHEETS[themeName] || HLJS_THEME_SHEETS.dark;
+    // Set integrity FIRST, then href — the browser reads the current
+    // integrity at fetch time, and href change is what triggers the fetch.
+    link.integrity = sheet.integrity;
+    link.href = sheet.href;
+}
+
 function showToast(message, type = 'info') {
     const icons = { success: '\u2713', error: '\u2717', info: '\u2139' };
     const toast = document.createElement('div');
@@ -122,14 +150,8 @@ function setHamburgerVisible(visible) {
 function setWorkspaceMode(active) {
     // No container class change needed — workspace lives inside the standard container
     document.body.classList.toggle('workspace-mode', active);
-    // Switch highlight.js theme
-    const hljsLink = document.getElementById('hljs-theme');
-    if (hljsLink) {
-        const theme = localStorage.getItem('theme') || 'dark';
-        hljsLink.href = theme === 'dark'
-            ? 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs2015.min.css'
-            : 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css';
-    }
+    // Switch highlight.js theme — helper updates href + integrity together (issue #19).
+    applyHljsTheme(localStorage.getItem('theme') || 'dark');
 }
 
 let _navInProgress = false;
@@ -836,12 +858,7 @@ function applyTheme(theme) {
         moon.style.display = theme === 'dark' ? 'block' : 'none';
         sun.style.display = theme === 'light' ? 'block' : 'none';
     }
-    const hljsLink = document.getElementById('hljs-theme');
-    if (hljsLink) {
-        hljsLink.href = theme === 'dark'
-            ? 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs2015.min.css'
-            : 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css';
-    }
+    applyHljsTheme(theme);  // href + integrity swapped together (issue #19)
 }
 
 function toggleTheme() {
