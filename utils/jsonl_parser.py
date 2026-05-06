@@ -329,148 +329,246 @@ def _track_file_activity(tool_name: str, tool_input: dict, metadata: dict):
             metadata["web_fetches"].append(url_or_query)
 
 
+def _tool_result_pred_bash(tr: dict) -> bool:
+    return "stdout" in tr or "stderr" in tr
+
+
+def _tool_result_build_bash(tr: dict, base: dict) -> dict:
+    result = dict(base)
+    result["result_type"] = "bash"
+    result["stdout"] = tr.get("stdout", "")
+    result["stderr"] = tr.get("stderr", "")
+    result["exit_code"] = tr.get("exitCode")
+    result["interrupted"] = tr.get("interrupted", False)
+    result["is_error"] = tr.get("is_error", False)
+    result["return_code_interpretation"] = tr.get("returnCodeInterpretation")
+    return result
+
+
+def _tool_result_pred_file_edit(tr: dict) -> bool:
+    return "structuredPatch" in tr or (
+        "filePath" in tr and "newString" in tr
+    )
+
+
+def _tool_result_build_file_edit(tr: dict, base: dict) -> dict:
+    result = dict(base)
+    result["result_type"] = "file_edit"
+    result["file_path"] = tr.get("filePath", "")
+    result["replace_all"] = tr.get("replaceAll", False)
+    return result
+
+
+def _tool_result_pred_file_write(tr: dict) -> bool:
+    return "filePath" in tr and "content" in tr
+
+
+def _tool_result_build_file_write(tr: dict, base: dict) -> dict:
+    result = dict(base)
+    result["result_type"] = "file_write"
+    result["file_path"] = tr.get("filePath", "")
+    return result
+
+
+def _tool_result_pred_glob(tr: dict) -> bool:
+    return "filenames" in tr and isinstance(tr.get("filenames"), list)
+
+
+def _tool_result_build_glob(tr: dict, base: dict) -> dict:
+    result = dict(base)
+    filenames = tr["filenames"]
+    result["result_type"] = "glob"
+    result["num_files"] = tr.get("numFiles", len(filenames))
+    result["truncated"] = tr.get("truncated", False)
+    result["duration_ms"] = tr.get("durationMs")
+    result["filenames"] = filenames
+    return result
+
+
+def _tool_result_pred_grep(tr: dict) -> bool:
+    return "mode" in tr and "numFiles" in tr
+
+
+def _tool_result_build_grep(tr: dict, base: dict) -> dict:
+    result = dict(base)
+    result["result_type"] = "grep"
+    result["mode"] = tr.get("mode")
+    result["num_files"] = tr.get("numFiles", 0)
+    result["num_lines"] = tr.get("numLines", 0)
+    result["duration_ms"] = tr.get("durationMs")
+    content = tr.get("content", "")
+    if content and isinstance(content, str):
+        result["content"] = content
+    return result
+
+
+def _tool_result_pred_file_read(tr: dict) -> bool:
+    return "file" in tr and isinstance(tr["file"], dict)
+
+
+def _tool_result_build_file_read(tr: dict, base: dict) -> dict:
+    result = dict(base)
+    file_obj = tr["file"]
+    result["result_type"] = "file_read"
+    result["file_path"] = file_obj.get("filePath", "")
+    result["num_lines"] = file_obj.get("numLines")
+    content = file_obj.get("content", "")
+    if content and isinstance(content, str):
+        result["content"] = content
+    return result
+
+
+def _tool_result_pred_web_search(tr: dict) -> bool:
+    return "query" in tr and "results" in tr
+
+
+def _tool_result_build_web_search(tr: dict, base: dict) -> dict:
+    result = dict(base)
+    result["result_type"] = "web_search"
+    result["query"] = tr.get("query", "")
+    result["result_count"] = len(tr.get("results", []))
+    result["duration_seconds"] = tr.get("durationSeconds")
+    return result
+
+
+def _tool_result_pred_web_fetch(tr: dict) -> bool:
+    return "url" in tr and "code" in tr
+
+
+def _tool_result_build_web_fetch(tr: dict, base: dict) -> dict:
+    result = dict(base)
+    result["result_type"] = "web_fetch"
+    result["url"] = tr.get("url", "")
+    result["status_code"] = tr.get("code")
+    result["duration_ms"] = tr.get("durationMs")
+    return result
+
+
+def _tool_result_pred_task_message(tr: dict) -> bool:
+    return "task_id" in tr or "message" in tr
+
+
+def _tool_result_build_task_message(tr: dict, base: dict) -> dict:
+    result = dict(base)
+    result["result_type"] = "task"
+    result["task_id"] = tr.get("task_id")
+    result["task_type"] = tr.get("task_type")
+    return result
+
+
+def _tool_result_pred_task_retrieval(tr: dict) -> bool:
+    return "retrieval_status" in tr and "task" in tr
+
+
+def _tool_result_build_task_retrieval(tr: dict, base: dict) -> dict:
+    result = dict(base)
+    task_obj = tr["task"] if isinstance(tr["task"], dict) else {}
+    result["result_type"] = "task"
+    result["retrieval_status"] = tr.get("retrieval_status")
+    result["task_id"] = task_obj.get("task_id")
+    return result
+
+
+def _tool_result_pred_task_completed(tr: dict) -> bool:
+    return "agentId" in tr and "totalDurationMs" in tr
+
+
+def _tool_result_build_task_completed(tr: dict, base: dict) -> dict:
+    result = dict(base)
+    result["result_type"] = "task"
+    result["agent_id"] = tr.get("agentId")
+    result["status"] = tr.get("status")
+    result["total_duration_ms"] = tr.get("totalDurationMs")
+    result["total_tokens"] = tr.get("totalTokens")
+    result["total_tool_use_count"] = tr.get("totalToolUseCount")
+    return result
+
+
+def _tool_result_pred_task_async(tr: dict) -> bool:
+    return "agentId" in tr and "isAsync" in tr
+
+
+def _tool_result_build_task_async(tr: dict, base: dict) -> dict:
+    result = dict(base)
+    result["result_type"] = "task"
+    result["agent_id"] = tr.get("agentId")
+    result["status"] = tr.get("status")
+    result["description"] = tr.get("description")
+    return result
+
+
+def _tool_result_pred_todo_write(tr: dict) -> bool:
+    return "newTodos" in tr or "oldTodos" in tr
+
+
+def _tool_result_build_todo_write(tr: dict, base: dict) -> dict:
+    result = dict(base)
+    new_todos = tr.get("newTodos", [])
+    result["result_type"] = "todo_write"
+    result["todo_count"] = len(new_todos) if isinstance(new_todos, list) else 0
+    result["todos"] = new_todos if isinstance(new_todos, list) else []
+    return result
+
+
+def _tool_result_pred_user_input(tr: dict) -> bool:
+    return "questions" in tr and "answers" in tr
+
+
+def _tool_result_build_user_input(tr: dict, base: dict) -> dict:
+    result = dict(base)
+    result["result_type"] = "user_input"
+    result["questions"] = tr.get("questions", [])
+    result["answers"] = tr.get("answers", {})
+    return result
+
+
+def _tool_result_pred_plan(tr: dict) -> bool:
+    return "plan" in tr and "filePath" in tr
+
+
+def _tool_result_build_plan(tr: dict, base: dict) -> dict:
+    result = dict(base)
+    result["result_type"] = "plan"
+    result["file_path"] = tr.get("filePath", "")
+    return result
+
+
+# Ordered dispatch: first matching predicate wins (legacy if/elif semantics).
+_TOOL_RESULT_DISPATCH = (
+    (_tool_result_pred_bash, _tool_result_build_bash),
+    (_tool_result_pred_file_edit, _tool_result_build_file_edit),
+    (_tool_result_pred_file_write, _tool_result_build_file_write),
+    (_tool_result_pred_glob, _tool_result_build_glob),
+    (_tool_result_pred_grep, _tool_result_build_grep),
+    (_tool_result_pred_file_read, _tool_result_build_file_read),
+    (_tool_result_pred_web_search, _tool_result_build_web_search),
+    (_tool_result_pred_web_fetch, _tool_result_build_web_fetch),
+    (_tool_result_pred_task_message, _tool_result_build_task_message),
+    (_tool_result_pred_task_retrieval, _tool_result_build_task_retrieval),
+    (_tool_result_pred_task_completed, _tool_result_build_task_completed),
+    (_tool_result_pred_task_async, _tool_result_build_task_async),
+    (_tool_result_pred_todo_write, _tool_result_build_todo_write),
+    (_tool_result_pred_user_input, _tool_result_build_user_input),
+    (_tool_result_pred_plan, _tool_result_build_plan),
+)
+
+
 def _parse_tool_result(tool_result, slug: str = None) -> dict | None:
     """Figure out what kind of tool result this is (bash, file edit, glob, etc.)
-    by looking at which keys are present, since the JSONL doesn't always tag them."""
+    by looking at which keys are present, since the JSONL doesn't always tag them.
+
+    Classification uses ``_TOOL_RESULT_DISPATCH``: append ``(predicate, builder)``
+    pairs to register a new shape; keep order consistent with Claude Code JSONL
+    evolution (more specific branches before generic ones)."""
     if not isinstance(tool_result, dict):
         return None
 
-    result = {"slug": slug}
+    base = {"slug": slug}
+    for pred, build in _TOOL_RESULT_DISPATCH:
+        if pred(tool_result):
+            return build(tool_result, base)
 
-    # Bash results: have stdout/stderr/interrupted
-    if "stdout" in tool_result or "stderr" in tool_result:
-        result["result_type"] = "bash"
-        result["stdout"] = tool_result.get("stdout", "")
-        result["stderr"] = tool_result.get("stderr", "")
-        result["exit_code"] = tool_result.get("exitCode")
-        result["interrupted"] = tool_result.get("interrupted", False)
-        result["is_error"] = tool_result.get("is_error", False)
-        result["return_code_interpretation"] = tool_result.get(
-            "returnCodeInterpretation"
-        )
-        return result
-
-    # File edit results: have filePath + structuredPatch or oldString/newString
-    if "structuredPatch" in tool_result or (
-        "filePath" in tool_result and "newString" in tool_result
-    ):
-        result["result_type"] = "file_edit"
-        result["file_path"] = tool_result.get("filePath", "")
-        result["replace_all"] = tool_result.get("replaceAll", False)
-        return result
-
-    # File create/write results: have filePath + content but no patch
-    if "filePath" in tool_result and "content" in tool_result:
-        result["result_type"] = "file_write"
-        result["file_path"] = tool_result.get("filePath", "")
-        return result
-
-    # Glob results: have filenames array
-    if "filenames" in tool_result and isinstance(
-        tool_result.get("filenames"), list
-    ):
-        result["result_type"] = "glob"
-        filenames = tool_result["filenames"]
-        result["num_files"] = tool_result.get("numFiles", len(filenames))
-        result["truncated"] = tool_result.get("truncated", False)
-        result["duration_ms"] = tool_result.get("durationMs")
-        result["filenames"] = filenames
-        return result
-
-    # Grep results: have mode + numFiles/numLines
-    if "mode" in tool_result and "numFiles" in tool_result:
-        result["result_type"] = "grep"
-        result["mode"] = tool_result.get("mode")
-        result["num_files"] = tool_result.get("numFiles", 0)
-        result["num_lines"] = tool_result.get("numLines", 0)
-        result["duration_ms"] = tool_result.get("durationMs")
-        content = tool_result.get("content", "")
-        if content and isinstance(content, str):
-            result["content"] = content
-        return result
-
-    # Read result: have file dict with content
-    if "file" in tool_result and isinstance(tool_result["file"], dict):
-        file_obj = tool_result["file"]
-        result["result_type"] = "file_read"
-        result["file_path"] = file_obj.get("filePath", "")
-        result["num_lines"] = file_obj.get("numLines")
-        content = file_obj.get("content", "")
-        if content and isinstance(content, str):
-            result["content"] = content
-        return result
-
-    # WebSearch results
-    if "query" in tool_result and "results" in tool_result:
-        result["result_type"] = "web_search"
-        result["query"] = tool_result.get("query", "")
-        result["result_count"] = len(tool_result.get("results", []))
-        result["duration_seconds"] = tool_result.get("durationSeconds")
-        return result
-
-    # WebFetch results
-    if "url" in tool_result and "code" in tool_result:
-        result["result_type"] = "web_fetch"
-        result["url"] = tool_result.get("url", "")
-        result["status_code"] = tool_result.get("code")
-        result["duration_ms"] = tool_result.get("durationMs")
-        return result
-
-    # Task results -- multiple variants
-    if "task_id" in tool_result or "message" in tool_result:
-        result["result_type"] = "task"
-        result["task_id"] = tool_result.get("task_id")
-        result["task_type"] = tool_result.get("task_type")
-        return result
-
-    # Task retrieval (has nested "task" dict + retrieval_status)
-    if "retrieval_status" in tool_result and "task" in tool_result:
-        result["result_type"] = "task"
-        task_obj = tool_result["task"] if isinstance(tool_result["task"], dict) else {}
-        result["retrieval_status"] = tool_result.get("retrieval_status")
-        result["task_id"] = task_obj.get("task_id")
-        return result
-
-    # Task completed subagent (has agentId + totalDurationMs + status)
-    if "agentId" in tool_result and "totalDurationMs" in tool_result:
-        result["result_type"] = "task"
-        result["agent_id"] = tool_result.get("agentId")
-        result["status"] = tool_result.get("status")
-        result["total_duration_ms"] = tool_result.get("totalDurationMs")
-        result["total_tokens"] = tool_result.get("totalTokens")
-        result["total_tool_use_count"] = tool_result.get("totalToolUseCount")
-        return result
-
-    # Task async launched (has agentId + isAsync + status)
-    if "agentId" in tool_result and "isAsync" in tool_result:
-        result["result_type"] = "task"
-        result["agent_id"] = tool_result.get("agentId")
-        result["status"] = tool_result.get("status")
-        result["description"] = tool_result.get("description")
-        return result
-
-    # TodoWrite results (has newTodos/oldTodos)
-    if "newTodos" in tool_result or "oldTodos" in tool_result:
-        result["result_type"] = "todo_write"
-        new_todos = tool_result.get("newTodos", [])
-        result["todo_count"] = len(new_todos) if isinstance(new_todos, list) else 0
-        result["todos"] = new_todos if isinstance(new_todos, list) else []
-        return result
-
-    # AskUserQuestion results (has questions/answers)
-    if "questions" in tool_result and "answers" in tool_result:
-        result["result_type"] = "user_input"
-        result["questions"] = tool_result.get("questions", [])
-        result["answers"] = tool_result.get("answers", {})
-        return result
-
-    # Plan results (has plan + filePath)
-    if "plan" in tool_result and "filePath" in tool_result:
-        result["result_type"] = "plan"
-        result["file_path"] = tool_result.get("filePath", "")
-        return result
-
-    # Generic fallback
+    result = dict(base)
     result["result_type"] = "unknown"
     return result
 
