@@ -93,7 +93,7 @@ def bulk_export():
                     md = session_to_markdown(session, stats)
                     title_slug = slugify(session["title"]) or "session"
                     short_id = sid[:8]
-                    proj_slug = slugify(project["name"])
+                    proj_slug = slugify(project["name"]) or "project"
                     ts = session["metadata"].get("first_timestamp", "")
                     ts_file = ts[:19].replace(":", "-") if ts else "0000-00-00T00-00-00"
                     rel_path = f"{proj_slug}/{ts_file}__{title_slug}__{short_id}.md"
