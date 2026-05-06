@@ -33,6 +33,7 @@ from utils.exclusion_rules import (
     load_rules,
     is_session_excluded,
 )
+from utils.slugify import slugify
 
 
 STATE_DIR = os.path.join(os.path.expanduser("~"), ".claude-code-chat-browser")
@@ -366,9 +367,9 @@ def cmd_export(args):
                 meta["first_timestamp"] = ts
             date_str = ts[:10]
             ts_file = ts[:19].replace(":", "-")   # 2026-02-10T01-46-15
-            title_slug = _slugify(session["title"])
+            title_slug = slugify(session["title"])
             short_id = sid[:8]
-            project_slug = _slugify(project["name"])
+            project_slug = slugify(project["name"])
 
             if fmt in ("md", "both"):
                 md = session_to_markdown(session, stats)
@@ -444,7 +445,7 @@ def cmd_export(args):
 
 def _export_single(session: dict, stats: dict, fmt: str, out_dir: str):
     """Write one session to disk as md, json, or both."""
-    title_slug = _slugify(session["title"])
+    title_slug = slugify(session["title"])
     short_id = session["session_id"][:8]
     ts = session["metadata"].get("first_timestamp", "")
     ts_file = ts[:19].replace(":", "-") if ts else "0000-00-00T00-00-00"
@@ -607,18 +608,6 @@ def _save_state(sessions: dict, count: int, out_dir: str):
     }
     with open(STATE_FILE, "w") as f:
         json.dump(state, f, indent=2)
-
-
-def _slugify(text: str) -> str:
-    slug = ""
-    for c in text.lower():
-        if c.isalnum():
-            slug += c
-        elif c in " -_/.":
-            slug += "-"
-    while "--" in slug:
-        slug = slug.replace("--", "-")
-    return slug.strip("-")
 
 
 def _die(msg: str):
