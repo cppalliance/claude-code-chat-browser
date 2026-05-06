@@ -171,6 +171,13 @@ class TestParseToolResult:
         assert r["query"] == "q"
         assert r["result_count"] == 1
 
+    def test_web_search_results_none_or_non_sized_yields_zero_count(self):
+        r = _parse_tool_result({"query": "q", "results": None})
+        assert r["result_type"] == "web_search"
+        assert r["result_count"] == 0
+        r2 = _parse_tool_result({"query": "q", "results": "not-a-list"})
+        assert r2["result_count"] == 0
+
     def test_web_fetch_result(self):
         r = _parse_tool_result({"url": "https://x", "code": 200, "durationMs": 40})
         assert r["result_type"] == "web_fetch"

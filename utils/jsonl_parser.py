@@ -426,7 +426,11 @@ def _tool_result_build_web_search(tr: dict, base: dict) -> dict:
     result = dict(base)
     result["result_type"] = "web_search"
     result["query"] = tr.get("query", "")
-    result["result_count"] = len(tr.get("results", []))
+    raw_results = tr.get("results")
+    if isinstance(raw_results, (list, tuple, set, dict)):
+        result["result_count"] = len(raw_results)
+    else:
+        result["result_count"] = 0
     result["duration_seconds"] = tr.get("durationSeconds")
     return result
 
@@ -553,7 +557,7 @@ _TOOL_RESULT_DISPATCH = (
 )
 
 
-def _parse_tool_result(tool_result, slug: str = None) -> dict | None:
+def _parse_tool_result(tool_result, slug: str | None = None) -> dict | None:
     """Figure out what kind of tool result this is (bash, file edit, glob, etc.)
     by looking at which keys are present, since the JSONL doesn't always tag them.
 
