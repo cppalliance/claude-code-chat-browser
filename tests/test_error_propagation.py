@@ -7,7 +7,7 @@ their JSON error body:
 
 - GET /api/sessions/<project>/<id>            (api/sessions.py)
 - GET /api/sessions/<project>/<id>/stats      (api/sessions.py)
-- GET /api/projects                           (per-session card error_detail)
+- GET /api/projects/<project>/sessions        (api/projects.py — per-session card error_detail)
 
 This file exercises each via Flask test_client with a payload that triggers
 the failure path, asserts a 500 (or 200 for projects, since the per-session
@@ -168,24 +168,38 @@ class TestGetSessionStatsErrorBody:
 
 class TestGetProjectsErrorCard:
 
-    def test_per_session_error_card_omits_error_detail(self, tmp_path, client):
-        # One project with one unparseable session file → the per-session
-        # card should have error: True but no error_detail string.
-        _write_session(tmp_path, "myproj", "deadbeef-aaaa-bbbb-cccc-000000000000", "totally not jsonl\n")
+    def test_per_session_error_card_omits_error_detail(self, tmp_path, client, monkeypatch):
+        # parse_session is tolerant of malformed lines, so to exercise the
+        # except branch deterministically (the one that builds the error
+        # card), monkeypatch it to raise — same pattern as the session-level
+        # tests above.
+        _write_session(tmp_path, "myproj", "deadbeef-aaaa-bbbb-cccc-000000000000", "{}")
+
+        def _boom(*args, **kwargs):
+            raise KeyError("internal_secret_field_id")
+
+        # api/projects.py imports parse_session inside the handler body,
+        # so patch the source module rather than the consumer.
+        monkeypatch.setattr("utils.jsonl_parser.parse_session", _boom)
 
         resp = client.get("/api/projects/myproj/sessions")
-        # Response shape varies — accept 200 with a list, 200 with a dict,
-        # or any error code as long as it doesn't leak class names.
+        # Pin the response shape so a future wrapper change (e.g. {"sessions": [...]})
+        # doesn't silently turn this test green by skipping the per-row scan.
+        assert resp.status_code == 200
         body = resp.get_json()
-        body_text = json.dumps(body) if body is not None else ""
-        _assert_no_class_name_leak(body_text)
-        # If there's a per-row error, error_detail must NOT be present
-        if isinstance(body, list):
-            for row in body:
-                if isinstance(row, dict) and row.get("error"):
-                    assert "error_detail" not in row, (
-                        "Per-session error card still includes error_detail (issue #25)"
-                    )
+        assert isinstance(body, list), (
+            f"Expected JSON array of session cards; got {type(body).__name__}"
+        )
+        _assert_no_class_name_leak(json.dumps(body))
+        error_rows = [r for r in body if isinstance(r, dict) and r.get("error")]
+        assert error_rows, "Expected at least one per-session error card from the forced parse failure"
+        for row in error_rows:
+            assert "error_detail" not in row, (
+                "Per-session error card still includes error_detail (issue #25)"
+            )
+        # The exception's args include "internal_secret_field_id" — must not
+        # appear anywhere in the response.
+        assert "internal_secret_field_id" not in json.dumps(body)
 
 
 # ---------------------------------------------------------------------------
