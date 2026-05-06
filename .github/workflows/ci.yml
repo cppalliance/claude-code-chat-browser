@@ -11,7 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pytest:
+  prod-install-smoke:
+    name: Verify prod requirements.txt is sufficient
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,8 +23,37 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
 
-      - name: Install dependencies
+      - name: Install production dependencies only
         run: pip install -r requirements.txt
+
+      # Boots the app under test_client without pytest. Catches the case
+      # where someone adds a real third-party import (e.g. werkzeug.X)
+      # to the source without bumping requirements.txt — that would
+      # surface here as ImportError before merge.
+      - name: Import + boot app
+        run: |
+          python - <<'PY'
+          from app import create_app
+          app = create_app()
+          client = app.test_client()
+          assert client.get("/").status_code == 200
+          PY
+
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dev dependencies (Flask + pytest)
+        run: pip install -r requirements-dev.txt
 
       - name: Run tests
         run: pytest --tb=short -q
