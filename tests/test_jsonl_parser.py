@@ -729,6 +729,36 @@ class TestParseSession:
         finally:
             os.unlink(path)
 
+    def test_null_message_assistant_no_crash(self):
+        path = _write_jsonl([
+            {
+                "type": "assistant",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "message": None,
+            },
+        ])
+        try:
+            s = parse_session(path)
+            assert s["metadata"]["total_input_tokens"] == 0
+            assert len(s["messages"]) == 1
+            assert s["messages"][0]["role"] == "assistant"
+        finally:
+            os.unlink(path)
+
+    def test_non_dict_usage_assistant_no_crash(self):
+        path = _write_jsonl([
+            {
+                "type": "assistant",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "message": {"model": "m", "content": [], "usage": "invalid"},
+            },
+        ])
+        try:
+            s = parse_session(path)
+            assert s["metadata"]["total_input_tokens"] == 0
+        finally:
+            os.unlink(path)
+
 
 # ---------------------------------------------------------------------------
 # quick_session_info

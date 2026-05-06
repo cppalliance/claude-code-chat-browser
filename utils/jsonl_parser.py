@@ -137,7 +137,7 @@ def _process_user(entry: dict, messages: list, metadata: dict):
     if metadata["permission_mode"] is None:
         metadata["permission_mode"] = entry.get("permissionMode")
 
-    msg = entry.get("message", {})
+    msg = entry.get("message") or {}
     content = msg.get("content", [])
     text = _extract_text(content)
     images = _extract_images(content)
@@ -170,7 +170,7 @@ def _process_user(entry: dict, messages: list, metadata: dict):
 def _process_assistant(entry: dict, messages: list, metadata: dict):
     """Handle assistant responses -- splits content into text, thinking blocks,
     and tool_use calls, and accumulates token/model/tool stats."""
-    msg = entry.get("message", {})
+    msg = entry.get("message") or {}
     model = msg.get("model", "")
     if model and model != "<synthetic>":
         metadata["models_used"].add(model)
@@ -503,7 +503,7 @@ def quick_session_info(filepath: str) -> dict:
                 last_ts = ts  # keep updating in case file is small
 
             if title is None and entry.get("type") == "user":
-                msg = entry.get("message", {})
+                msg = entry.get("message") or {}
                 text = _extract_text(msg.get("content", []))
                 if text:
                     clean = _strip_system_tags(text).strip()
