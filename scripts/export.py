@@ -31,8 +31,7 @@ from utils.json_exporter import session_to_json
 from utils.exclusion_rules import (
     resolve_exclusion_rules_path,
     load_rules,
-    build_searchable_text,
-    is_excluded_by_rules,
+    is_session_excluded,
 )
 
 
@@ -348,17 +347,13 @@ def cmd_export(args):
                 skipped += 1
                 continue
 
-            if rules:
-                meta = session["metadata"]
-                searchable = build_searchable_text(
-                    project_name=project.get("display_name") or project["name"],
-                    session_title=session["title"],
-                    model_names=list(meta.get("models_used") or []),
-                    content_snippet=_session_text_for_exclusion(session),
-                )
-                if is_excluded_by_rules(rules, searchable):
-                    skipped += 1
-                    continue
+            if is_session_excluded(
+                rules,
+                session,
+                project.get("display_name") or project["name"],
+            ):
+                skipped += 1
+                continue
 
             stats = compute_stats(session)
             meta = session["metadata"]
@@ -471,16 +466,6 @@ def _export_single(session: dict, stats: dict, fmt: str, out_dir: str):
 
 
 # ==================== Helpers ====================
-
-
-def _session_text_for_exclusion(session: dict) -> str:
-    """Extract plain text from all session messages for exclusion rule matching."""
-    parts = []
-    for msg in session.get("messages", []):
-        text = msg.get("text") or ""
-        if isinstance(text, str) and text.strip():
-            parts.append(text)
-    return "\n\n".join(parts)
 
 
 # ==================== Argument Parser ====================
