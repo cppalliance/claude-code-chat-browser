@@ -1,7 +1,5 @@
 """Project listing endpoints."""
 
-import traceback
-
 from flask import Blueprint, current_app, jsonify
 
 from utils.session_path import get_claude_projects_dir, list_projects, list_sessions, safe_join
@@ -79,7 +77,11 @@ def get_project_sessions(project_name):
                 "first_timestamp": meta["first_timestamp"],
                 "last_timestamp": meta["last_timestamp"],
             })
-        except Exception as e:
-            print(f"[ERROR] Failed to parse {s['id']}: {type(e).__name__}: {e}\n{traceback.format_exc()}")
-            result.append({**s, "title": "Error parsing session", "error": True, "error_detail": f"{type(e).__name__}: {e}"})
+        except Exception:
+            # Full detail (class, message, traceback) to the server log via
+            # logger.exception. The per-session card carries only `error: True`
+            # — the class-name+message string was a leak (issue #25). The
+            # operator looks at the server log for triage.
+            current_app.logger.exception("Failed to parse session %s", s["id"])
+            result.append({**s, "title": "Error parsing session", "error": True})
     return jsonify(result)

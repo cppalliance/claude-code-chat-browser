@@ -1,7 +1,6 @@
 """Session detail and stats endpoints."""
 
 import os
-import traceback
 
 from flask import Blueprint, current_app, jsonify, abort
 
@@ -39,12 +38,14 @@ def get_session(project_name, session_id):
             if is_excluded_by_rules(rules, searchable):
                 return jsonify({"error": "Session not found"}), 404
         return jsonify(session)
-    except Exception as e:
-        tb = traceback.format_exc()
-        print(f"[ERROR] Failed to parse session {session_id}: {e}\n{tb}")
-        return jsonify({
-            "error": f"Failed to parse session: {type(e).__name__}: {e}",
-        }), 500
+    except Exception:
+        # Full traceback (class name, message, stack) goes to the server log
+        # via logger.exception. The HTTP body returns a stable, generic
+        # message — never the class name or `e` itself, which would leak
+        # internal field names, file paths, and user values to any client
+        # (issue #25).
+        current_app.logger.exception("Failed to parse session %s", session_id)
+        return jsonify({"error": "Failed to parse session"}), 500
 
 
 @sessions_bp.route("/api/sessions/<path:project_name>/<session_id>/stats")
@@ -62,9 +63,8 @@ def get_session_stats(project_name, session_id):
         session = parse_session(filepath)
         stats = compute_stats(session)
         return jsonify(stats)
-    except Exception as e:
-        tb = traceback.format_exc()
-        print(f"[ERROR] Failed to compute stats for {session_id}: {e}\n{tb}")
-        return jsonify({
-            "error": f"Failed to compute stats: {type(e).__name__}: {e}",
-        }), 500
+    except Exception:
+        # Same pattern as get_session above — full detail to the server log,
+        # generic message in the HTTP body (issue #25).
+        current_app.logger.exception("Failed to compute stats for %s", session_id)
+        return jsonify({"error": "Failed to compute session stats"}), 500
