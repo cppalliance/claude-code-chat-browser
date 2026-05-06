@@ -13,7 +13,7 @@ from utils.jsonl_parser import parse_session
 from utils.session_stats import compute_stats
 from utils.md_exporter import session_to_markdown
 from utils.json_exporter import session_to_json
-from utils.exclusion_rules import build_searchable_text, is_excluded_by_rules
+from utils.exclusion_rules import is_session_excluded
 
 export_bp = Blueprint("export", __name__)
 
@@ -38,16 +38,6 @@ def _write_state(sessions_map: dict, count: int):
     state.setdefault("sessions", {}).update(sessions_map)
     with open(_STATE_FILE, "w") as f:
         json.dump(state, f, indent=2)
-
-
-def _session_text_for_exclusion(session: dict) -> str:
-    """Extract a plain-text snippet from session messages for exclusion matching."""
-    parts = []
-    for msg in session.get("messages", []):
-        text = msg.get("text") or ""
-        if isinstance(text, str) and text.strip():
-            parts.append(text)
-    return "\n\n".join(parts)
 
 
 @export_bp.route("/api/export/state")
@@ -98,16 +88,12 @@ def bulk_export():
                     if session["title"] == "Untitled Session":
                         continue
 
-                    if rules:
-                        meta = session["metadata"]
-                        searchable = build_searchable_text(
-                            project_name=project.get("display_name") or project["name"],
-                            session_title=session["title"],
-                            model_names=list(meta.get("models_used") or []),
-                            content_snippet=_session_text_for_exclusion(session),
-                        )
-                        if is_excluded_by_rules(rules, searchable):
-                            continue
+                    if is_session_excluded(
+                        rules,
+                        session,
+                        project.get("display_name") or project["name"],
+                    ):
+                        continue
 
                     stats = compute_stats(session)
                     md = session_to_markdown(session, stats)
@@ -166,17 +152,8 @@ def export_session(project_name, session_id):
     fmt = request.args.get("format", "md")
     session = parse_session(filepath)
     rules = current_app.config.get("EXCLUSION_RULES") or []
-    if rules:
-        meta = session["metadata"]
-        text_parts = [msg.get("text") or "" for msg in session.get("messages", []) if msg.get("text")]
-        searchable = build_searchable_text(
-            project_name=project_name,
-            session_title=session["title"],
-            model_names=list(meta.get("models_used") or []),
-            content_snippet="\n\n".join(text_parts),
-        )
-        if is_excluded_by_rules(rules, searchable):
-            return jsonify({"error": "Session not found"}), 404
+    if is_session_excluded(rules, session, project_name):
+        return jsonify({"error": "Session not found"}), 404
     stats = compute_stats(session)
     title_slug = _slugify(session["title"]) or "session"
 

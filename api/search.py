@@ -6,7 +6,7 @@ from flask import Blueprint, current_app, jsonify, request
 
 from utils.session_path import get_claude_projects_dir, list_projects, list_sessions
 from utils.jsonl_parser import parse_session
-from utils.exclusion_rules import build_searchable_text, is_excluded_by_rules
+from utils.exclusion_rules import is_session_excluded
 
 search_bp = Blueprint("search", __name__)
 
@@ -33,17 +33,8 @@ def search():
             except Exception:
                 continue
 
-            if rules:
-                meta = session["metadata"]
-                text_parts = [msg.get("text") or "" for msg in session.get("messages", []) if msg.get("text")]
-                searchable = build_searchable_text(
-                    project_name=project["name"],
-                    session_title=session["title"],
-                    model_names=list(meta.get("models_used") or []),
-                    content_snippet="\n\n".join(text_parts),
-                )
-                if is_excluded_by_rules(rules, searchable):
-                    continue
+            if is_session_excluded(rules, session, project["name"]):
+                continue
 
             for msg in session["messages"]:
                 text = msg.get("text", "") or msg.get("content", "")

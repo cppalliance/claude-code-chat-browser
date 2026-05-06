@@ -209,3 +209,47 @@ def build_searchable_text(
     if content_snippet:
         parts.append(content_snippet)
     return "\n".join(p for p in parts if p)
+
+
+def session_text_for_exclusion(session: dict) -> str:
+    """Extract a plain-text snippet from session messages for exclusion matching.
+
+    Joins all non-empty, non-whitespace message ``text`` fields with blank
+    lines. Whitespace-only strings are skipped — they carry no signal for
+    rule matching and only inflate the haystack. (Previously this lived as a
+    duplicate ``_session_text_for_exclusion`` in two callers; consolidated
+    here as the single source of truth — issue #23.)
+    """
+    parts = []
+    for msg in session.get("messages", []):
+        text = msg.get("text") or ""
+        if isinstance(text, str) and text.strip():
+            parts.append(text)
+    return "\n\n".join(parts)
+
+
+def is_session_excluded(
+    rules: list[list],
+    session: dict,
+    project_name: str | None,
+) -> bool:
+    """High-level helper: evaluate exclusion rules against a parsed session.
+
+    Wraps the full pattern that was previously inlined at six call sites:
+    extract message text via :func:`session_text_for_exclusion`, build the
+    haystack via :func:`build_searchable_text`, then evaluate via
+    :func:`is_excluded_by_rules`.
+
+    Returns ``False`` when ``rules`` is empty/falsy — callers can call this
+    unconditionally without first checking whether rules exist.
+    """
+    if not rules:
+        return False
+    meta = session.get("metadata", {}) or {}
+    searchable = build_searchable_text(
+        project_name=project_name,
+        session_title=session.get("title"),
+        model_names=list(meta.get("models_used") or []),
+        content_snippet=session_text_for_exclusion(session),
+    )
+    return is_excluded_by_rules(rules, searchable)
