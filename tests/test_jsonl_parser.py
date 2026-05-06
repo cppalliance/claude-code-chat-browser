@@ -5,8 +5,6 @@ import os
 import sys
 import tempfile
 
-import pytest
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from utils.jsonl_parser import (  # noqa: E402
@@ -338,8 +336,7 @@ class TestInferTitle:
 class TestStripSystemTags:
     def test_system_reminder_removed(self):
         t = "<system-reminder>in</system-reminder>keep"
-        assert "system-reminder" not in _strip_system_tags(t)
-        assert "keep" in _strip_system_tags(t)
+        assert _strip_system_tags(t) == "keep"
 
     def test_ide_opened_file_removed(self):
         t = "<ide_opened_file>x</ide_opened_file>y"
@@ -351,9 +348,7 @@ class TestStripSystemTags:
 
     def test_remaining_known_opening_closing_tags_stripped(self):
         t = "</ide_selection><command-name>foo</command-name>bar"
-        out = _strip_system_tags(t)
-        assert "ide_selection" not in out
-        assert "bar" in out
+        assert _strip_system_tags(t) == "foobar"
 
     def test_clean_text_unchanged(self):
         assert _strip_system_tags("hello world") == "hello world"
@@ -735,6 +730,22 @@ class TestParseSession:
                 "type": "assistant",
                 "timestamp": "2026-01-01T00:00:00Z",
                 "message": None,
+            },
+        ])
+        try:
+            s = parse_session(path)
+            assert s["metadata"]["total_input_tokens"] == 0
+            assert len(s["messages"]) == 1
+            assert s["messages"][0]["role"] == "assistant"
+        finally:
+            os.unlink(path)
+
+    def test_non_dict_message_assistant_no_crash(self):
+        path = _write_jsonl([
+            {
+                "type": "assistant",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "message": "not-a-dict",
             },
         ])
         try:
