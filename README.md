@@ -107,9 +107,20 @@ claude-code-chat-browser/
 └── tests/
 ```
 
+## Development
+
+To run the test suite, install the dev requirements (Flask + pytest):
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+`requirements.txt` carries only the runtime dep (Flask); `requirements-dev.txt` pulls it in via `-r` and adds pytest.
+
 ## Continuous integration
 
-Every push and pull request runs **`pytest`** on **Ubuntu** (Python 3.12) via [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+Every push and pull request runs **`pytest`** on **Ubuntu** (Python 3.12) via [`.github/workflows/ci.yml`](.github/workflows/ci.yml). A separate job verifies that `pip install -r requirements.txt` (production-only) is sufficient to import and boot the app.
 
 ## Exported Markdown Format
 
