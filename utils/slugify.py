@@ -6,8 +6,6 @@ historical behavior of ``api/export_api.py`` and avoids platform-specific
 issues with non-ASCII paths inside zip archives.
 """
 
-from __future__ import annotations
-
 import re
 
 
