@@ -367,9 +367,9 @@ def cmd_export(args):
                 meta["first_timestamp"] = ts
             date_str = ts[:10]
             ts_file = ts[:19].replace(":", "-")   # 2026-02-10T01-46-15
+            title_slug = slugify(session["title"], default="session")
             short_id = sid[:8]
-            title_slug = slugify(session["title"]) or "session"
-            project_slug = slugify(project["name"]) or "project"
+            project_slug = slugify(project["name"], default="project")
 
             if fmt in ("md", "both"):
                 md = session_to_markdown(session, stats)
@@ -445,8 +445,8 @@ def cmd_export(args):
 
 def _export_single(session: dict, stats: dict, fmt: str, out_dir: str):
     """Write one session to disk as md, json, or both."""
+    title_slug = slugify(session["title"], default="session")
     short_id = session["session_id"][:8]
-    title_slug = slugify(session["title"]) or "session"
     ts = session["metadata"].get("first_timestamp", "")
     ts_file = ts[:19].replace(":", "-") if ts else "0000-00-00T00-00-00"
 
