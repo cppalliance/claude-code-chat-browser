@@ -14,6 +14,7 @@ from utils.session_stats import compute_stats
 from utils.md_exporter import session_to_markdown
 from utils.json_exporter import session_to_json
 from utils.exclusion_rules import is_session_excluded
+from utils.slugify import slugify
 
 export_bp = Blueprint("export", __name__)
 
@@ -47,13 +48,6 @@ def get_export_state():
         "last_export_time": state.get("lastExportTime"),
         "export_count": state.get("exportedCount", 0),
     })
-
-
-def _slugify(text: str) -> str:
-    import re
-    text = text.lower()
-    text = re.sub(r"[^a-z0-9]+", "-", text)
-    return text.strip("-")
 
 
 @export_bp.route("/api/export", methods=["POST"])
@@ -97,9 +91,9 @@ def bulk_export():
 
                     stats = compute_stats(session)
                     md = session_to_markdown(session, stats)
-                    title_slug = _slugify(session["title"]) or "session"
+                    title_slug = slugify(session["title"], default="session")
                     short_id = sid[:8]
-                    proj_slug = _slugify(project["name"])
+                    proj_slug = slugify(project["name"], default="project")
                     ts = session["metadata"].get("first_timestamp", "")
                     ts_file = ts[:19].replace(":", "-") if ts else "0000-00-00T00-00-00"
                     rel_path = f"{proj_slug}/{ts_file}__{title_slug}__{short_id}.md"
@@ -155,7 +149,7 @@ def export_session(project_name, session_id):
     if is_session_excluded(rules, session, project_name):
         return jsonify({"error": "Session not found"}), 404
     stats = compute_stats(session)
-    title_slug = _slugify(session["title"]) or "session"
+    title_slug = slugify(session["title"], default="session")
 
     if fmt == "json":
         content = session_to_json(session, stats)
