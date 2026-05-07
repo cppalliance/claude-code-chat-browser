@@ -426,6 +426,8 @@ def _tool_result_build_web_search(tr: dict, base: dict) -> dict:
     result = dict(base)
     result["result_type"] = "web_search"
     result["query"] = tr.get("query", "")
+    # Defensive: legacy ``len(tr.get("results", []))`` crashed when key existed
+    # with value None (``len(None)``). Non-sized ``results`` → count 0.
     raw_results = tr.get("results")
     if isinstance(raw_results, (list, tuple, set, dict)):
         result["result_count"] = len(raw_results)
@@ -449,6 +451,10 @@ def _tool_result_build_web_fetch(tr: dict, base: dict) -> dict:
 
 
 def _tool_result_pred_task_message(tr: dict) -> bool:
+    # Broad: matches ``task_id`` OR ``message``. Runs before retrieval/completed/async
+    # arms below — same short-circuit order as the original if/elif chain. Payloads
+    # that also carry e.g. ``agentId`` still classify here if they have ``message``.
+    # Refining order needs golden fixtures; track as follow-up if real collisions appear.
     return "task_id" in tr or "message" in tr
 
 
@@ -537,7 +543,16 @@ def _tool_result_build_plan(tr: dict, base: dict) -> dict:
     return result
 
 
-# Ordered dispatch: first matching predicate wins (legacy if/elif semantics).
+# Dispatch registry: **first matching predicate wins** (same as legacy if/elif).
+# Order is load-bearing — do not sort alphabetically or “more specific first”
+# without replaying tests and real session fixtures.
+#
+# Notably ``task_message`` is intentionally broad (``task_id`` or ``message``)
+# and sits before ``task_retrieval`` / ``task_completed`` / ``task_async`` so
+# payloads that include overlapping keys still match the legacy branch order.
+#
+# To add a shape: append ``(pred, build)`` here, or insert only after verifying
+# predicates above would not steal intended matches.
 _TOOL_RESULT_DISPATCH = (
     (_tool_result_pred_bash, _tool_result_build_bash),
     (_tool_result_pred_file_edit, _tool_result_build_file_edit),
@@ -561,9 +576,13 @@ def _parse_tool_result(tool_result, slug: str | None = None) -> dict | None:
     """Figure out what kind of tool result this is (bash, file edit, glob, etc.)
     by looking at which keys are present, since the JSONL doesn't always tag them.
 
-    Classification uses ``_TOOL_RESULT_DISPATCH``: append ``(predicate, builder)``
-    pairs to register a new shape; keep order consistent with Claude Code JSONL
-    evolution (more specific branches before generic ones)."""
+    Classification uses ``_TOOL_RESULT_DISPATCH``: ordered ``(predicate, builder)``
+    pairs; the **first** predicate that matches wins (parity with the historical
+    ``if``/``elif`` chain — order is not strictly “specific before generic”).
+
+    Append a new pair at the end to register a shape, or insert mid-table only
+    after checking interactions with broader predicates above (see notes on the
+    tuple)."""
     if not isinstance(tool_result, dict):
         return None
 
