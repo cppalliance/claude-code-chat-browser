@@ -62,6 +62,41 @@ class TestExportParserFlags:
         args = self._parse(["export", "--since", "last"])
         assert args.since == "last"
 
+    def test_since_incremental(self):
+        args = self._parse(["--since", "incremental"])
+        assert args.since == "incremental"
+
+    def test_since_before_export_subcommand_recovered(self):
+        """Flags before ``export`` must not be lost to subparser defaults."""
+        from scripts import export as export_mod
+
+        argv = ["--since", "last", "export"]
+        args = self._parse(argv)
+        assert args.since == "all"  # argparse quirk without recovery
+        for k, v in export_mod._prefixed_export_option_overrides(argv).items():
+            setattr(args, k, v)
+        assert args.since == "last"
+
+    def test_since_incremental_before_export_recovered(self):
+        from scripts import export as export_mod
+
+        argv = ["--since", "incremental", "export"]
+        args = self._parse(argv)
+        assert args.since == "all"
+        for k, v in export_mod._prefixed_export_option_overrides(argv).items():
+            setattr(args, k, v)
+        assert args.since == "incremental"
+
+    def test_prefixed_out_before_export(self):
+        from scripts import export as export_mod
+
+        argv = ["--out", "/tmp/z", "export"]
+        args = self._parse(argv)
+        assert args.out is None
+        for k, v in export_mod._prefixed_export_option_overrides(argv).items():
+            setattr(args, k, v)
+        assert args.out == "/tmp/z"
+
     # -- --out ------------------------------------------------------------------
 
     def test_out_default_is_none(self):
