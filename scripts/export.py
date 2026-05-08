@@ -36,7 +36,11 @@ from utils.exclusion_rules import (
 )
 from utils.slugify import slugify
 from utils.export_day_filter import collect_sessions_for_latest_activity_day
-
+from utils.export_state_store import (
+    atomic_write_export_state,
+    export_state_lock,
+    load_export_state_from_disk,
+)
 
 STATE_DIR = os.path.join(os.path.expanduser("~"), ".claude-code-chat-browser")
 STATE_FILE = os.path.join(STATE_DIR, "export_state.json")
@@ -766,28 +770,28 @@ def _load_state() -> dict:
 
         {"<session-uuid>": <mtime-float>, ...}
     """
-    if not os.path.isfile(STATE_FILE):
-        return {}
-    with open(STATE_FILE, "r") as f:
-        data = json.load(f)
-    # Migrate: if the file has neither "sessions" nor "lastExportTime" it is
-    # the old flat dict of session_id → mtime.
-    if "sessions" not in data and "lastExportTime" not in data:
-        return {"sessions": data}
-    return data
+    with export_state_lock(STATE_FILE):
+        return load_export_state_from_disk(STATE_FILE)
 
 
 def _save_state(sessions: dict, count: int, out_dir: str):
-    """Persist export state with standardised fields matching cursor-chat-browser."""
-    os.makedirs(STATE_DIR, exist_ok=True)
-    state = {
-        "lastExportTime": datetime.now().isoformat(),
-        "exportedCount": count,
-        "exportDir": out_dir,
-        "sessions": sessions,
-    }
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f, indent=2)
+    """Persist export state with standardised fields matching cursor-chat-browser.
+
+    Merges ``sessions`` into any concurrent updates on disk (same lock/atomic
+    path as the web API).
+    """
+    with export_state_lock(STATE_FILE):
+        disk = load_export_state_from_disk(STATE_FILE)
+        disk["lastExportTime"] = datetime.now().isoformat()
+        disk["exportedCount"] = count
+        disk["exportDir"] = out_dir
+        base = disk.get("sessions")
+        if not isinstance(base, dict):
+            base = {}
+        merged = dict(base)
+        merged.update(sessions)
+        disk["sessions"] = merged
+        atomic_write_export_state(disk, STATE_FILE)
 
 
 def _die(msg: str):

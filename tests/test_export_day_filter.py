@@ -1,6 +1,9 @@
 """Unit tests for utils/export_day_filter.py."""
 
+import logging
 from datetime import date
+
+import pytest
 
 from utils.export_day_filter import (
     collect_sessions_for_latest_activity_day,
@@ -61,3 +64,58 @@ def test_collect_latest_day_filters_by_overlap():
     assert n == 2
     assert len(rows) == 1
     assert rows[0][2]["title"] == "One"
+
+
+def test_collect_latest_day_logs_parse_failure(caplog):
+    """Parse errors must be visible: they can change which day wins ``d = max(...)``."""
+
+    def list_sessions(path):
+        return [
+            {"id": "a", "path": "broken.jsonl", "modified": 0.0},
+            {"id": "b", "path": "good.jsonl", "modified": 0.0},
+        ]
+
+    def parse_session(path):
+        if path == "broken.jsonl":
+            raise ValueError("simulated corrupt jsonl")
+        return {
+            "title": "OK",
+            "metadata": {
+                "first_timestamp": "2026-04-05T10:00:00Z",
+                "last_timestamp": "2026-04-05T12:00:00Z",
+            },
+        }
+
+    projects = [{"name": "proj", "path": "/x", "display_name": "P"}]
+    with caplog.at_level(logging.ERROR, logger="utils.export_day_filter"):
+        d, rows, n = collect_sessions_for_latest_activity_day(
+            projects,
+            list_sessions=list_sessions,
+            parse_session=parse_session,
+            is_session_excluded=lambda *a, **k: False,
+            rules=[],
+        )
+    assert "broken.jsonl" in caplog.text
+    assert "simulated corrupt jsonl" in caplog.text
+    assert d == date(2026, 4, 5)
+    assert n == 2
+    assert len(rows) == 1
+
+
+def test_collect_latest_day_abort_on_parse_error():
+    def list_sessions(path):
+        return [{"id": "a", "path": "bad.jsonl", "modified": 0.0}]
+
+    def parse_session(path):
+        raise RuntimeError("fail fast")
+
+    projects = [{"name": "proj", "path": "/x", "display_name": "P"}]
+    with pytest.raises(RuntimeError, match="fail fast"):
+        collect_sessions_for_latest_activity_day(
+            projects,
+            list_sessions=list_sessions,
+            parse_session=parse_session,
+            is_session_excluded=lambda *a, **k: False,
+            rules=[],
+            abort_on_parse_error=True,
+        )

@@ -3,14 +3,17 @@
 import io
 import json
 import os
-import tempfile
-import threading
 import zipfile
-from contextlib import contextmanager
 from datetime import datetime
 
 from flask import Blueprint, current_app, jsonify, request, send_file
 
+from utils.export_state_store import (
+    EXPORT_STATE_FILE,
+    atomic_write_export_state,
+    export_state_lock,
+    load_export_state_from_disk,
+)
 from utils.session_path import (
     get_claude_projects_dir,
     list_projects,
@@ -24,64 +27,22 @@ from utils.exclusion_rules import is_session_excluded
 from utils.slugify import slugify
 from utils.export_day_filter import collect_sessions_for_latest_activity_day
 
-try:
-    import fcntl
-except ImportError:
-    fcntl = None  # Windows: fall back to threading lock (same process only)
-
 export_bp = Blueprint("export", __name__)
 
-_STATE_FILE = os.path.join(
-    os.path.expanduser("~"), ".claude-code-chat-browser", "export_state.json"
-)
-
-_fallback_lock = threading.Lock()
+# Tests monkeypatch this path; keep in sync with utils.export_state_store.
+_STATE_FILE = EXPORT_STATE_FILE
 
 
-@contextmanager
 def _state_lock():
-    """Serialize export_state.json reads/writes (POSIX: flock; else threading)."""
-    if fcntl is not None:
-        lock_path = _STATE_FILE + ".lock"
-        os.makedirs(os.path.dirname(lock_path), exist_ok=True)
-        lock_fp = open(lock_path, "a+")
-        try:
-            fcntl.flock(lock_fp.fileno(), fcntl.LOCK_EX)
-            yield
-        finally:
-            fcntl.flock(lock_fp.fileno(), fcntl.LOCK_UN)
-            lock_fp.close()
-    else:
-        with _fallback_lock:
-            yield
+    return export_state_lock(_STATE_FILE)
 
 
 def _load_state_from_disk() -> dict:
-    if os.path.exists(_STATE_FILE):
-        try:
-            with open(_STATE_FILE, encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
+    return load_export_state_from_disk(_STATE_FILE)
 
 
 def _atomic_write_state(state: dict) -> None:
-    """Write state atomically (temp file + replace) under _state_lock."""
-    dir_name = os.path.dirname(_STATE_FILE) or "."
-    os.makedirs(dir_name, exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(state, f, indent=2)
-        os.replace(tmp_path, _STATE_FILE)
-    except BaseException:
-        try:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+    atomic_write_export_state(state, _STATE_FILE)
 
 
 def _read_state() -> dict:
@@ -115,10 +76,15 @@ def get_export_state():
 
 @export_bp.route("/api/export", methods=["POST"])
 def bulk_export():
-    body = request.get_json(silent=True) or {}
+    body = request.get_json(silent=True)
+    if body is None:
+        body = {}
+    if not isinstance(body, dict):
+        return jsonify({"error": "Invalid request body"}), 400
+
     since = body.get("since", "all")
     if since not in ("all", "last", "incremental"):
-        since = "all"
+        return jsonify({"error": "Invalid since mode", "since": since}), 400
 
     base = (
         current_app.config.get("CLAUDE_PROJECTS_DIR")

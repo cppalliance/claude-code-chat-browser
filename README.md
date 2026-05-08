@@ -19,12 +19,12 @@ Browse and export Claude Code chat history — Web GUI and CLI.
 - **Smooth transitions** — staggered card/message animations, crossfade content swaps
 - **Scroll-to-top button** in bottom-right corner
 - **Per-model badges** in session header
-- **Bulk export** — download all sessions, incremental updates, or latest-day slice as a zip; if there is nothing to export, the API returns **422** JSON (`Nothing to export`) instead of an empty zip
+- **Bulk export** — download all sessions, incremental updates, or latest-day slice as a zip; if there is nothing to export, the API returns **422** with JSON body `{"error": "Nothing to export", "since": "<mode>"}` (the `since` field echoes your request: `"all"`, `"last"`, or `"incremental"`) instead of an empty zip
 
 ### CLI Export
 - Standalone script to export all sessions to Markdown with YAML frontmatter
 - Rich Markdown: token usage, tool calls, thinking blocks, model info, timestamps
-- `--since last` — export every session that overlaps the **latest UTC calendar day** present in your history (zip name includes `last-MM-DD`)
+- `--since last` — export every session that overlaps the **latest UTC calendar day** present in your history (default zip name: `claude-code-export-last-MM-DD-YYYY-MM-DD.zip` — the first `MM-DD` is that latest UTC day, and `YYYY-MM-DD` is the export date)
 - `--since incremental` — export only sessions **new or changed since the last export** (file mtime + saved state)
 - `--project` flag to export a subset of projects
 
@@ -70,7 +70,7 @@ python scripts/export.py
 # Export to specific directory, no zip
 python scripts/export.py --out ./exports --no-zip
 
-# Latest calendar day (UTC): all sessions active on that day; zip like claude-code-export-last-04-06-2026-05-08.zip
+# Latest calendar day (UTC): all sessions active on that day; zip pattern claude-code-export-last-MM-DD-YYYY-MM-DD.zip (e.g. claude-code-export-last-04-06-2026-05-08.zip — 04-06 = latest UTC day, 2026-05-08 = export date)
 python scripts/export.py --since last
 
 # Incremental (only new/updated sessions since last run, using export state)

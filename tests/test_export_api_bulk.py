@@ -23,6 +23,34 @@ def isolated_state(tmp_path, monkeypatch):
     return path
 
 
+def test_bulk_export_invalid_since_returns_400(isolated_state, tmp_path):
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    app.config["CLAUDE_PROJECTS_DIR"] = str(tmp_path)
+    app.register_blueprint(export_bp)
+    client = app.test_client()
+    resp = client.post("/api/export", json={"since": "lst"})
+    assert resp.status_code == 400
+    body = resp.get_json()
+    assert body["error"] == "Invalid since mode"
+    assert body["since"] == "lst"
+
+
+def test_bulk_export_non_object_json_returns_400(isolated_state, tmp_path):
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    app.config["CLAUDE_PROJECTS_DIR"] = str(tmp_path)
+    app.register_blueprint(export_bp)
+    client = app.test_client()
+    resp = client.post(
+        "/api/export",
+        data=json.dumps(["all"]),
+        content_type="application/json",
+    )
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "Invalid request body"
+
+
 def test_bulk_export_empty_returns_422_json(isolated_state, tmp_path):
     app = Flask(__name__)
     app.config["TESTING"] = True

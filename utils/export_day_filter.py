@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 
 def iso_timestamp_to_date(ts: str | None) -> date | None:
@@ -46,12 +49,17 @@ def collect_sessions_for_latest_activity_day(
     parse_session,
     is_session_excluded,
     rules,
+    abort_on_parse_error: bool = False,
 ) -> tuple[date | None, list[tuple[dict, dict, dict, date, date]], int]:
     """Parse sessions in *projects*, skip untitled/excluded, return (D, rows, n_scanned).
 
-    *D* is the latest session **end** calendar date (UTC). Each row is
-    ``(project, sess_info, session, start_date, end_date)`` for sessions that
-    overlap *D*. *n_scanned* counts every ``.jsonl`` file visited.
+    *D* is the latest session **end** calendar date (UTC) from successfully
+    parsed sessions only (``d = max(...)`` over parsed rows). Parse failures are
+    logged and skipped unless *abort_on_parse_error* is true, in which case the
+    first failure is re-raised.
+
+    Each row is ``(project, sess_info, session, start_date, end_date)`` for
+    sessions that overlap *D*. *n_scanned* counts every ``.jsonl`` file visited.
     """
     parsed: list[tuple[dict, dict, dict, date, date]] = []
     total_scan = 0
@@ -60,7 +68,15 @@ def collect_sessions_for_latest_activity_day(
             total_scan += 1
             try:
                 session = parse_session(sess_info["path"])
-            except Exception:
+            except Exception as e:
+                logger.error(
+                    "Failed to parse session for latest-day selection %s: %s: %s",
+                    sess_info["path"],
+                    type(e).__name__,
+                    e,
+                )
+                if abort_on_parse_error:
+                    raise
                 continue
             if session["title"] == "Untitled Session":
                 continue
