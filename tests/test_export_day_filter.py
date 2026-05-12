@@ -15,6 +15,9 @@ from utils.export_day_filter import (
 
 def test_iso_timestamp_to_date():
     assert iso_timestamp_to_date("2026-04-06T12:00:00Z") == date(2026, 4, 6)
+    # 23:00 -05:00 is 04:00 UTC the next calendar day (not the Y-M-D prefix).
+    assert iso_timestamp_to_date("2026-04-06T23:00:00-05:00") == date(2026, 4, 7)
+    assert iso_timestamp_to_date("2026-04-06") == date(2026, 4, 6)
     assert iso_timestamp_to_date(None) is None
 
 

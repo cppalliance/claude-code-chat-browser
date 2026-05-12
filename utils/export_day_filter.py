@@ -9,16 +9,29 @@ logger = logging.getLogger(__name__)
 
 
 def iso_timestamp_to_date(ts: str | None) -> date | None:
-    """First 10 chars of an ISO timestamp as a UTC calendar date."""
+    """Calendar date in UTC for an ISO-8601 *ts* (offset-aware → convert; naive → that instant's date)."""
     if not ts or not isinstance(ts, str):
         return None
     s = ts.strip()
     if len(s) < 10:
         return None
+    # Date-only: no instant to shift by offset; keep the given calendar day.
+    if len(s) == 10 and "T" not in s:
+        try:
+            return date.fromisoformat(s[:10])
+        except ValueError:
+            return None
+    normalized = s.replace("Z", "+00:00")
     try:
-        return date.fromisoformat(s[:10])
+        dt = datetime.fromisoformat(normalized)
     except ValueError:
-        return None
+        try:
+            return date.fromisoformat(s[:10])
+        except ValueError:
+            return None
+    if dt.tzinfo is not None and dt.utcoffset() is not None:
+        return dt.astimezone(timezone.utc).date()
+    return dt.date()
 
 
 def session_calendar_bounds(
