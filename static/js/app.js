@@ -226,14 +226,15 @@ async function showProjects() {
                     const d = new Date(state.last_export_time);
                     if (!isNaN(d.getTime())) {
                         hasPreviousExport = true;
-                        lastExportHtml = `<p class="text-muted text-sm" style="margin:0">Last export: ${d.toLocaleString()} (${state.export_count || 0} sessions)</p>`;
+                        const sessionCount = state.last_export_session_count ?? state.export_count ?? 0;
+                        lastExportHtml = `<p class="text-muted text-sm" style="margin:0">Last export: ${d.toLocaleString()} (${sessionCount} sessions in last export)</p>`;
                     }
                 }
             } catch(e) {}
         }
 
         const sinceBtnHtml = hasPreviousExport
-            ? `<button class="btn btn-primary btn-sm" id="btn-export-since" onclick="bulkExport('last')">
+            ? `<button class="btn btn-primary btn-sm" id="btn-export-since" onclick="bulkExport('incremental')">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Export new since last
               </button>`
@@ -769,13 +770,13 @@ async function doSearch() {
 // ==================== Export ====================
 
 function bulkExport(since = 'all') {
-    const label = since === 'last' ? 'Export new sessions since last export?' : 'Export all sessions as a zip file?';
+    const label = since === 'incremental' ? 'Export new sessions since last export?' : 'Export all sessions as a zip file?';
     showConfirm(label, async () => {
-        const suffix = since === 'last' ? '-since-last' : '';
+        const suffix = since === 'incremental' ? '-incremental' : '';
         const fname = `claude-code-export${suffix}-${new Date().toISOString().slice(0, 10)}.zip`;
         const handle = await getFileHandle(fname, [{ description: 'ZIP archive', accept: { 'application/zip': ['.zip'] } }]);
         if (!handle) return;
-        const btnId = since === 'last' ? '#btn-export-since' : '#btn-export-all';
+        const btnId = since === 'incremental' ? '#btn-export-since' : '#btn-export-all';
         const btn = document.querySelector(btnId);
         const origText = btn ? btn.textContent.trim() : '';
         if (btn) { btn.disabled = true; btn.textContent = 'Exporting...'; }
@@ -785,7 +786,17 @@ function bulkExport(since = 'all') {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ since }),
             });
-            if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+            const ct = res.headers.get('Content-Type') || '';
+            if (!res.ok) {
+                let msg = `Export failed: ${res.status}`;
+                if (ct.includes('application/json')) {
+                    try {
+                        const errBody = await res.json();
+                        if (errBody.error) msg = errBody.error;
+                    } catch (_) { /* ignore */ }
+                }
+                throw new Error(msg);
+            }
             const blob = await res.blob();
             await writeToHandle(handle, blob, fname);
             showProjects(); // Refresh to show updated last-export timestamp

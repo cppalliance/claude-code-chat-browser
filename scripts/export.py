@@ -8,7 +8,8 @@ Examples:
     export.py stats                    # token/cost totals
     export.py stats --session UUID     # single session breakdown
     export.py --format json --no-zip   # JSON files instead of zip
-    export.py --since last             # only sessions changed since last run
+    export.py --since incremental      # only sessions new/changed since last run (mtime)
+    export.py --since last             # all sessions active on latest UTC calendar day
 """
 
 import argparse
@@ -34,15 +35,121 @@ from utils.exclusion_rules import (
     is_session_excluded,
 )
 from utils.slugify import slugify
-
+from utils.export_day_filter import collect_sessions_for_latest_activity_day
+from utils.export_state_store import (
+    atomic_write_export_state,
+    export_state_lock,
+    load_export_state_from_disk,
+)
 
 STATE_DIR = os.path.join(os.path.expanduser("~"), ".claude-code-chat-browser")
 STATE_FILE = os.path.join(STATE_DIR, "export_state.json")
 
 
+def _project_matches(project: dict, needle: str) -> bool:
+    """True if needle matches internal dir name or display_name (substring, case-insensitive)."""
+    if not needle:
+        return True
+    n = needle.lower()
+    if n in project["name"].lower():
+        return True
+    disp = project.get("display_name") or ""
+    return n in disp.lower()
+
+
+def _zip_export_basename(
+    project_filter: str | None,
+    projects: list[dict],
+    date_tag: str,
+    *,
+    since: str = "all",
+    latest_day=None,
+) -> str:
+    """Zip filename (no directory): project slug and/or latest-day slug when set."""
+    from datetime import date
+
+    parts: list[str] = []
+    if project_filter:
+        if len(projects) == 1:
+            p0 = projects[0]
+            parts.append(
+                slugify(p0.get("display_name") or p0["name"], default="project")
+            )
+        else:
+            parts.append(
+                f"{slugify(project_filter, default='project')}-n{len(projects)}"
+            )
+    if since == "last" and latest_day is not None and isinstance(
+        latest_day, date
+    ):
+        parts.append(f"last-{latest_day.strftime('%m-%d')}")
+    if parts:
+        return f"claude-code-export-{'-'.join(parts)}-{date_tag}.zip"
+    return f"claude-code-export-{date_tag}.zip"
+
+
+def _prefixed_export_option_overrides(argv: list[str]) -> dict[str, object]:
+    """Recover export flags written *before* the ``export`` subcommand.
+
+    When the same flag is registered on both the root parser and the ``export``
+    subparser, argparse can drop values from the segment before ``export`` and
+    apply the subparser defaults instead (e.g. ``--since incremental export`` becomes
+    ``since=all``). Parse that prefix here so incremental export still works.
+    """
+    if "export" not in argv:
+        return {}
+    pre = argv[: argv.index("export")]
+    opts: dict[str, object] = {}
+    i = 0
+    while i < len(pre):
+        a = pre[i]
+        if a == "--since" and i + 1 < len(pre) and pre[i + 1] in (
+            "all",
+            "last",
+            "incremental",
+        ):
+            opts["since"] = pre[i + 1]
+            i += 2
+            continue
+        if a == "--out" and i + 1 < len(pre):
+            opts["out"] = pre[i + 1]
+            i += 2
+            continue
+        if a == "--no-zip":
+            opts["no_zip"] = True
+            i += 1
+            continue
+        if a in ("-e", "--exclude-rules") and i + 1 < len(pre):
+            opts["exclude_rules"] = pre[i + 1]
+            i += 2
+            continue
+        if a == "--base-dir" and i + 1 < len(pre):
+            opts["base_dir"] = pre[i + 1]
+            i += 2
+            continue
+        if a == "--project" and i + 1 < len(pre):
+            opts["project"] = pre[i + 1]
+            i += 2
+            continue
+        if a == "--format" and i + 1 < len(pre) and pre[i + 1] in ("md", "json", "both"):
+            opts["format"] = pre[i + 1]
+            i += 2
+            continue
+        if a == "--session" and i + 1 < len(pre):
+            opts["session"] = pre[i + 1]
+            i += 2
+            continue
+        i += 1
+    return opts
+
+
 def main():
     parser = build_parser()
     args = parser.parse_args()
+
+    if getattr(args, "command", None) == "export":
+        for key, val in _prefixed_export_option_overrides(sys.argv[1:]).items():
+            setattr(args, key, val)
 
     command = getattr(args, "command", None) or "export"
 
@@ -63,7 +170,7 @@ def cmd_list(args):
 
     projects = list_projects(base_dir)
     if project_filter:
-        projects = [p for p in projects if project_filter in p["name"]]
+        projects = [p for p in projects if _project_matches(p, project_filter)]
 
     if not projects:
         print("No projects found.")
@@ -196,7 +303,7 @@ def _aggregate_stats(base_dir: str, project_filter: str, fmt: str):
     by project."""
     projects = list_projects(base_dir)
     if project_filter:
-        projects = [p for p in projects if project_filter in p["name"]]
+        projects = [p for p in projects if _project_matches(p, project_filter)]
 
     totals = {
         "projects": len(projects),
@@ -282,6 +389,66 @@ def _aggregate_stats(base_dir: str, project_filter: str, fmt: str):
         print(f"  Est. cost:    ~${totals['total_cost']:.2f} USD")
 
 
+def _append_export_for_session(
+    project: dict,
+    sess_info: dict,
+    session: dict,
+    fmt: str,
+    all_exports: list,
+    manifest: list,
+    last_export: dict,
+) -> None:
+    """Append markdown/json entries and manifest row; update *last_export* mtime."""
+    sid = sess_info["id"]
+    stats = compute_stats(session)
+    meta = session["metadata"]
+    ts = meta.get("first_timestamp", "")
+    if not ts:
+        from datetime import datetime as _dt
+
+        ts = _dt.fromtimestamp(sess_info["modified"]).strftime(
+            "%Y-%m-%dT%H:%M:%S"
+        )
+        meta["first_timestamp"] = ts
+    date_str = ts[:10]
+    ts_file = ts[:19].replace(":", "-")
+    title_slug = slugify(session["title"], default="session")
+    short_id = sid[:8]
+    project_slug = slugify(project["name"], default="project")
+
+    if fmt in ("md", "both"):
+        md = session_to_markdown(session, stats)
+        rel_path = os.path.join(
+            date_str, project_slug, f"{ts_file}__{title_slug}__{short_id}.md"
+        )
+        all_exports.append((rel_path, md))
+
+    if fmt in ("json", "both"):
+        js = session_to_json(session, stats)
+        rel_path = os.path.join(
+            date_str, project_slug, f"{ts_file}__{title_slug}__{short_id}.json"
+        )
+        all_exports.append((rel_path, js))
+
+    manifest.append({
+        "session_id": sid,
+        "title": session["title"],
+        "project": project["name"],
+        "updated_at": meta.get("last_timestamp", ""),
+        "models": meta.get("models_used", []),
+        "tokens": meta["total_input_tokens"] + meta["total_output_tokens"],
+        "tool_calls": meta["total_tool_calls"],
+        "files_touched": stats.get("files_touched", {}).get(
+            "total_unique", 0
+        ),
+        "commands_run": len(stats.get("commands_run", [])),
+        "cost_estimate_usd": stats.get("cost_estimate_usd"),
+        "wall_clock_seconds": meta.get("session_wall_time_seconds"),
+    })
+
+    last_export[sid] = sess_info["modified"]
+
+
 def cmd_export(args):
     """The main export command. Writes md/json files, optionally zipped."""
     base_dir = getattr(args, "base_dir", None) or get_claude_projects_dir()
@@ -298,8 +465,8 @@ def cmd_export(args):
 
     rules = load_rules(resolve_exclusion_rules_path(exclusion_rules_path))
 
-    state = _load_state() if since == "last" else {}
-    last_export = state.get("sessions", {})
+    state = _load_state() if since == "incremental" else {}
+    last_export = dict(state.get("sessions", {}))
 
     # Single session export
     if session_filter:
@@ -313,7 +480,7 @@ def cmd_export(args):
 
     projects = list_projects(base_dir)
     if project_filter:
-        projects = [p for p in projects if project_filter in p["name"]]
+        projects = [p for p in projects if _project_matches(p, project_filter)]
 
     if not projects:
         print("No projects found.")
@@ -325,83 +492,82 @@ def cmd_export(args):
     manifest = []
     total_sessions = 0
     skipped = 0
+    skipped_mtime_unchanged = 0
+    latest_day = None
 
-    for project in projects:
-        sessions = list_sessions(project["path"])
-        for sess_info in sessions:
-            total_sessions += 1
-            sid = sess_info["id"]
+    if since == "last":
+        d, rows, total_sessions = collect_sessions_for_latest_activity_day(
+            projects,
+            list_sessions=list_sessions,
+            parse_session=parse_session,
+            is_session_excluded=is_session_excluded,
+            rules=rules,
+        )
+        if d is None:
+            print("Nothing to export (no qualifying sessions in scope).")
+            return
+        latest_day = d
+        print(
+            f"Latest activity end-date (UTC): {d.isoformat()} — "
+            f"exporting sessions that overlap that calendar day."
+        )
+        if not rows:
+            print(
+                f"No sessions overlap {d.isoformat()} (UTC); nothing to export."
+            )
+            return
+        skipped = total_sessions - len(rows)
+        for project, sess_info, session, _st, _en in rows:
+            _append_export_for_session(
+                project,
+                sess_info,
+                session,
+                fmt,
+                all_exports,
+                manifest,
+                last_export,
+            )
+    else:
+        for project in projects:
+            sessions = list_sessions(project["path"])
+            for sess_info in sessions:
+                total_sessions += 1
+                sid = sess_info["id"]
 
-            if since == "last":
-                prev_mtime = last_export.get(sid, 0)
-                if sess_info["modified"] <= prev_mtime:
+                if since == "incremental":
+                    prev_mtime = last_export.get(sid, 0)
+                    if sess_info["modified"] <= prev_mtime:
+                        skipped += 1
+                        skipped_mtime_unchanged += 1
+                        continue
+
+                try:
+                    session = parse_session(sess_info["path"])
+                except Exception as e:
+                    print(f"  Warning: failed to parse {sid}: {e}")
+                    continue
+
+                if session["title"] == "Untitled Session":
                     skipped += 1
                     continue
 
-            try:
-                session = parse_session(sess_info["path"])
-            except Exception as e:
-                print(f"  Warning: failed to parse {sid}: {e}")
-                continue
+                if is_session_excluded(
+                    rules,
+                    session,
+                    project.get("display_name") or project["name"],
+                ):
+                    skipped += 1
+                    continue
 
-            if session["title"] == "Untitled Session":
-                skipped += 1
-                continue
-
-            if is_session_excluded(
-                rules,
-                session,
-                project.get("display_name") or project["name"],
-            ):
-                skipped += 1
-                continue
-
-            stats = compute_stats(session)
-            meta = session["metadata"]
-            ts = meta.get("first_timestamp", "")
-            if not ts:
-                from datetime import datetime as _dt
-                ts = _dt.fromtimestamp(sess_info["modified"]).strftime(
-                    "%Y-%m-%dT%H:%M:%S"
+                _append_export_for_session(
+                    project,
+                    sess_info,
+                    session,
+                    fmt,
+                    all_exports,
+                    manifest,
+                    last_export,
                 )
-                meta["first_timestamp"] = ts
-            date_str = ts[:10]
-            ts_file = ts[:19].replace(":", "-")   # 2026-02-10T01-46-15
-            title_slug = slugify(session["title"], default="session")
-            short_id = sid[:8]
-            project_slug = slugify(project["name"], default="project")
-
-            if fmt in ("md", "both"):
-                md = session_to_markdown(session, stats)
-                rel_path = os.path.join(
-                    date_str, project_slug, f"{ts_file}__{title_slug}__{short_id}.md"
-                )
-                all_exports.append((rel_path, md))
-
-            if fmt in ("json", "both"):
-                js = session_to_json(session, stats)
-                rel_path = os.path.join(
-                    date_str, project_slug, f"{ts_file}__{title_slug}__{short_id}.json"
-                )
-                all_exports.append((rel_path, js))
-
-            manifest.append({
-                "session_id": sid,
-                "title": session["title"],
-                "project": project["name"],
-                "updated_at": meta.get("last_timestamp", ""),
-                "models": meta.get("models_used", []),
-                "tokens": meta["total_input_tokens"] + meta["total_output_tokens"],
-                "tool_calls": meta["total_tool_calls"],
-                "files_touched": stats.get("files_touched", {}).get(
-                    "total_unique", 0
-                ),
-                "commands_run": len(stats.get("commands_run", [])),
-                "cost_estimate_usd": stats.get("cost_estimate_usd"),
-                "wall_clock_seconds": meta.get("session_wall_time_seconds"),
-            })
-
-            last_export[sid] = sess_info["modified"]
 
     exported = len(all_exports)
     print(
@@ -411,6 +577,18 @@ def cmd_export(args):
 
     if not all_exports:
         print("Nothing to export.")
+        if since == "incremental":
+            last_t = state.get("lastExportTime")
+            if last_t:
+                print(f"Last export: {last_t}")
+            last_dir = state.get("exportDir")
+            if last_dir:
+                print(f"Last export directory: {last_dir}")
+            if skipped_mtime_unchanged > 0:
+                print(
+                    "All sessions on disk were already at or before the last "
+                    "recorded export time (nothing new to write)."
+                )
         return
 
     os.makedirs(out_dir, exist_ok=True)
@@ -428,7 +606,13 @@ def cmd_export(args):
         print(f"Exported {exported} file(s) to {out_dir}")
     else:
         date_tag = datetime.now().strftime("%Y-%m-%d")
-        zip_name = f"claude-code-export-{date_tag}.zip"
+        zip_name = _zip_export_basename(
+            project_filter,
+            projects,
+            date_tag,
+            since=since,
+            latest_day=latest_day,
+        )
         zip_path = os.path.join(out_dir, zip_name)
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for rel_path, content in all_exports:
@@ -482,9 +666,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base-dir", default=None,
                         help="Override Claude Code projects directory")
     parser.add_argument("--project", default=None,
-                        help="Filter by project name (substring match)")
-    parser.add_argument("--since", choices=["all", "last"], default=None,
-                        help="Export all or only new since last run")
+                        help="Filter by project (substring on list display name or dir name)")
+    parser.add_argument("--since", choices=["all", "last", "incremental"], default=None,
+                        help="'last' = latest UTC calendar day; 'incremental' = new since last export (mtime)")
     parser.add_argument("--out", default=None,
                         help="Output directory (default: current dir)")
     parser.add_argument("--no-zip", action="store_true", default=False,
@@ -507,7 +691,7 @@ def build_parser() -> argparse.ArgumentParser:
     # List subcommand
     list_p = subparsers.add_parser("list", help="List projects and sessions")
     list_p.add_argument("--project", default=None,
-                        help="Filter/select project")
+                        help="Filter/select project (display name or dir name substring)")
     list_p.add_argument("--base-dir", default=None,
                         help="Override Claude Code projects directory")
 
@@ -518,14 +702,14 @@ def build_parser() -> argparse.ArgumentParser:
     stats_p.add_argument("--format", choices=["text", "json"], default="text",
                          help="Output format (default: text)")
     stats_p.add_argument("--project", default=None,
-                         help="Filter by project name")
+                         help="Filter by project (display name or dir name substring)")
     stats_p.add_argument("--base-dir", default=None,
                          help="Override Claude Code projects directory")
 
     # Export subcommand (explicit)
     export_p = subparsers.add_parser("export", help="Export sessions")
-    export_p.add_argument("--since", choices=["all", "last"], default="all",
-                          help="Export all or only new since last run")
+    export_p.add_argument("--since", choices=["all", "last", "incremental"], default="all",
+                          help="'last' = latest UTC day; 'incremental' = new since last export")
     export_p.add_argument("--out", default=None,
                           help="Output directory (default: current dir)")
     export_p.add_argument("--no-zip", action="store_true",
@@ -535,7 +719,7 @@ def build_parser() -> argparse.ArgumentParser:
     export_p.add_argument("--session", default=None,
                           help="Export single session by UUID prefix")
     export_p.add_argument("--project", default=None,
-                          help="Filter by project name")
+                          help="Filter by project (display name or dir name substring)")
     export_p.add_argument("--base-dir", default=None,
                           help="Override Claude Code projects directory")
     export_p.add_argument(
@@ -586,28 +770,28 @@ def _load_state() -> dict:
 
         {"<session-uuid>": <mtime-float>, ...}
     """
-    if not os.path.isfile(STATE_FILE):
-        return {}
-    with open(STATE_FILE, "r") as f:
-        data = json.load(f)
-    # Migrate: if the file has neither "sessions" nor "lastExportTime" it is
-    # the old flat dict of session_id → mtime.
-    if "sessions" not in data and "lastExportTime" not in data:
-        return {"sessions": data}
-    return data
+    with export_state_lock(STATE_FILE):
+        return load_export_state_from_disk(STATE_FILE)
 
 
 def _save_state(sessions: dict, count: int, out_dir: str):
-    """Persist export state with standardised fields matching cursor-chat-browser."""
-    os.makedirs(STATE_DIR, exist_ok=True)
-    state = {
-        "lastExportTime": datetime.now().isoformat(),
-        "exportedCount": count,
-        "exportDir": out_dir,
-        "sessions": sessions,
-    }
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f, indent=2)
+    """Persist export state with standardised fields matching cursor-chat-browser.
+
+    Merges ``sessions`` into any concurrent updates on disk (same lock/atomic
+    path as the web API).
+    """
+    with export_state_lock(STATE_FILE):
+        disk = load_export_state_from_disk(STATE_FILE)
+        disk["lastExportTime"] = datetime.now().isoformat()
+        disk["exportedCount"] = count
+        disk["exportDir"] = out_dir
+        base = disk.get("sessions")
+        if not isinstance(base, dict):
+            base = {}
+        merged = dict(base)
+        merged.update(sessions)
+        disk["sessions"] = merged
+        atomic_write_export_state(disk, STATE_FILE)
 
 
 def _die(msg: str):
@@ -617,3 +801,4 @@ def _die(msg: str):
 
 if __name__ == "__main__":
     main()
+ 
