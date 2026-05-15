@@ -5,6 +5,8 @@ import { setWorkspaceMode } from './shared/theme.js';
 
 // ==================== Search ====================
 
+let lastSearchRequestId = 0;
+
 export function showSearchPage() {
     setHamburgerVisible(false);
     setWorkspaceMode(false);
@@ -29,6 +31,7 @@ export function showSearchPage() {
 }
 
 export async function doSearch() {
+    const localRequestId = ++lastSearchRequestId;
     const input = document.getElementById('search-input');
     if (!input) { showSearchPage(); return; }
     const query = input.value.trim();
@@ -39,12 +42,15 @@ export async function doSearch() {
 
     try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&limit=50`);
+        if (localRequestId !== lastSearchRequestId) return;
         if (!res.ok) {
             let msg = `Search failed (${res.status})`;
             try { msg = await res.text() || msg; } catch { /* ignore */ }
+            if (localRequestId !== lastSearchRequestId) return;
             throw new Error(msg);
         }
         const results = await res.json();
+        if (localRequestId !== lastSearchRequestId) return;
 
         let html = `<p class="text-muted text-sm">${results.length} result${results.length !== 1 ? 's' : ''}</p><br>`;
         html += '<div class="search-results">';
@@ -60,6 +66,7 @@ export async function doSearch() {
         html += '</div>';
         smoothSet(container, html);
     } catch (e) {
+        if (localRequestId !== lastSearchRequestId) return;
         container.innerHTML = `<div class="loading">Error: ${esc(e.message)}</div>`;
     }
 }
