@@ -16,7 +16,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 INDEX_HTML = REPO_ROOT / "static" / "index.html"
-APP_JS = REPO_ROOT / "static" / "js" / "app.js"
+# HLJS_THEME_SHEETS was extracted to shared/theme.js (Day 4 module split).
+# app.js re-exports it, but the canonical source is theme.js.
+APP_JS = REPO_ROOT / "static" / "js" / "shared" / "theme.js"
 
 
 def _link_attr(html: str, link_id: str, attr: str) -> str:
