@@ -20,10 +20,10 @@ export async function showProjects() {
     loadingBar.start();
 
     try {
-        const [projRes, stateRes] = await Promise.all([
-            fetch('/api/projects'),
-            fetch('/api/export/state').catch(() => null),
-        ]);
+        // Load projects first. Do not Promise.all with /api/export/state: that endpoint
+        // takes a file lock; if it blocks (stale lock, slow disk), the UI would hang here
+        // forever even though /api/projects already succeeded.
+        const projRes = await fetch('/api/projects');
         if (!projRes.ok) {
             let msg = `Failed to load projects (${projRes.status})`;
             try { const body = await projRes.json(); if (body.error) msg = body.error; } catch { try { msg = await projRes.text() || msg; } catch { /* ignore */ } }
@@ -32,9 +32,9 @@ export async function showProjects() {
             return;
         }
         const projects = await projRes.json();
-        loadingBar.done();
 
         if (!projects.length) {
+            loadingBar.done();
             smoothSet(content, '<div class="empty-state">No Claude Code projects found.<br>Make sure Claude Code has been used on this machine.</div>');
             return;
         }
@@ -44,7 +44,17 @@ export async function showProjects() {
 
         let lastExportHtml = '';
         let hasPreviousExport = false;
-        if (stateRes) {
+        let stateRes = null;
+        const exportCtrl = new AbortController();
+        const exportTid = setTimeout(() => exportCtrl.abort(), 5000);
+        try {
+            stateRes = await fetch('/api/export/state', { signal: exportCtrl.signal });
+        } catch {
+            /* timeout or network — still render project list */
+        } finally {
+            clearTimeout(exportTid);
+        }
+        if (stateRes && stateRes.ok) {
             try {
                 const exportState = await stateRes.json();
                 if (exportState.last_export_time) {
@@ -52,7 +62,7 @@ export async function showProjects() {
                     if (!isNaN(d.getTime())) {
                         hasPreviousExport = true;
                         const sessionCount = Math.max(0, parseInt(exportState.last_export_session_count ?? exportState.export_count ?? 0, 10) || 0);
-                        lastExportHtml = `<p class="text-muted text-sm" style="margin:0">Last export: ${d.toLocaleString()} (${sessionCount} sessions in last export)</p>`;
+                        lastExportHtml = `<p class="text-muted text-sm">Last export: ${d.toLocaleString()} (${sessionCount} sessions in last export)</p>`;
                     }
                 }
             } catch(e) {}
@@ -65,12 +75,9 @@ export async function showProjects() {
               </button>`
             : '';
 
-        let html = `<div class="page-header">
-            <div>
+        let html = `<div class="page-header page-header--projects">
+            <div class="page-header__top">
                 <h1>Projects</h1>
-                <p class="text-muted">Browse your Claude Code conversations by project. Click on a project to view its sessions.</p>
-            </div>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.4rem">
                 <div class="btn-group">
                     ${sinceBtnHtml}
                     <button class="btn btn-outline btn-sm" id="btn-export-all" onclick="bulkExport('all')">
@@ -78,7 +85,10 @@ export async function showProjects() {
                         Export all
                     </button>
                 </div>
-                ${lastExportHtml}
+            </div>
+            <div class="page-header__subrow">
+                <p class="text-muted page-header__intro">Browse your Claude Code conversations by project. Click on a project to view its sessions.</p>
+                ${lastExportHtml ? `<div class="page-header__export-meta">${lastExportHtml}</div>` : ''}
             </div>
         </div>`;
 
@@ -128,6 +138,7 @@ export async function showProjects() {
             html += `</tbody></table></div></div>`;
         }
 
+        loadingBar.done();
         smoothSet(content, html);
     } catch (e) {
         loadingBar.done();
