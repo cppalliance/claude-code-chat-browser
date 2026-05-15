@@ -279,6 +279,37 @@ h3 { font-size: 1.15rem; font-weight: 600; }
   flex-wrap: wrap;
 }
 
+/* Projects home: title + actions on one row; intro + last export on the next row (same baseline). */
+.page-header--projects {
+  flex-direction: column;
+  align-items: stretch;
+}
+.page-header--projects .page-header__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.page-header--projects .page-header__subrow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.page-header--projects .page-header__intro {
+  margin: 0;
+  flex: 1 1 12rem;
+}
+.page-header--projects .page-header__export-meta {
+  flex: 0 1 auto;
+  text-align: right;
+}
+.page-header--projects .page-header__export-meta p {
+  margin: 0;
+}
+
 /* ---------- Utility ---------- */
 .flex-between { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 
