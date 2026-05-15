@@ -1,7 +1,7 @@
 // Search page — search UI and result rendering.
 
-import { esc, smoothSet } from './shared/utils.js';
-import { setHamburgerVisible, setWorkspaceMode } from './shared/theme.js';
+import { esc, smoothSet, setHamburgerVisible } from './shared/utils.js';
+import { setWorkspaceMode } from './shared/theme.js';
 
 // ==================== Search ====================
 

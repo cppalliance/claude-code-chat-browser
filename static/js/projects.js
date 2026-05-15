@@ -1,8 +1,8 @@
 // Projects home page — project list rendering.
 
 import { state } from './shared/state.js';
-import { esc, formatDate, smoothSet, loadingBar } from './shared/utils.js';
-import { setHamburgerVisible, setWorkspaceMode } from './shared/theme.js';
+import { esc, formatDate, smoothSet, loadingBar, setHamburgerVisible } from './shared/utils.js';
+import { setWorkspaceMode } from './shared/theme.js';
 
 // ==================== Projects (home) ====================
 
