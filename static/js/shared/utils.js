@@ -13,6 +13,7 @@ export function truncate(s, max) {
 export function formatTs(ts) {
     try {
         const d = new Date(ts);
+        if (isNaN(d.getTime())) return ts;
         const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
         const dd = String(d.getUTCDate()).padStart(2, '0');
         const yyyy = d.getUTCFullYear();
@@ -29,6 +30,7 @@ export function formatTs(ts) {
 export function formatDate(ts) {
     try {
         const d = new Date(ts);
+        if (isNaN(d.getTime())) return ts ? ts.slice(0, 10) : '';
         const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
         const dd = String(d.getUTCDate()).padStart(2, '0');
         const yyyy = d.getUTCFullYear();
@@ -37,7 +39,7 @@ export function formatDate(ts) {
 }
 
 export function formatSize(bytes) {
-    if (!bytes) return '?';
+    if (bytes == null) return '?';
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / 1048576).toFixed(1) + ' MB';
@@ -59,9 +61,20 @@ export function showToast(message, type = 'info') {
     const icons = { success: '\u2713', error: '\u2717', info: '\u2139' };
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    toast.innerHTML = `<span class="toast-icon">${icons[type] || icons.info}</span><span class="toast-text">${message}</span><button class="toast-close">\u00d7</button><div class="toast-progress"></div>`;
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'toast-icon';
+    iconSpan.textContent = icons[type] || icons.info;
+    const textSpan = document.createElement('span');
+    textSpan.className = 'toast-text';
+    textSpan.textContent = message;
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'toast-close';
+    closeBtn.textContent = '\u00d7';
+    const progress = document.createElement('div');
+    progress.className = 'toast-progress';
+    toast.append(iconSpan, textSpan, closeBtn, progress);
     document.body.appendChild(toast);
-    toast.querySelector('.toast-close').addEventListener('click', () => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); });
+    closeBtn.addEventListener('click', () => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); });
     requestAnimationFrame(() => toast.classList.add('show'));
     setTimeout(() => {
         toast.classList.remove('show');
@@ -74,16 +87,16 @@ export function showConfirm(message, onConfirm) {
     overlay.className = 'confirm-overlay';
     const dialog = document.createElement('div');
     dialog.className = 'confirm-dialog';
-    dialog.innerHTML = `
-        <div class="confirm-header">
-            <span class="confirm-icon">?</span>
-            <span class="confirm-title">Confirm Action</span>
-        </div>
-        <p class="confirm-message">${message}</p>
-        <div class="confirm-actions">
-            <button class="confirm-btn confirm-cancel">Cancel</button>
-            <button class="confirm-btn confirm-ok">Confirm</button>
-        </div>`;
+    const header = document.createElement('div');
+    header.className = 'confirm-header';
+    header.innerHTML = '<span class="confirm-icon">?</span><span class="confirm-title">Confirm Action</span>';
+    const msgEl = document.createElement('p');
+    msgEl.className = 'confirm-message';
+    msgEl.textContent = message;
+    const actions = document.createElement('div');
+    actions.className = 'confirm-actions';
+    actions.innerHTML = '<button class="confirm-btn confirm-cancel">Cancel</button><button class="confirm-btn confirm-ok">Confirm</button>';
+    dialog.append(header, msgEl, actions);
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add('show'));

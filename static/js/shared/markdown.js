@@ -39,9 +39,7 @@ export function renderMarkdown(text) {
             if (typeof DOMPurify !== 'undefined') {
                 return DOMPurify.sanitize(parsed);
             }
-            // DOMPurify not yet loaded — return parsed but log a warning
-            console.warn('[renderMarkdown] DOMPurify not available; output is unsanitized');
-            return parsed;
+            throw new Error('DOMPurify not available');
         } catch (e) { /* fall through to escaped fallback */ }
     }
     // Fallback: fully escaped output with basic code block conversion (no DOMPurify needed)

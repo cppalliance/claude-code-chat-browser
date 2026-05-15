@@ -24,6 +24,13 @@ export async function showProjects() {
             fetch('/api/projects'),
             fetch('/api/export/state').catch(() => null),
         ]);
+        if (!projRes.ok) {
+            let msg = `Failed to load projects (${projRes.status})`;
+            try { const body = await projRes.json(); if (body.error) msg = body.error; } catch { try { msg = await projRes.text() || msg; } catch { /* ignore */ } }
+            loadingBar.done();
+            smoothSet(content, `<div class="loading"><p class="text-danger">${esc(msg)}</p></div>`);
+            return;
+        }
         const projects = await projRes.json();
         loadingBar.done();
 
@@ -44,7 +51,7 @@ export async function showProjects() {
                     const d = new Date(exportState.last_export_time);
                     if (!isNaN(d.getTime())) {
                         hasPreviousExport = true;
-                        const sessionCount = exportState.last_export_session_count ?? exportState.export_count ?? 0;
+                        const sessionCount = Math.max(0, parseInt(exportState.last_export_session_count ?? exportState.export_count ?? 0, 10) || 0);
                         lastExportHtml = `<p class="text-muted text-sm" style="margin:0">Last export: ${d.toLocaleString()} (${sessionCount} sessions in last export)</p>`;
                     }
                 }

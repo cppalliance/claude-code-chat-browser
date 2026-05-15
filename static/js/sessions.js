@@ -54,7 +54,7 @@ export async function showWorkspace(projectName, selectedSessionId) {
                 const errorClass = s.error ? ' sidebar-item-error' : '';
                 const errorDetail = s.error_detail ? `<div class="error-detail">${esc(s.error_detail)}</div>` : '';
                 const modelBadge = models ? `<span style="font-size:0.65rem;opacity:0.6;display:block;margin-top:1px">${esc(models)}</span>` : '';
-                sidebar += `<button class="sidebar-item${isActive}${errorClass}" onclick="selectSession('${esc(projectName)}','${esc(s.id)}')" id="sidebar-${s.id}">
+                sidebar += `<button class="sidebar-item${isActive}${errorClass}" onclick="selectSession(${JSON.stringify(projectName)},${JSON.stringify(s.id)})" id="sidebar-${esc(s.id)}">
                     <div class="sidebar-item-title">${esc(title)}</div>
                     ${errorDetail}
                     <div class="sidebar-item-time">${esc(ts)}${modelBadge}</div>
@@ -96,7 +96,7 @@ export async function showWorkspace(projectName, selectedSessionId) {
 
 export function selectSession(projectName, sessionId) {
     closeSidebar();
-    window.location.hash = `#project/${encodeURIComponent(projectName)}/${sessionId}`;
+    window.location.hash = `#project/${encodeURIComponent(projectName)}/${encodeURIComponent(sessionId)}`;
 }
 
 export async function loadSession(projectName, sessionId) {
@@ -105,7 +105,7 @@ export async function loadSession(projectName, sessionId) {
     loadingBar.start();
 
     try {
-        const res = await fetch(`/api/sessions/${encodeURIComponent(projectName)}/${sessionId}`);
+        const res = await fetch(`/api/sessions/${encodeURIComponent(projectName)}/${encodeURIComponent(sessionId)}`);
         if (!res.ok) {
             loadingBar.done();
             const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
@@ -151,7 +151,7 @@ export async function loadSession(projectName, sessionId) {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     Copy All
                 </button>
-                <button class="btn btn-outline btn-sm" onclick="downloadSession('${esc(projectName)}','${sessionId}')">
+                <button class="btn btn-outline btn-sm" onclick="downloadSession(${JSON.stringify(projectName)},${JSON.stringify(sessionId)})">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     Download
                 </button>
@@ -392,8 +392,8 @@ function renderToolResult(parsed) {
 }
 
 export function copyAll() {
-    const msgs = document.querySelector('.messages-container');
-    if (!msgs) return;
-    const text = msgs.innerText;
+    const sessionEl = document.querySelector('.session-content-inner') || document.querySelector('#session-content');
+    if (!sessionEl) return;
+    const text = sessionEl.innerText;
     navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard', 'success'));
 }

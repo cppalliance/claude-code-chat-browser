@@ -114,7 +114,7 @@ class TestNoDirectMarkedParseOutsideWrapper:
         assert not violations, (
             "The following JS files call marked.parse() directly (issue #295). "
             "All markdown rendering must go through renderMarkdown() in "
-            f"shared/markdown.js:\n  " + "\n  ".join(violations)
+            "shared/markdown.js:\n  " + "\n  ".join(violations)
         )
 
     def test_no_raw_marked_parse_to_inner_html(self):

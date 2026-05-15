@@ -12,6 +12,10 @@ import { bulkExport, downloadSession } from './export.js';
 
 // ==================== Router ====================
 
+function safeDecode(str) {
+    try { return decodeURIComponent(str); } catch { return null; }
+}
+
 function handleRoute() {
     if (state.navInProgress) return;
     window.scrollTo(0, 0);
@@ -20,7 +24,8 @@ function handleRoute() {
         const parts = hash.slice(9);
         const slashIdx = parts.indexOf('/');
         if (slashIdx > 0) {
-            const project = decodeURIComponent(parts.slice(0, slashIdx));
+            const project = safeDecode(parts.slice(0, slashIdx));
+            if (!project) { showProjects(); return; }
             const sessionId = parts.slice(slashIdx + 1);
             if (state.currentProject === project && state.cachedSessions.length > 0 && document.getElementById('sidebar')) {
                 document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
@@ -31,7 +36,9 @@ function handleRoute() {
                 showWorkspace(project, sessionId);
             }
         } else {
-            showWorkspace(decodeURIComponent(parts));
+            const project = safeDecode(parts);
+            if (!project) { showProjects(); return; }
+            showWorkspace(project);
         }
     } else if (hash === '#search') {
         showSearchPage();

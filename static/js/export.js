@@ -49,7 +49,7 @@ export async function downloadSession(project, sessionId) {
     const handle = await getFileHandle(fname, [{ description: 'Markdown', accept: { 'text/markdown': ['.md'] } }]);
     if (!handle) return;
     try {
-        const res = await fetch(`/api/export/session/${encodeURIComponent(project)}/${sessionId}`);
+        const res = await fetch(`/api/export/session/${encodeURIComponent(project)}/${encodeURIComponent(sessionId)}`);
         if (!res.ok) throw new Error(`Download failed: ${res.status}`);
         const blob = await res.blob();
         await writeToHandle(handle, blob, fname);
@@ -72,8 +72,13 @@ async function getFileHandle(suggestedName, fileTypes) {
 async function writeToHandle(handle, blob, fallbackName) {
     if (handle !== 'fallback') {
         const writable = await handle.createWritable();
-        await writable.write(blob);
-        await writable.close();
+        try {
+            await writable.write(blob);
+            await writable.close();
+        } catch (e) {
+            try { await writable.abort(); } catch { /* ignore abort errors */ }
+            throw e;
+        }
     } else {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');

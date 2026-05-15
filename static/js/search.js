@@ -39,13 +39,18 @@ export async function doSearch() {
 
     try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&limit=50`);
+        if (!res.ok) {
+            let msg = `Search failed (${res.status})`;
+            try { msg = await res.text() || msg; } catch { /* ignore */ }
+            throw new Error(msg);
+        }
         const results = await res.json();
 
         let html = `<p class="text-muted text-sm">${results.length} result${results.length !== 1 ? 's' : ''}</p><br>`;
         html += '<div class="search-results">';
 
         for (const r of results) {
-            html += `<div class="search-result" onclick="window.location.hash='#project/${encodeURIComponent(r.project)}/${r.session_id}'">
+            html += `<div class="search-result" onclick="window.location.hash='#project/${encodeURIComponent(r.project)}/${encodeURIComponent(r.session_id)}'">
                 <div><strong>${esc(r.title)}</strong> <span class="text-muted text-sm">${esc(r.project)} &bull; ${esc(r.role)}</span></div>
                 <div class="snippet">...${esc(r.snippet)}...</div>
             </div>`;
