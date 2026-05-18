@@ -4,6 +4,8 @@ lists projects/sessions from that directory."""
 import os
 import platform
 
+from models.project import ProjectDict, SessionListItemDict
+
 
 def safe_join(base: str, *parts: str) -> str:
     """Join path components and verify the result stays under base.
@@ -25,13 +27,13 @@ def get_claude_projects_dir() -> str:
     return os.path.join(home, ".claude", "projects")
 
 
-def list_projects(base_dir: str | None = None) -> list[dict]:
+def list_projects(base_dir: str | None = None) -> list[ProjectDict]:
     """Scan the projects dir and return info for each one that has .jsonl files."""
     base = base_dir or get_claude_projects_dir()
     if not os.path.isdir(base):
         return []
 
-    projects = []
+    projects: list[ProjectDict] = []
     for name in sorted(os.listdir(base)):
         project_dir = os.path.join(base, name)
         if not os.path.isdir(project_dir):
@@ -53,7 +55,7 @@ def list_projects(base_dir: str | None = None) -> list[dict]:
             display_name = None
             for jf in jsonl_files:
                 display_name = _get_display_name(
-                    os.path.join(project_dir, jf), None
+                    os.path.join(project_dir, jf), name
                 )
                 if display_name:
                     break
@@ -69,7 +71,7 @@ def list_projects(base_dir: str | None = None) -> list[dict]:
     return projects
 
 
-def _get_display_name(jsonl_path: str, fallback: str) -> str:
+def _get_display_name(jsonl_path: str, fallback: str | None) -> str:
     """Peek at the first entry's cwd field to get a human-readable project path
     instead of the hashed directory name."""
     import json
@@ -86,15 +88,16 @@ def _get_display_name(jsonl_path: str, fallback: str) -> str:
                     cwd = cwd.replace("\\", "/").rstrip("/")
                     # Extract last folder name and capitalize first letter
                     folder = cwd.rsplit("/", 1)[-1]
-                    return folder[:1].upper() + folder[1:] if folder else cwd
+                    out = folder[:1].upper() + folder[1:] if folder else cwd
+                    return str(out)
     except Exception:
         pass
-    return fallback
+    return fallback or ""
 
 
-def list_sessions(project_dir: str) -> list[dict]:
+def list_sessions(project_dir: str) -> list[SessionListItemDict]:
     """Return id, path, size, mtime for each .jsonl file in a project dir."""
-    sessions = []
+    sessions: list[SessionListItemDict] = []
     if not os.path.isdir(project_dir):
         return sessions
 

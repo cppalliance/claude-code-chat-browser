@@ -4,15 +4,18 @@ actually work with -- messages, tool calls, token counts, file activity, etc."""
 import json
 import os
 from datetime import datetime
+from typing import Any, cast
+
+from models.session import MessageDict, QuickSessionInfoDict, SessionDict
 
 
-def parse_session(filepath: str) -> dict:
+def parse_session(filepath: str) -> SessionDict:
     """Main entry point. Reads every line from a .jsonl file and builds up
     a session dict with messages, metadata (tokens, models, tool counts),
     and file/command activity."""
     session_id = os.path.basename(filepath).replace(".jsonl", "")
-    messages = []
-    metadata = {
+    messages: list[MessageDict] = []
+    metadata: dict[str, Any] = {
         "session_id": session_id,
         "models_used": set(),
         "total_input_tokens": 0,
@@ -117,20 +120,25 @@ def parse_session(filepath: str) -> dict:
 
     title = _infer_title(messages)
 
-    return {
-        "session_id": session_id,
-        "title": title,
-        "messages": messages,
-        "metadata": metadata,
-    }
+    return cast(
+        SessionDict,
+        {
+            "session_id": session_id,
+            "title": title,
+            "messages": messages,
+            "metadata": metadata,
+        },
+    )
 
 
-def _entry_message(entry: dict) -> dict:
+def _entry_message(entry: dict[str, Any]) -> dict[str, Any]:
     m = entry.get("message")
     return m if isinstance(m, dict) else {}
 
 
-def _process_user(entry: dict, messages: list, metadata: dict):
+def _process_user(
+    entry: dict[str, Any], messages: list[MessageDict], metadata: dict[str, Any]
+) -> None:
     """Pull out text, tool results, and session-level metadata (cwd, version, etc.)
     from a user entry."""
     if metadata["version"] is None:
@@ -172,7 +180,9 @@ def _process_user(entry: dict, messages: list, metadata: dict):
     })
 
 
-def _process_assistant(entry: dict, messages: list, metadata: dict):
+def _process_assistant(
+    entry: dict[str, Any], messages: list[MessageDict], metadata: dict[str, Any]
+) -> None:
     """Handle assistant responses -- splits content into text, thinking blocks,
     and tool_use calls, and accumulates token/model/tool stats."""
     msg = _entry_message(entry)
@@ -265,7 +275,9 @@ def _process_assistant(entry: dict, messages: list, metadata: dict):
     })
 
 
-def _process_system(entry: dict, messages: list, metadata: dict):
+def _process_system(
+    entry: dict[str, Any], messages: list[MessageDict], metadata: dict[str, Any]
+) -> None:
     """Handle system entries (mostly compact_boundary markers from context
     compaction)."""
     subtype = entry.get("subtype", "")
@@ -290,7 +302,7 @@ def _process_system(entry: dict, messages: list, metadata: dict):
     })
 
 
-def _process_progress(entry: dict, messages: list):
+def _process_progress(entry: dict[str, Any], messages: list[MessageDict]) -> None:
     """Capture progress entries -- streaming bash output, hook results, etc.
     These are noisy so we mostly just store them for the JSON export."""
     data = entry.get("data", {})
@@ -309,7 +321,9 @@ def _process_progress(entry: dict, messages: list):
     })
 
 
-def _track_file_activity(tool_name: str, tool_input: dict, metadata: dict):
+def _track_file_activity(
+    tool_name: str, tool_input: dict[str, Any], metadata: dict[str, Any]
+) -> None:
     """Look at what each tool call did and record which files got touched,
     what commands got run, what URLs got fetched."""
     fp = tool_input.get("file_path", "")
@@ -329,11 +343,11 @@ def _track_file_activity(tool_name: str, tool_input: dict, metadata: dict):
             metadata["web_fetches"].append(url_or_query)
 
 
-def _tool_result_pred_bash(tr: dict) -> bool:
+def _tool_result_pred_bash(tr: dict[str, Any]) -> bool:
     return "stdout" in tr or "stderr" in tr
 
 
-def _tool_result_build_bash(tr: dict, base: dict) -> dict:
+def _tool_result_build_bash(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
     result = dict(base)
     result["result_type"] = "bash"
     result["stdout"] = tr.get("stdout", "")
@@ -345,13 +359,13 @@ def _tool_result_build_bash(tr: dict, base: dict) -> dict:
     return result
 
 
-def _tool_result_pred_file_edit(tr: dict) -> bool:
+def _tool_result_pred_file_edit(tr: dict[str, Any]) -> bool:
     return "structuredPatch" in tr or (
         "filePath" in tr and "newString" in tr
     )
 
 
-def _tool_result_build_file_edit(tr: dict, base: dict) -> dict:
+def _tool_result_build_file_edit(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
     result = dict(base)
     result["result_type"] = "file_edit"
     result["file_path"] = tr.get("filePath", "")
@@ -359,22 +373,22 @@ def _tool_result_build_file_edit(tr: dict, base: dict) -> dict:
     return result
 
 
-def _tool_result_pred_file_write(tr: dict) -> bool:
+def _tool_result_pred_file_write(tr: dict[str, Any]) -> bool:
     return "filePath" in tr and "content" in tr
 
 
-def _tool_result_build_file_write(tr: dict, base: dict) -> dict:
+def _tool_result_build_file_write(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
     result = dict(base)
     result["result_type"] = "file_write"
     result["file_path"] = tr.get("filePath", "")
     return result
 
 
-def _tool_result_pred_glob(tr: dict) -> bool:
+def _tool_result_pred_glob(tr: dict[str, Any]) -> bool:
     return "filenames" in tr and isinstance(tr.get("filenames"), list)
 
 
-def _tool_result_build_glob(tr: dict, base: dict) -> dict:
+def _tool_result_build_glob(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
     result = dict(base)
     filenames = tr["filenames"]
     result["result_type"] = "glob"
@@ -385,11 +399,11 @@ def _tool_result_build_glob(tr: dict, base: dict) -> dict:
     return result
 
 
-def _tool_result_pred_grep(tr: dict) -> bool:
+def _tool_result_pred_grep(tr: dict[str, Any]) -> bool:
     return "mode" in tr and "numFiles" in tr
 
 
-def _tool_result_build_grep(tr: dict, base: dict) -> dict:
+def _tool_result_build_grep(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
     result = dict(base)
     result["result_type"] = "grep"
     result["mode"] = tr.get("mode")
@@ -402,11 +416,11 @@ def _tool_result_build_grep(tr: dict, base: dict) -> dict:
     return result
 
 
-def _tool_result_pred_file_read(tr: dict) -> bool:
+def _tool_result_pred_file_read(tr: dict[str, Any]) -> bool:
     return "file" in tr and isinstance(tr["file"], dict)
 
 
-def _tool_result_build_file_read(tr: dict, base: dict) -> dict:
+def _tool_result_build_file_read(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
     result = dict(base)
     file_obj = tr["file"]
     result["result_type"] = "file_read"
@@ -418,11 +432,11 @@ def _tool_result_build_file_read(tr: dict, base: dict) -> dict:
     return result
 
 
-def _tool_result_pred_web_search(tr: dict) -> bool:
+def _tool_result_pred_web_search(tr: dict[str, Any]) -> bool:
     return "query" in tr and "results" in tr
 
 
-def _tool_result_build_web_search(tr: dict, base: dict) -> dict:
+def _tool_result_build_web_search(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
     result = dict(base)
     result["result_type"] = "web_search"
     result["query"] = tr.get("query", "")
@@ -437,11 +451,11 @@ def _tool_result_build_web_search(tr: dict, base: dict) -> dict:
     return result
 
 
-def _tool_result_pred_web_fetch(tr: dict) -> bool:
+def _tool_result_pred_web_fetch(tr: dict[str, Any]) -> bool:
     return "url" in tr and "code" in tr
 
 
-def _tool_result_build_web_fetch(tr: dict, base: dict) -> dict:
+def _tool_result_build_web_fetch(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
     result = dict(base)
     result["result_type"] = "web_fetch"
     result["url"] = tr.get("url", "")
@@ -450,7 +464,7 @@ def _tool_result_build_web_fetch(tr: dict, base: dict) -> dict:
     return result
 
 
-def _tool_result_pred_task_message(tr: dict) -> bool:
+def _tool_result_pred_task_message(tr: dict[str, Any]) -> bool:
     # Broad: matches ``task_id`` OR ``message``. Runs before retrieval/completed/async
     # arms below — same short-circuit order as the original if/elif chain. Payloads
     # that also carry e.g. ``agentId`` still classify here if they have ``message``.
@@ -458,7 +472,7 @@ def _tool_result_pred_task_message(tr: dict) -> bool:
     return "task_id" in tr or "message" in tr
 
 
-def _tool_result_build_task_message(tr: dict, base: dict) -> dict:
+def _tool_result_build_task_message(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
     result = dict(base)
     result["result_type"] = "task"
     result["task_id"] = tr.get("task_id")
@@ -466,11 +480,11 @@ def _tool_result_build_task_message(tr: dict, base: dict) -> dict:
     return result
 
 
-def _tool_result_pred_task_retrieval(tr: dict) -> bool:
+def _tool_result_pred_task_retrieval(tr: dict[str, Any]) -> bool:
     return "retrieval_status" in tr and "task" in tr
 
 
-def _tool_result_build_task_retrieval(tr: dict, base: dict) -> dict:
+def _tool_result_build_task_retrieval(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
     result = dict(base)
     task_obj = tr["task"] if isinstance(tr["task"], dict) else {}
     result["result_type"] = "task"
@@ -479,11 +493,11 @@ def _tool_result_build_task_retrieval(tr: dict, base: dict) -> dict:
     return result
 
 
-def _tool_result_pred_task_completed(tr: dict) -> bool:
+def _tool_result_pred_task_completed(tr: dict[str, Any]) -> bool:
     return "agentId" in tr and "totalDurationMs" in tr
 
 
-def _tool_result_build_task_completed(tr: dict, base: dict) -> dict:
+def _tool_result_build_task_completed(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
     result = dict(base)
     result["result_type"] = "task"
     result["agent_id"] = tr.get("agentId")
@@ -494,11 +508,11 @@ def _tool_result_build_task_completed(tr: dict, base: dict) -> dict:
     return result
 
 
-def _tool_result_pred_task_async(tr: dict) -> bool:
+def _tool_result_pred_task_async(tr: dict[str, Any]) -> bool:
     return "agentId" in tr and "isAsync" in tr
 
 
-def _tool_result_build_task_async(tr: dict, base: dict) -> dict:
+def _tool_result_build_task_async(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
     result = dict(base)
     result["result_type"] = "task"
     result["agent_id"] = tr.get("agentId")
@@ -507,11 +521,11 @@ def _tool_result_build_task_async(tr: dict, base: dict) -> dict:
     return result
 
 
-def _tool_result_pred_todo_write(tr: dict) -> bool:
+def _tool_result_pred_todo_write(tr: dict[str, Any]) -> bool:
     return "newTodos" in tr or "oldTodos" in tr
 
 
-def _tool_result_build_todo_write(tr: dict, base: dict) -> dict:
+def _tool_result_build_todo_write(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
     result = dict(base)
     new_todos = tr.get("newTodos", [])
     result["result_type"] = "todo_write"
@@ -520,11 +534,11 @@ def _tool_result_build_todo_write(tr: dict, base: dict) -> dict:
     return result
 
 
-def _tool_result_pred_user_input(tr: dict) -> bool:
+def _tool_result_pred_user_input(tr: dict[str, Any]) -> bool:
     return "questions" in tr and "answers" in tr
 
 
-def _tool_result_build_user_input(tr: dict, base: dict) -> dict:
+def _tool_result_build_user_input(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
     result = dict(base)
     result["result_type"] = "user_input"
     result["questions"] = tr.get("questions", [])
@@ -532,11 +546,11 @@ def _tool_result_build_user_input(tr: dict, base: dict) -> dict:
     return result
 
 
-def _tool_result_pred_plan(tr: dict) -> bool:
+def _tool_result_pred_plan(tr: dict[str, Any]) -> bool:
     return "plan" in tr and "filePath" in tr
 
 
-def _tool_result_build_plan(tr: dict, base: dict) -> dict:
+def _tool_result_build_plan(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
     result = dict(base)
     result["result_type"] = "plan"
     result["file_path"] = tr.get("filePath", "")
@@ -572,7 +586,9 @@ _TOOL_RESULT_DISPATCH = (
 )
 
 
-def _parse_tool_result(tool_result, slug: str | None = None) -> dict | None:
+def _parse_tool_result(
+    tool_result: Any, slug: str | None = None
+) -> dict[str, Any] | None:
     """Figure out what kind of tool result this is (bash, file edit, glob, etc.)
     by looking at which keys are present, since the JSONL doesn't always tag them.
 
@@ -596,7 +612,7 @@ def _parse_tool_result(tool_result, slug: str | None = None) -> dict | None:
     return result
 
 
-def quick_session_info(filepath: str) -> dict:
+def quick_session_info(filepath: str) -> QuickSessionInfoDict:
     """Lightweight peek at a session file -- returns title and last_timestamp
     without fully parsing all messages.  Much faster than parse_session() for
     large files.
@@ -666,7 +682,7 @@ def quick_session_info(filepath: str) -> dict:
     }
 
 
-def _normalize_content(content) -> list:
+def _normalize_content(content: Any) -> list[dict[str, Any]]:
     """Content can be a plain string, a list of strings, or a list of typed
     blocks. Normalize everything into [{type, text}, ...] form."""
     if isinstance(content, str):
@@ -682,7 +698,7 @@ def _normalize_content(content) -> list:
     return []
 
 
-def _extract_text(content_parts) -> str:
+def _extract_text(content_parts: Any) -> str:
     """Grab just the text blocks out of a content array, ignore tool_use/thinking."""
     parts = _normalize_content(content_parts)
     texts = []
@@ -692,7 +708,7 @@ def _extract_text(content_parts) -> str:
     return "\n".join(texts)
 
 
-def _extract_images(content_parts) -> list:
+def _extract_images(content_parts: Any) -> list[dict[str, Any]]:
     """Pull base64 image blocks out of a content array.
     Also looks inside nested tool_result content blocks."""
     parts = _normalize_content(content_parts)
@@ -719,7 +735,7 @@ def _extract_images(content_parts) -> list:
     return images
 
 
-def _infer_title(messages: list) -> str:
+def _infer_title(messages: list[MessageDict]) -> str:
     """Use the first line of the first real user message as the session title."""
     for msg in messages:
         if msg["role"] == "user" and msg.get("text"):

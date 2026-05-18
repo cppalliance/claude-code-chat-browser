@@ -28,6 +28,9 @@ import logging
 import os
 import re
 from pathlib import Path
+from typing import Any
+
+from models.session import SessionDict
 
 _logger = logging.getLogger(__name__)
 
@@ -64,14 +67,14 @@ def resolve_exclusion_rules_path(cli_path: str | None) -> str | None:
     return None
 
 
-def _tokenize_rule(line: str) -> list:
+def _tokenize_rule(line: str) -> list[Any]:
     """
     Tokenize a rule line into terms and operators.
 
     Returns a list where each element is ``"AND"``, ``"OR"``, or a
     ``(kind, value)`` tuple (kind is ``"word"`` or ``"phrase"``).
     """
-    tokens = []
+    tokens: list[Any] = []
     rest = line.strip()
     while rest:
         m = re.match(r"\s+", rest)
@@ -103,7 +106,7 @@ def _tokenize_rule(line: str) -> list:
     return tokens
 
 
-def _term_matches(term: tuple, text: str) -> bool:
+def _term_matches(term: tuple[str, str], text: str) -> bool:
     """Case-insensitive substring match for a single term."""
     _kind, value = term
     if not value:
@@ -111,7 +114,7 @@ def _term_matches(term: tuple, text: str) -> bool:
     return value.lower() in text.lower()
 
 
-def _rule_matches(tokens: list, text: str) -> bool:
+def _rule_matches(tokens: list[Any], text: str) -> bool:
     """
     Evaluate a tokenized rule against *text*.
 
@@ -120,8 +123,8 @@ def _rule_matches(tokens: list, text: str) -> bool:
     """
     if not tokens:
         return False
-    clauses: list[list] = []
-    current: list = []
+    clauses: list[list[Any]] = []
+    current: list[Any] = []
     for t in tokens:
         if t == "OR":
             if current:
@@ -143,7 +146,7 @@ def _rule_matches(tokens: list, text: str) -> bool:
     return False
 
 
-def load_rules(path: str | None) -> list[list]:
+def load_rules(path: str | None) -> list[list[Any]]:
     """
     Load and parse the exclusion rule file at *path*.
 
@@ -173,7 +176,7 @@ def load_rules(path: str | None) -> list[list]:
     return rules
 
 
-def is_excluded_by_rules(rules: list[list], searchable_text: str) -> bool:
+def is_excluded_by_rules(rules: list[list[Any]], searchable_text: str) -> bool:
     """
     Return ``True`` if *searchable_text* matches any exclusion rule.
 
@@ -211,7 +214,7 @@ def build_searchable_text(
     return "\n".join(p for p in parts if p)
 
 
-def session_text_for_exclusion(session: dict) -> str:
+def session_text_for_exclusion(session: SessionDict) -> str:
     """Extract a plain-text snippet from session messages for exclusion matching.
 
     Joins all non-empty, non-whitespace message ``text`` fields with blank
@@ -229,8 +232,8 @@ def session_text_for_exclusion(session: dict) -> str:
 
 
 def is_session_excluded(
-    rules: list[list],
-    session: dict,
+    rules: list[list[Any]],
+    session: SessionDict,
     project_name: str | None,
 ) -> bool:
     """High-level helper: evaluate exclusion rules against a parsed session.

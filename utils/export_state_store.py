@@ -6,15 +6,23 @@ import json
 import os
 import tempfile
 import threading
+from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Any, cast
 
+from models.export import ExportStateDict
+
+fcntl: Any
 try:
-    import fcntl
+    import fcntl as _fcntl_mod
+    fcntl = _fcntl_mod
 except ImportError:
     fcntl = None
 
+msvcrt: Any
 try:
-    import msvcrt
+    import msvcrt as _msvcrt_mod
+    msvcrt = _msvcrt_mod
 except ImportError:
     msvcrt = None
 
@@ -35,7 +43,7 @@ def _fallback_lock_for(path: str) -> threading.Lock:
 
 
 @contextmanager
-def export_state_lock(state_path: str | None = None):
+def export_state_lock(state_path: str | None = None) -> Iterator[None]:
     """Serialize export_state.json reads/writes across processes.
 
     POSIX: ``flock`` on a sidecar ``*.lock`` file. Windows: ``msvcrt.locking`` on
@@ -63,10 +71,10 @@ def export_state_lock(state_path: str | None = None):
         if not os.path.exists(lock_path):
             with open(lock_path, "wb") as f:
                 f.write(b"\x00")
-        lock_fp = open(lock_path, "r+b")
+        lock_fp = open(lock_path, "r+b")  # type: ignore[assignment]
         try:
             if os.path.getsize(lock_path) == 0:
-                lock_fp.write(b"\x00")
+                lock_fp.write(b"\x00")  # type: ignore[arg-type]
                 lock_fp.flush()
             lock_fp.seek(0)
             msvcrt.locking(lock_fp.fileno(), msvcrt.LK_LOCK, 1)
@@ -82,7 +90,7 @@ def export_state_lock(state_path: str | None = None):
             yield
 
 
-def load_export_state_from_disk(state_path: str | None = None) -> dict:
+def load_export_state_from_disk(state_path: str | None = None) -> ExportStateDict:
     """Load state from disk (call under :func:`export_state_lock` for consistency).
 
     Migrates legacy flat ``{session_id: mtime, ...}`` to ``{"sessions": ...}``.
@@ -104,10 +112,12 @@ def load_export_state_from_disk(state_path: str | None = None) -> dict:
     if not isinstance(data.get("sessions"), dict):
         data = dict(data)
         data["sessions"] = {}
-    return data
+    return cast(ExportStateDict, data)
 
 
-def atomic_write_export_state(state: dict, state_path: str | None = None) -> None:
+def atomic_write_export_state(
+    state: ExportStateDict, state_path: str | None = None
+) -> None:
     """Write *state* atomically (serialize, temp file + fsync + replace).
 
     Call under :func:`export_state_lock` matching *state_path*.

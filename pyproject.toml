@@ -1,0 +1,9 @@
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["api", "utils", "models"]
+exclude = ["tests/"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true

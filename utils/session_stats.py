@@ -2,6 +2,11 @@
 activity, command success rates, conversation turns, etc. Bridges the raw
 parser output to the exporters."""
 
+from typing import Any, cast
+
+from models.session import MessageDict, SessionDict, SessionMetadataDict
+from models.stats import FilesTouchedDict, SessionStatsDict
+
 # Approximate pricing per 1M tokens (USD) as of early 2026.
 # Used for best-effort cost estimation only.
 _MODEL_PRICING = {
@@ -12,7 +17,7 @@ _MODEL_PRICING = {
 }
 
 
-def compute_stats(session: dict) -> dict:
+def compute_stats(session: SessionDict) -> SessionStatsDict:
     """Build the full stats dict for a session. Everything the exporters and
     API endpoints need -- file lists, command history, cost, turn count."""
     meta = session["metadata"]
@@ -35,10 +40,10 @@ def compute_stats(session: dict) -> dict:
         "api_error_count": meta.get("api_errors", 0),
         "compaction_events": meta.get("compact_boundaries", []),
     }
-    return stats
+    return cast(SessionStatsDict, stats)
 
 
-def _compute_files_touched(meta: dict) -> dict:
+def _compute_files_touched(meta: SessionMetadataDict) -> FilesTouchedDict:
     """Split files into read-only, edited, and newly created buckets. Files
     that were both read and edited only show up under edited."""
     read = set(meta.get("files_read", []))
@@ -53,15 +58,16 @@ def _compute_files_touched(meta: dict) -> dict:
     }
 
 
-def _compute_commands_run(messages: list) -> list:
+def _compute_commands_run(messages: list[MessageDict]) -> list[dict[str, Any]]:
     """Walk through messages and match up Bash tool_use calls with their
     subsequent tool_result entries to get exit codes and error status."""
     commands = []
     # Build a map of tool_use_id -> command from assistant messages
     pending_commands = {}
     for msg in messages:
-        if msg["role"] == "assistant" and msg.get("tool_uses"):
-            for tu in msg["tool_uses"]:
+        tool_uses = msg.get("tool_uses") or []
+        if msg["role"] == "assistant" and tool_uses:
+            for tu in tool_uses:
                 if tu["name"] == "Bash":
                     cmd = tu["input"].get("command", "")
                     if cmd:
@@ -71,9 +77,8 @@ def _compute_commands_run(messages: list) -> list:
                         }
 
         # Match tool results back to commands
-        if msg["role"] == "user" and msg.get("tool_result_parsed"):
-            trp = msg["tool_result_parsed"]
-            if trp.get("result_type") == "bash":
+        trp = msg.get("tool_result_parsed")
+        if msg["role"] == "user" and trp and trp.get("result_type") == "bash":
                 # Try to find matching command by sequential order
                 if pending_commands:
                     first_id = next(iter(pending_commands))
@@ -95,7 +100,7 @@ def _compute_commands_run(messages: list) -> list:
     return commands
 
 
-def _count_turns(messages: list) -> int:
+def _count_turns(messages: list[MessageDict]) -> int:
     """Count how many times the user said something and got a reply back."""
     turns = 0
     prev_role = None
@@ -108,7 +113,7 @@ def _count_turns(messages: list) -> int:
     return turns
 
 
-def _estimate_cost(messages: list, meta: dict) -> float | None:
+def _estimate_cost(messages: list[MessageDict], meta: SessionMetadataDict) -> float | None:
     """Rough cost estimate based on each message's token count and the model
     that generated it. Not exact -- doesn't account for caching discounts."""
     total = 0.0
@@ -133,7 +138,7 @@ def _estimate_cost(messages: list, meta: dict) -> float | None:
     return round(total, 4) if has_data else None
 
 
-def _get_pricing(model: str) -> tuple | None:
+def _get_pricing(model: str) -> tuple[float, float] | None:
     """Find pricing by checking if 'opus', 'sonnet', or 'haiku' appears in
     the model name. Returns None for unknown models."""
     model_lower = model.lower()
@@ -143,7 +148,7 @@ def _get_pricing(model: str) -> tuple | None:
     return None
 
 
-def _summarize_tool_results(messages: list) -> dict:
+def _summarize_tool_results(messages: list[MessageDict]) -> dict[str, int]:
     """Count up how many tool results succeeded, failed, or got interrupted,
     broken down by tool type."""
     summary = {
@@ -192,7 +197,7 @@ def _summarize_tool_results(messages: list) -> dict:
     return summary
 
 
-def _format_duration(seconds) -> str | None:
+def _format_duration(seconds: float | int | None) -> str | None:
     """Turn seconds into something like '2h 15m' or '45s'."""
     if seconds is None:
         return None
