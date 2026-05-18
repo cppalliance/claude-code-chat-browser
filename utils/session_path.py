@@ -1,10 +1,14 @@
 """Finds where Claude Code stores its .jsonl session files on disk and
 lists projects/sessions from that directory."""
 
+import json
+import logging
 import os
 import platform
 
 from models.project import ProjectDict, SessionListItemDict
+
+_logger = logging.getLogger(__name__)
 
 
 def safe_join(base: str, *parts: str) -> str:
@@ -55,9 +59,9 @@ def list_projects(base_dir: str | None = None) -> list[ProjectDict]:
             display_name = name
             for jf in jsonl_files:
                 candidate = _get_display_name(
-                    os.path.join(project_dir, jf), name
+                    os.path.join(project_dir, jf), None
                 )
-                if candidate:
+                if candidate is not None:
                     display_name = candidate
                     break
             projects.append({
@@ -70,10 +74,9 @@ def list_projects(base_dir: str | None = None) -> list[ProjectDict]:
     return projects
 
 
-def _get_display_name(jsonl_path: str, fallback: str | None) -> str:
+def _get_display_name(jsonl_path: str, fallback: str | None) -> str | None:
     """Peek at the first entry's cwd field to get a human-readable project path
     instead of the hashed directory name."""
-    import json
     try:
         with open(jsonl_path, "r", encoding="utf-8", errors="replace") as f:
             for line in f:
@@ -89,9 +92,11 @@ def _get_display_name(jsonl_path: str, fallback: str | None) -> str:
                     folder = cwd.rsplit("/", 1)[-1]
                     out = folder[:1].upper() + folder[1:] if folder else cwd
                     return str(out)
-    except Exception:
-        pass
-    return fallback or ""
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        _logger.warning(
+            "Failed to extract display name from %s: %s", jsonl_path, exc
+        )
+    return fallback
 
 
 def list_sessions(project_dir: str) -> list[SessionListItemDict]:
