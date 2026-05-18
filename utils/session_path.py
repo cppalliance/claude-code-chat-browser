@@ -52,15 +52,14 @@ def list_projects(base_dir: str | None = None) -> list[ProjectDict]:
                 latest_mtime, tz=timezone.utc
             ).isoformat()
             # Read cwd from sessions to get the real project path
-            display_name = None
+            display_name = name
             for jf in jsonl_files:
-                display_name = _get_display_name(
+                candidate = _get_display_name(
                     os.path.join(project_dir, jf), name
                 )
-                if display_name:
+                if candidate:
+                    display_name = candidate
                     break
-            if not display_name:
-                display_name = name
             projects.append({
                 "name": name,
                 "path": project_dir,

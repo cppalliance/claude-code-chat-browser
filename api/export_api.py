@@ -277,30 +277,36 @@ def export_session(project_name: str, session_id: str) -> FlaskReturn:
         return json_ok({"error": "Session not found"}), 404
 
     fmt = request.args.get("format", "md")
-    session = parse_session(filepath)
-    rules = current_app.config.get("EXCLUSION_RULES") or []
-    if is_session_excluded(rules, session, project_name):
-        return json_ok({"error": "Session not found"}), 404
-    stats = compute_stats(session)
-    title_slug = slugify(session["title"], default="session")
+    try:
+        session = parse_session(filepath)
+        rules = current_app.config.get("EXCLUSION_RULES") or []
+        if is_session_excluded(rules, session, project_name):
+            return json_ok({"error": "Session not found"}), 404
+        stats = compute_stats(session)
+        title_slug = slugify(session["title"], default="session")
 
-    if fmt == "json":
-        content = session_to_json(session, stats)
-        buf = io.BytesIO(content.encode("utf-8"))
+        if fmt == "json":
+            content = session_to_json(session, stats)
+            buf = io.BytesIO(content.encode("utf-8"))
+            buf.seek(0)
+            return send_file(
+                buf,
+                mimetype="application/json",
+                as_attachment=True,
+                download_name=f"{title_slug}.json",  # type: ignore[call-arg]
+            )
+
+        md = session_to_markdown(session, stats)
+        buf = io.BytesIO(md.encode("utf-8"))
         buf.seek(0)
         return send_file(
             buf,
-            mimetype="application/json",
+            mimetype="text/markdown",
             as_attachment=True,
-            download_name=f"{title_slug}.json",  # type: ignore[call-arg]
+            download_name=f"{title_slug}.md",  # type: ignore[call-arg]
         )
-
-    md = session_to_markdown(session, stats)
-    buf = io.BytesIO(md.encode("utf-8"))
-    buf.seek(0)
-    return send_file(
-        buf,
-        mimetype="text/markdown",
-        as_attachment=True,
-        download_name=f"{title_slug}.md",  # type: ignore[call-arg]
-    )
+    except Exception:
+        current_app.logger.exception(
+            "Failed to export session %s/%s", project_name, session_id
+        )
+        return json_ok({"error": "Internal server error exporting session"}), 500
