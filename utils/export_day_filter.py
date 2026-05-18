@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timezone
+from typing import Any, Callable
+
+from models.project import ProjectDict, SessionListItemDict
+from models.session import SessionDict
 
 logger = logging.getLogger(__name__)
 
@@ -56,14 +60,18 @@ def day_overlaps_session(start: date, end: date, day: date) -> bool:
 
 
 def collect_sessions_for_latest_activity_day(
-    projects: list[dict],
+    projects: list[ProjectDict],
     *,
-    list_sessions,
-    parse_session,
-    is_session_excluded,
-    rules,
+    list_sessions: Callable[[str], list[SessionListItemDict]],
+    parse_session: Callable[[str], SessionDict],
+    is_session_excluded: Callable[..., bool],
+    rules: list[list[Any]],
     abort_on_parse_error: bool = False,
-) -> tuple[date | None, list[tuple[dict, dict, dict, date, date]], int]:
+) -> tuple[
+    date | None,
+    list[tuple[ProjectDict, SessionListItemDict, SessionDict, date, date]],
+    int,
+]:
     """Parse sessions in *projects*, skip untitled/excluded, return (D, rows, n_scanned).
 
     *D* is the latest session **end** calendar date (UTC) from successfully
@@ -74,7 +82,7 @@ def collect_sessions_for_latest_activity_day(
     Each row is ``(project, sess_info, session, start_date, end_date)`` for
     sessions that overlap *D*. *n_scanned* counts every ``.jsonl`` file visited.
     """
-    parsed: list[tuple[dict, dict, dict, date, date]] = []
+    parsed: list[tuple[ProjectDict, SessionListItemDict, SessionDict, date, date]] = []
     total_scan = 0
     for project in projects:
         for sess_info in list_sessions(project["path"]):

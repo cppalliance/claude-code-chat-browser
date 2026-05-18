@@ -4,25 +4,45 @@ import os
 
 from flask import Blueprint, current_app, jsonify, request
 
+from api._flask_types import FlaskReturn, json_ok
+from models.search import SearchHitDict
 from utils.session_path import get_claude_projects_dir, list_projects, list_sessions
 from utils.jsonl_parser import parse_session
 from utils.exclusion_rules import is_session_excluded
 
 search_bp = Blueprint("search", __name__)
 
+_DEFAULT_LIMIT = 50
+
+
+def _parse_limit(raw: str | None, default: int = _DEFAULT_LIMIT) -> int:
+    """Parse a positive integer limit from a query string value."""
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError("Invalid limit: must be a positive integer") from None
+    if value < 1:
+        raise ValueError("Invalid limit: must be a positive integer")
+    return value
+
 
 @search_bp.route("/api/search")
-def search():
+def search() -> FlaskReturn:
     query = request.args.get("q", "").strip().lower()
     if not query:
-        return jsonify([])
+        return json_ok([])
 
-    max_results = int(request.args.get("limit", 50))
+    try:
+        max_results = _parse_limit(request.args.get("limit"))
+    except ValueError as e:
+        return json_ok({"error": str(e)}), 400
     base = current_app.config.get("CLAUDE_PROJECTS_DIR") or get_claude_projects_dir()
     projects = list_projects(base)
 
     rules = current_app.config.get("EXCLUSION_RULES") or []
-    results = []
+    results: list[SearchHitDict] = []
     for project in projects:
         sessions = list_sessions(project["path"])
         for sess_info in sessions:
@@ -56,4 +76,4 @@ def search():
                     if len(results) >= max_results:
                         break
 
-    return jsonify(results)
+    return json_ok(results)
