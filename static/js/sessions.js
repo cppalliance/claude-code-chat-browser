@@ -4,6 +4,7 @@ import { state } from './shared/state.js';
 import { esc, truncate, formatDate, formatTs, smoothSet, loadingBar, showToast, closeSidebar, setHamburgerVisible } from './shared/utils.js';
 import { renderMarkdown, cleanContent } from './shared/markdown.js';
 import { setWorkspaceMode } from './shared/theme.js';
+import { downloadSession } from './export.js';
 
 // ==================== Workspace (split layout) ====================
 
@@ -54,7 +55,7 @@ export async function showWorkspace(projectName, selectedSessionId) {
                 const errorClass = s.error ? ' sidebar-item-error' : '';
                 const errorDetail = s.error_detail ? `<div class="error-detail">${esc(s.error_detail)}</div>` : '';
                 const modelBadge = models ? `<span style="font-size:0.65rem;opacity:0.6;display:block;margin-top:1px">${esc(models)}</span>` : '';
-                sidebar += `<button class="sidebar-item${isActive}${errorClass}" onclick="selectSession(${JSON.stringify(projectName)},${JSON.stringify(s.id)})" id="sidebar-${esc(s.id)}">
+                sidebar += `<button type="button" class="sidebar-item${isActive}${errorClass}" data-project="${esc(projectName)}" data-session-id="${esc(s.id)}" id="sidebar-${esc(s.id)}">
                     <div class="sidebar-item-title">${esc(title)}</div>
                     ${errorDetail}
                     <div class="sidebar-item-time">${esc(ts)}${modelBadge}</div>
@@ -81,6 +82,7 @@ export async function showWorkspace(projectName, selectedSessionId) {
             </div>
         </div>`;
         smoothSet(content, html);
+        bindSidebarSessionClicks();
         loadingBar.done();
 
         if (selectedSessionId) {
@@ -92,6 +94,30 @@ export async function showWorkspace(projectName, selectedSessionId) {
         loadingBar.done();
         content.innerHTML = `<div class="loading">Error: ${esc(e.message)}</div>`;
     }
+}
+
+function bindSidebarSessionClicks() {
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+    sidebar.addEventListener('click', (e) => {
+        const btn = e.target.closest('button.sidebar-item[data-session-id]');
+        if (!btn) return;
+        const project = btn.getAttribute('data-project');
+        const sessionId = btn.getAttribute('data-session-id');
+        if (project == null || sessionId == null) return;
+        selectSession(project, sessionId);
+    });
+}
+
+function bindWorkspaceDownloadClick(wsActions) {
+    const btn = wsActions.querySelector('[data-download-session]');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+        const project = btn.getAttribute('data-download-project');
+        const sessionId = btn.getAttribute('data-download-session');
+        if (project == null || sessionId == null) return;
+        downloadSession(project, sessionId);
+    });
 }
 
 export function selectSession(projectName, sessionId) {
@@ -151,11 +177,12 @@ export async function loadSession(projectName, sessionId) {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     Copy All
                 </button>
-                <button class="btn btn-outline btn-sm" onclick="downloadSession(${JSON.stringify(projectName)},${JSON.stringify(sessionId)})">
+                <button type="button" class="btn btn-outline btn-sm" data-download-project="${esc(projectName)}" data-download-session="${esc(sessionId)}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     Download
                 </button>
             </div>`;
+            bindWorkspaceDownloadClick(wsActions);
         }
 
         html += `<div class="card">
