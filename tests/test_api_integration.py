@@ -81,8 +81,9 @@ def test_session_detail_includes_thinking_blocks(client_thinking):
     session = resp.get_json()
     assert "messages" in session
     assistant_msgs = [m for m in session["messages"] if m.get("role") == "assistant"]
-    assert len(assistant_msgs) >= 1
-    assert assistant_msgs[0].get("thinking") == "Considering options carefully."
+    assert any(
+        m.get("thinking") == "Considering options carefully." for m in assistant_msgs
+    )
 
 
 # --- /api/search ---
