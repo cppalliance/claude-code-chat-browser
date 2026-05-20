@@ -112,7 +112,7 @@ jobs:
 
       # Subset run: skip fail-under (full suite enforces 60% in pytest job).
       - name: Run integration tests with coverage
-        run: pytest tests/test_api_integration.py tests/test_search.py -v --cov=api --cov-report=xml --cov-fail-under=0
+        run: pytest tests/test_api_integration.py tests/test_search.py -v --cov=api --cov=utils --cov-report=xml --cov-fail-under=0
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
