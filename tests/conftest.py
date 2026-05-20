@@ -39,7 +39,7 @@ def client(tmp_path):
 
 @pytest.fixture
 def client_single(tmp_path):
-    """Flask test client with one seeded session — for search/limit tests."""
+    """Flask test client with one seeded session ? for search/limit tests."""
     return _make_test_client(tmp_path, {"session_abc123.jsonl": "session_minimal.jsonl"})
 
 
