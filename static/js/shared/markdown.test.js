@@ -1,5 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cleanContent, renderMarkdown } from './markdown.js';
+
+const _origMarked = globalThis.marked;
+const _origDOMPurify = globalThis.DOMPurify;
 
 describe('cleanContent', () => {
     it('strips system-reminder blocks', () => {
@@ -20,6 +23,12 @@ describe('renderMarkdown', () => {
         globalThis.DOMPurify = {
             sanitize: vi.fn((html) => html.replace(/<script[\s\S]*?<\/script>/gi, '')),
         };
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        globalThis.marked = _origMarked;
+        globalThis.DOMPurify = _origDOMPurify;
     });
 
     it('sanitizes script tags from parsed output', () => {

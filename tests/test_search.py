@@ -84,6 +84,10 @@ class TestSearchLimitValidation:
         assert resp.status_code == 200
         assert isinstance(resp.get_json(), list)
 
+    def test_limit_whitespace_defaults_returns_200(self, client):
+        resp = client.get("/api/search?q=Hello&limit=%20%20%20")
+        assert resp.status_code == 200
+
     def test_empty_query_returns_empty_list(self, client):
         resp = client.get("/api/search?q=")
         assert resp.status_code == 200
