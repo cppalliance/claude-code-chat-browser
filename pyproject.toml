@@ -3,3 +3,14 @@ python_version = "3.12"
 strict = true
 packages = ["api", "utils", "models"]
 exclude = ["tests/"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=api --cov=utils --cov-report=term-missing --cov-report=xml:coverage.xml"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+fail_under = 60
+include = ["api/*", "utils/*"]
