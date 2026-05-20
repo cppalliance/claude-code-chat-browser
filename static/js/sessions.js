@@ -100,11 +100,12 @@ function bindSidebarSessionClicks() {
     const sidebar = document.getElementById('sidebar');
     if (!sidebar) return;
     sidebar.addEventListener('click', (e) => {
+        if (!(e.target instanceof Element)) return;
         const btn = e.target.closest('button.sidebar-item[data-session-id]');
         if (!btn) return;
         const project = btn.getAttribute('data-project');
         const sessionId = btn.getAttribute('data-session-id');
-        if (project == null || sessionId == null) return;
+        if (!project || !sessionId) return;
         selectSession(project, sessionId);
     });
 }

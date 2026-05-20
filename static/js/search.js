@@ -28,10 +28,12 @@ export function showSearchPage() {
             <div id="search-results"></div>
         </div>`;
     document.getElementById('search-results').addEventListener('click', (e) => {
+        if (!(e.target instanceof Element)) return;
         const result = e.target.closest('.search-result[data-project]');
         if (!result) return;
         const project = result.getAttribute('data-project');
         const sessionId = result.getAttribute('data-session-id');
+        if (!project || !sessionId) return;
         window.location.hash = `#project/${encodeURIComponent(project)}/${encodeURIComponent(sessionId)}`;
     });
     document.getElementById('search-input').focus();
