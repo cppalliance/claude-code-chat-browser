@@ -33,3 +33,22 @@ def client_single(tmp_path):
     app = create_app(base_dir=str(tmp_path))
     app.config["TESTING"] = True
     return app.test_client()
+
+
+@pytest.fixture
+def client_empty(tmp_path):
+    """Flask test client with an empty projects directory."""
+    app = create_app(base_dir=str(tmp_path))
+    app.config["TESTING"] = True
+    return app.test_client()
+
+
+@pytest.fixture
+def client_thinking(tmp_path):
+    """Flask test client with a session containing thinking content blocks."""
+    project_dir = tmp_path / "test-project"
+    project_dir.mkdir(parents=True)
+    shutil.copy(FIXTURES / "session_with_thinking.jsonl", project_dir / "session_think001.jsonl")
+    app = create_app(base_dir=str(tmp_path))
+    app.config["TESTING"] = True
+    return app.test_client()

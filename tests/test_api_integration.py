@@ -4,12 +4,10 @@ API integration tests — full HTTP round-trip via Flask test_client.
 Covers /api/projects, /api/projects/<name>/sessions, /api/sessions/<name>/<id>,
 and /api/search (Week 3 Tuesday, 8pt).
 
-The `client` fixture (two seeded sessions) is provided by tests/conftest.py.
+Fixtures (`client`, `client_empty`, `client_thinking`) live in tests/conftest.py.
 """
 
 from __future__ import annotations
-
-from app import create_app
 
 
 def _assert_error_shape(resp):
@@ -33,10 +31,8 @@ def test_projects_returns_list(client):
     assert "path" in project
 
 
-def test_projects_empty_base_dir(tmp_path):
-    app = create_app(base_dir=str(tmp_path))
-    app.config["TESTING"] = True
-    resp = app.test_client().get("/api/projects")
+def test_projects_empty_base_dir(client_empty):
+    resp = client_empty.get("/api/projects")
     assert resp.status_code == 200
     assert resp.get_json() == []
 
@@ -77,6 +73,16 @@ def test_session_detail_not_found(client):
     resp = client.get("/api/sessions/test-project/nonexistent")
     assert resp.status_code == 404
     _assert_error_shape(resp)
+
+
+def test_session_detail_includes_thinking_blocks(client_thinking):
+    resp = client_thinking.get("/api/sessions/test-project/session_think001")
+    assert resp.status_code == 200
+    session = resp.get_json()
+    assert "messages" in session
+    assistant_msgs = [m for m in session["messages"] if m.get("role") == "assistant"]
+    assert len(assistant_msgs) >= 1
+    assert assistant_msgs[0].get("thinking") == "Considering options carefully."
 
 
 # --- /api/search ---
