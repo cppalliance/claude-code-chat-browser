@@ -154,7 +154,7 @@ class TestGetSessionStatsErrorBody:
         monkeypatch.setattr("api.sessions.parse_session", _boom)
 
         resp = client.get("/api/sessions/proj/abc/stats")
-        assert resp.status_code == 400
+        assert resp.status_code == 500
         body = resp.get_json()
         assert body.get("error") == "Failed to parse session"
         assert body.get("code") == "PARSE_ERROR"

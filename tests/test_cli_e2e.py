@@ -66,11 +66,19 @@ def test_cli_stats_exits_zero(tmp_path):
     assert proc.returncode == 0
 
 
-def test_cli_invalid_since_exits_nonzero():
-    proc = _run_cli(["--since", "yesterday"])
+def test_cli_invalid_since_exits_nonzero(tmp_path):
+    base = _seed_base_dir(tmp_path)
+    proc = _run_cli([
+        "export",
+        "--since",
+        "yesterday",
+        "--base-dir",
+        str(base),
+    ])
     assert proc.returncode != 0
     assert "--since" in proc.stderr
     assert "invalid choice" in proc.stderr.lower()
+    assert "export" in proc.stderr
 
 
 def test_cli_export_creates_output(tmp_path):

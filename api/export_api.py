@@ -294,7 +294,7 @@ def export_session(project_name: str, session_id: str) -> FlaskReturn:
         return error_response(
             ErrorCode.PARSE_ERROR,
             "Failed to parse session",
-            400,
+            500,
         )
 
     rules = current_app.config.get("EXCLUSION_RULES") or []
