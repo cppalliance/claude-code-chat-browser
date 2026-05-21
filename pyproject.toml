@@ -2,9 +2,4 @@
 python_version = "3.12"
 strict = true
 packages = ["api", "utils", "models"]
-
-[[tool.mypy.overrides]]
-files = ["tests"]
-strict = false
-disallow_untyped_defs = false
-disallow_untyped_calls = false
+exclude = ["tests/"]

@@ -1,6 +1,6 @@
 """Shared Flask handler return types for mypy."""
 
-from typing import Any, Union
+from typing import Any, Union, cast
 
 from flask import Response, jsonify
 
@@ -11,7 +11,7 @@ FlaskReturn = Union[Response, tuple[Response, int]]
 
 def json_response(*args: Any, **kwargs: Any) -> Response:
     """Typed wrapper around :func:`flask.jsonify` for JSON bodies."""
-    return jsonify(*args, **kwargs)
+    return cast(Response, jsonify(*args, **kwargs))
 
 
 def json_error(payload: str | dict[str, Any], status: int) -> tuple[Response, int]:

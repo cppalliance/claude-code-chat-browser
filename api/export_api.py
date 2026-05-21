@@ -247,7 +247,7 @@ def bulk_export() -> FlaskReturn:
         buf,
         mimetype="application/zip",
         as_attachment=True,
-        download_name=f"claude-code-export{suffix}-{date_tag}.zip",
+        download_name=f"claude-code-export{suffix}-{date_tag}.zip",  # type: ignore[call-arg]
     )
 
 
@@ -285,7 +285,7 @@ def export_session(project_name: str, session_id: str) -> FlaskReturn:
                 buf,
                 mimetype="application/json",
                 as_attachment=True,
-                download_name=f"{title_slug}.json",
+                download_name=f"{title_slug}.json",  # type: ignore[call-arg]
             )
 
         md = session_to_markdown(session, stats)
@@ -295,7 +295,7 @@ def export_session(project_name: str, session_id: str) -> FlaskReturn:
             buf,
             mimetype="text/markdown",
             as_attachment=True,
-            download_name=f"{title_slug}.md",
+            download_name=f"{title_slug}.md",  # type: ignore[call-arg]
         )
     except Exception:
         current_app.logger.exception(

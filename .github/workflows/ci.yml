@@ -75,7 +75,7 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Run mypy (strict, production packages)
-        run: mypy
+        run: mypy -p api -p utils -p models
 
       - name: Run mypy on tests (non-strict smoke)
-        run: mypy tests --follow-imports skip
+        run: mypy tests --config-file mypy-tests.ini --follow-imports skip
