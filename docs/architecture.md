@@ -4,7 +4,7 @@
 
 ## Component diagram
 
-```
+```text
                     ┌─────────────────────────────┐
                     │  ~/.claude/projects/      │
                     │    <project>/*.jsonl      │  (read-only data source)

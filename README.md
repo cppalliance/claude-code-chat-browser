@@ -98,7 +98,7 @@ Reads from `~/.claude/projects/` which contains JSONL session files created by C
 
 See **[`docs/architecture.md`](docs/architecture.md)** for layered design, data flow, and the dispatch-table ordering rationale.
 
-```
+```text
 claude-code-chat-browser/
 ├── app.py                    # Flask entry point (default port 5000)
 ├── api/

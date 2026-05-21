@@ -16,7 +16,7 @@ None. The server binds to `127.0.0.1` by default and reads `~/.claude/projects/`
 
 ## Error envelope
 
-Every `4xx` and `5xx` response from `/api/*` uses this shape:
+Most `/api/*` error responses use this shape:
 
 ```json
 {
@@ -24,6 +24,14 @@ Every `4xx` and `5xx` response from `/api/*` uses this shape:
   "code": "MACHINE_READABLE_CODE"
 }
 ```
+
+**Exception (no `{error, code}` body):**
+
+| Endpoint | Status | Body |
+|----------|--------|------|
+| `GET /api/projects/<project_name>/sessions` | 400 | `[]` (empty JSON array) when `project_name` fails path validation |
+
+All other documented error paths below use the structured envelope.
 
 Extra fields may appear for specific codes (for example `since` on invalid bulk-export mode).
 
