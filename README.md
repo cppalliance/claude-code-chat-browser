@@ -21,20 +21,11 @@ Browse and export Claude Code chat history — Web GUI and CLI.
 - **Per-model badges** in session header
 - **Bulk export** — download all sessions, incremental updates, or latest-day slice as a zip; if there is nothing to export, the API returns **422** with JSON body `{"error": "Nothing to export", "code": "EXPORT_NOTHING_TO_EXPORT", "since": "<mode>"}` (the `since` field echoes your request: `"all"`, `"last"`, or `"incremental"`) instead of an empty zip
 
-### API error codes
+### API
 
-JSON error responses include a machine-readable `"code"` (stable `UPPER_SNAKE_CASE`) and a human-readable `"error"` message. Common codes:
+REST endpoints for projects, sessions, search, and export are documented in **[`docs/api-reference.md`](docs/api-reference.md)**.
 
-| Code | Typical HTTP | Meaning |
-|------|--------------|---------|
-| `SEARCH_INVALID_LIMIT` | 400 | Query param `limit` is not a positive integer |
-| `INVALID_PATH` | 400 | Path traversal or unsafe project/session path |
-| `SESSION_NOT_FOUND` | 404 | Session file missing or excluded |
-| `INVALID_REQUEST_BODY` | 400 | POST body is not a JSON object |
-| `INVALID_SINCE_MODE` | 400 | Bulk export `since` is not `all`, `last`, or `incremental` |
-| `EXPORT_NOTHING_TO_EXPORT` | 422 | No sessions matched the export scope |
-| `PARSE_ERROR` | 500 | Session file could not be parsed |
-| `INTERNAL_ERROR` | 500 | Unexpected failure (e.g. stats computation) |
+JSON error responses include a machine-readable `"code"` (stable `UPPER_SNAKE_CASE`) and a human-readable `"error"` message. See the [error code catalog](docs/api-reference.md#error-code-catalog) for the full table.
 
 ### CLI Export
 - Standalone script to export all sessions to Markdown with YAML frontmatter
@@ -105,14 +96,20 @@ Reads from `~/.claude/projects/` which contains JSONL session files created by C
 
 ## Project Structure
 
+See **[`docs/architecture.md`](docs/architecture.md)** for layered design, data flow, and the dispatch-table ordering rationale.
+
 ```
 claude-code-chat-browser/
 ├── app.py                    # Flask entry point (default port 5000)
 ├── api/
+│   ├── error_codes.py        # ErrorCode enum + error_response() helper
 │   ├── projects.py           # Project listing & session counts
 │   ├── sessions.py           # Session parsing & message delivery
 │   ├── search.py             # Full-text search across sessions
 │   └── export_api.py         # Bulk zip and per-session Markdown export
+├── docs/
+│   ├── api-reference.md      # HTTP API reference (routes, errors, examples)
+│   └── architecture.md       # Component diagram and data flow
 ├── utils/
 │   ├── session_path.py       # OS-aware path detection & project naming
 │   ├── jsonl_parser.py       # JSONL session parser with tool result classification
@@ -122,24 +119,28 @@ claude-code-chat-browser/
 ├── static/
 │   ├── index.html            # SPA entry point (Inter font, minimal markup)
 │   ├── css/style.css         # Dark/light theme, responsive, animations
-│   └── js/app.js             # Hash-based routing, rendering, UI components
+│   └── js/                   # ES modules (app.js, route handlers, shared/)
+├── CONTRIBUTING.md           # Dev setup, tests, PR conventions
 └── tests/
 ```
 
 ## Development
 
-To run the test suite, install the dev requirements (Flask + pytest):
+See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for full setup, conventions, and where to change each layer.
+
+Quick start:
 
 ```bash
 pip install -r requirements-dev.txt
 pytest
+npm ci && npm test   # only if you changed static/js/
 ```
 
-`requirements.txt` carries only the runtime dep (Flask); `requirements-dev.txt` pulls it in via `-r` and adds pytest.
+`requirements.txt` carries only the runtime dep (Flask); `requirements-dev.txt` pulls it in via `-r` and adds pytest (+ coverage). Frontend tests use vitest (`package.json`).
 
 ## Continuous integration
 
-Every push and pull request runs **`pytest`** on **Ubuntu** (Python 3.12) via [`.github/workflows/ci.yml`](.github/workflows/ci.yml). A separate job verifies that `pip install -r requirements.txt` (production-only) is sufficient to import and boot the app.
+Every push and pull request runs **`pytest`**, **API integration tests**, and **vitest** on **Ubuntu** (Python 3.12, Node 20) via [`.github/workflows/ci.yml`](.github/workflows/ci.yml). A separate job verifies that `pip install -r requirements.txt` (production-only) is sufficient to import and boot the app.
 
 ## Exported Markdown Format
 
