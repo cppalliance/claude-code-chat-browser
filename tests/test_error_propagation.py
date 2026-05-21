@@ -154,9 +154,10 @@ class TestGetSessionStatsErrorBody:
         monkeypatch.setattr("api.sessions.parse_session", _boom)
 
         resp = client.get("/api/sessions/proj/abc/stats")
-        assert resp.status_code == 500
+        assert resp.status_code == 400
         body = resp.get_json()
         assert body.get("error") == "Failed to parse session"
+        assert body.get("code") == "PARSE_ERROR"
         # The exception value contains a fake-secret path — must not leak.
         assert "/private/path" not in json.dumps(body)
         _assert_no_class_name_leak(json.dumps(body))

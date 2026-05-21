@@ -40,10 +40,9 @@ def _seed_base_dir(tmp_path: Path) -> Path:
     project_dir = tmp_path / "test-project"
     project_dir.mkdir(parents=True)
     dest = project_dir / "session_abc123.jsonl"
-    dest.write_text(
-        (FIXTURES / "session_minimal.jsonl").read_text(encoding="utf-8"),
-        encoding="utf-8",
-    )
+    content = (FIXTURES / "session_minimal.jsonl").read_text(encoding="utf-8")
+    content = content.replace("demo-project", "test-project")
+    dest.write_text(content, encoding="utf-8")
     return tmp_path
 
 
@@ -51,7 +50,7 @@ def test_cli_list_exits_zero(tmp_path):
     base = _seed_base_dir(tmp_path)
     proc = _run_cli(["list", "--base-dir", str(base)])
     assert proc.returncode == 0
-    assert "test-project" in proc.stdout or "Project" in proc.stdout
+    assert "test-project" in proc.stdout.lower()
 
 
 def test_cli_list_unknown_project_exits_zero_with_message(tmp_path):
@@ -70,6 +69,8 @@ def test_cli_stats_exits_zero(tmp_path):
 def test_cli_invalid_since_exits_nonzero():
     proc = _run_cli(["--since", "yesterday"])
     assert proc.returncode != 0
+    assert "--since" in proc.stderr
+    assert "invalid choice" in proc.stderr.lower()
 
 
 def test_cli_export_creates_output(tmp_path):

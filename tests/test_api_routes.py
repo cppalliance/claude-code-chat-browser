@@ -56,7 +56,9 @@ def test_session_detail_parse_failure_returns_500_without_leak(client, monkeypat
 def test_search_limit_capped_at_max(client):
     resp = client.get("/api/search?q=Hello&limit=9999")
     assert resp.status_code == 200
-    assert len(resp.get_json()) <= 500
+    results = resp.get_json()
+    assert isinstance(results, list)
+    assert len(results) <= 500
 
 
 def test_project_sessions_invalid_path_returns_400_empty_list(client):
