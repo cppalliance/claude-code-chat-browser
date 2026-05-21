@@ -156,7 +156,7 @@ class TestGetSessionStatsErrorBody:
         resp = client.get("/api/sessions/proj/abc/stats")
         assert resp.status_code == 500
         body = resp.get_json()
-        assert body.get("error") == "Failed to compute session stats"
+        assert body.get("error") == "Failed to parse session"
         # The exception value contains a fake-secret path — must not leak.
         assert "/private/path" not in json.dumps(body)
         _assert_no_class_name_leak(json.dumps(body))

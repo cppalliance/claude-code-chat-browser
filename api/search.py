@@ -2,9 +2,10 @@
 
 import os
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, request
 
-from api._flask_types import FlaskReturn, json_error, json_response
+from api._flask_types import FlaskReturn, json_response
+from api.error_codes import ErrorCode, error_response
 from models.search import SearchHitDict
 from utils.session_path import get_claude_projects_dir, list_projects, list_sessions
 from utils.jsonl_parser import parse_session
@@ -37,8 +38,13 @@ def search() -> FlaskReturn:
 
     try:
         max_results = _parse_limit(request.args.get("limit"))
-    except ValueError as e:
-        return json_error(str(e), 400)
+    except ValueError:
+        return error_response(
+            ErrorCode.SEARCH_INVALID_LIMIT,
+            "Invalid limit: must be a positive integer",
+            400,
+        )
+
     base = current_app.config.get("CLAUDE_PROJECTS_DIR") or get_claude_projects_dir()
     projects = list_projects(base)
 
@@ -60,7 +66,6 @@ def search() -> FlaskReturn:
             for msg in session["messages"]:
                 text = msg.get("text", "") or msg.get("content", "")
                 if query in text.lower():
-                    # Find the matching snippet
                     idx = text.lower().index(query)
                     start = max(0, idx - 80)
                     end = min(len(text), idx + len(query) + 80)

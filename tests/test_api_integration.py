@@ -10,11 +10,7 @@ Fixtures (`client`, `client_empty`, `client_thinking`) live in tests/conftest.py
 from __future__ import annotations
 
 
-def _assert_error_shape(resp):
-    body = resp.get_json()
-    assert body is not None
-    assert "error" in body
-    # Wednesday will add "code" field — uncomment after structured error codes land.
+from tests.conftest import assert_error_response as _assert_error_shape
 
 
 # --- /api/projects ---

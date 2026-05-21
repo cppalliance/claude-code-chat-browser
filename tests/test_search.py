@@ -5,6 +5,8 @@ The `client_single` fixture (one seeded session) is provided by tests/conftest.p
 
 from __future__ import annotations
 
+from tests.conftest import assert_error_response
+
 
 def test_limit_integer_string(client_single):
     resp = client_single.get("/api/search?q=Hello&limit=10")
@@ -15,13 +17,13 @@ def test_limit_integer_string(client_single):
 def test_limit_float_string(client_single):
     resp = client_single.get("/api/search?q=Hello&limit=1.5")
     assert resp.status_code == 400
-    assert "error" in resp.get_json()
+    assert_error_response(resp, expected_code="SEARCH_INVALID_LIMIT")
 
 
 def test_limit_non_numeric(client_single):
     resp = client_single.get("/api/search?q=Hello&limit=abc")
     assert resp.status_code == 400
-    assert "error" in resp.get_json()
+    assert_error_response(resp, expected_code="SEARCH_INVALID_LIMIT")
 
 
 def test_limit_default(client_single):
@@ -37,13 +39,13 @@ def test_limit_whitespace_defaults(client_single):
 def test_limit_zero(client_single):
     resp = client_single.get("/api/search?q=Hello&limit=0")
     assert resp.status_code == 400
-    assert "error" in resp.get_json()
+    assert_error_response(resp, expected_code="SEARCH_INVALID_LIMIT")
 
 
 def test_limit_negative(client_single):
     resp = client_single.get("/api/search?q=Hello&limit=-1")
     assert resp.status_code == 400
-    assert "error" in resp.get_json()
+    assert_error_response(resp, expected_code="SEARCH_INVALID_LIMIT")
 
 
 def test_empty_query(client_single):
