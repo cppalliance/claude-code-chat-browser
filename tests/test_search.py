@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+# TODO: drop sys.path hack when pyproject.toml gains a [project] table + pip install -e .
 sys.path.insert(0, str(REPO_ROOT))
 
 from flask import Flask  # noqa: E402
@@ -58,6 +59,20 @@ class TestSearchLimitValidation:
 
     def test_limit_non_numeric_returns_400(self, client):
         resp = client.get("/api/search?q=test&limit=abc")
+        assert resp.status_code == 400
+        body = resp.get_json()
+        assert "error" in body
+        assert "limit" in body["error"].lower()
+
+    def test_limit_zero_returns_400(self, client):
+        resp = client.get("/api/search?q=test&limit=0")
+        assert resp.status_code == 400
+        body = resp.get_json()
+        assert "error" in body
+        assert "limit" in body["error"].lower()
+
+    def test_limit_negative_returns_400(self, client):
+        resp = client.get("/api/search?q=test&limit=-5")
         assert resp.status_code == 400
         body = resp.get_json()
         assert "error" in body

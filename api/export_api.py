@@ -9,7 +9,7 @@ from typing import Any
 
 from flask import Blueprint, current_app, request, send_file
 
-from api._flask_types import FlaskReturn, json_ok
+from api._flask_types import FlaskReturn, json_error, json_response
 from models.export import ExportStateDict
 
 from utils.export_state_store import (
@@ -68,7 +68,7 @@ def _write_state(sessions_map: dict[str, float], count: int) -> None:
 def get_export_state() -> FlaskReturn:
     state = _read_state()
     n = state.get("exportedCount", 0)
-    return json_ok(
+    return json_response(
         {
             "last_export_time": state.get("lastExportTime"),
             # Sessions exported in the last completed bulk export (not a lifetime total).
@@ -84,11 +84,11 @@ def bulk_export() -> FlaskReturn:
     if body is None:
         body = {}
     if not isinstance(body, dict):
-        return json_ok({"error": "Invalid request body"}), 400
+        return json_error("Invalid request body", 400)
 
     since = body.get("since", "all")
     if since not in ("all", "last", "incremental"):
-        return json_ok({"error": "Invalid since mode", "since": since}), 400
+        return json_error({"error": "Invalid since mode", "since": since}, 400)
 
     base = (
         current_app.config.get("CLAUDE_PROJECTS_DIR")
@@ -230,15 +230,7 @@ def bulk_export() -> FlaskReturn:
         _write_state(new_sessions_map, count)
 
     if count == 0:
-        return (
-            json_ok(
-                {
-                    "error": "Nothing to export",
-                    "since": since,
-                }
-            ),
-            422,
-        )
+        return json_error({"error": "Nothing to export", "since": since}, 422)
 
     buf.seek(0)
     date_tag = datetime.now().strftime("%Y-%m-%d")
@@ -271,17 +263,17 @@ def export_session(project_name: str, session_id: str) -> FlaskReturn:
     try:
         filepath = safe_join(base, project_name, f"{session_id}.jsonl")
     except ValueError:
-        return json_ok({"error": "Invalid path"}), 400
+        return json_error("Invalid path", 400)
 
     if not os.path.isfile(filepath):
-        return json_ok({"error": "Session not found"}), 404
+        return json_error("Session not found", 404)
 
     fmt = request.args.get("format", "md")
     try:
         session = parse_session(filepath)
         rules = current_app.config.get("EXCLUSION_RULES") or []
         if is_session_excluded(rules, session, project_name):
-            return json_ok({"error": "Session not found"}), 404
+            return json_error("Session not found", 404)
         stats = compute_stats(session)
         title_slug = slugify(session["title"], default="session")
 
@@ -309,4 +301,4 @@ def export_session(project_name: str, session_id: str) -> FlaskReturn:
         current_app.logger.exception(
             "Failed to export session %s/%s", project_name, session_id
         )
-        return json_ok({"error": "Internal server error exporting session"}), 500
+        return json_error("Internal server error exporting session", 500)

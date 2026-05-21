@@ -74,5 +74,8 @@ jobs:
       - name: Install dev dependencies
         run: pip install -r requirements-dev.txt
 
-      - name: Run mypy (strict)
+      - name: Run mypy (strict, production packages)
         run: mypy
+
+      - name: Run mypy on tests (non-strict smoke)
+        run: mypy tests --follow-imports skip
