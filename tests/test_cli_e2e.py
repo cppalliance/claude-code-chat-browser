@@ -20,7 +20,12 @@ def _cli_env() -> dict[str, str]:
     return env
 
 
-def _run_cli(argv: list[str], *, env: dict | None = None) -> subprocess.CompletedProcess:
+def _run_cli(
+    argv: list[str],
+    *,
+    env: dict | None = None,
+    timeout: float = 60.0,
+) -> subprocess.CompletedProcess:
     cmd = [sys.executable, str(EXPORT_SCRIPT), *argv]
     merged = _cli_env()
     if env:
@@ -33,6 +38,7 @@ def _run_cli(argv: list[str], *, env: dict | None = None) -> subprocess.Complete
         env=merged,
         encoding="utf-8",
         errors="replace",
+        timeout=timeout,
     )
 
 
@@ -53,7 +59,8 @@ def test_cli_list_exits_zero(tmp_path):
     assert "test-project" in proc.stdout.lower()
 
 
-def test_cli_list_unknown_project_exits_zero_with_message(tmp_path):
+def test_cli_list_nonmatching_project_filter_prints_no_projects(tmp_path):
+    """--project filters by substring; zero matches prints 'No projects found.'"""
     base = _seed_base_dir(tmp_path)
     proc = _run_cli(["list", "--base-dir", str(base), "--project", "does-not-exist"])
     assert proc.returncode == 0

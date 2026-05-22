@@ -52,7 +52,7 @@ def test_error_codes_on_endpoints(client, method, path, kwargs, status, code):
     fn = getattr(client, method)
     resp = fn(path, **kwargs)
     assert resp.status_code == status
-    assert_error_response(resp, expected_code=str(code))
+    assert_error_response(resp, expected_code=code)
 
 
 def test_bulk_export_empty_includes_export_nothing_code(client_empty):

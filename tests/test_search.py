@@ -52,6 +52,7 @@ def test_limit_default(client_single):
 def test_limit_whitespace_defaults(client_single):
     resp = client_single.get("/api/search?q=Hello&limit=%20%20%20")
     assert resp.status_code == 200
+    _assert_search_hits(resp.get_json(), max_items=50)
 
 
 def test_limit_zero(client_single):

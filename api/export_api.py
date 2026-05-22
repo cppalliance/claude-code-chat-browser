@@ -36,6 +36,14 @@ export_bp = Blueprint("export", __name__)
 # Tests monkeypatch this path; keep in sync with utils.export_state_store.
 _STATE_FILE = EXPORT_STATE_FILE
 
+_EXPORT_ERRORS = (
+    json.JSONDecodeError,
+    KeyError,
+    ValueError,
+    OSError,
+    FileNotFoundError,
+)
+
 
 def _state_lock() -> Any:
     return export_state_lock(_STATE_FILE)
@@ -162,7 +170,7 @@ def bulk_export() -> FlaskReturn:
                     )
                     new_sessions_map[sid] = sess_info.get("modified", 0)
                     count += 1
-                except Exception as e:
+                except _EXPORT_ERRORS as e:
                     current_app.logger.warning(
                         "Failed to export %s: %s", sid[:10], e
                     )
@@ -224,7 +232,7 @@ def bulk_export() -> FlaskReturn:
                         )
                         new_sessions_map[sid] = sess_info.get("modified", 0)
                         count += 1
-                    except Exception as e:
+                    except _EXPORT_ERRORS as e:
                         current_app.logger.warning(
                             "Failed to export %s: %s", sid[:10], e
                         )
@@ -287,7 +295,7 @@ def export_session(project_name: str, session_id: str) -> FlaskReturn:
     fmt = request.args.get("format", "md")
     try:
         session = parse_session(filepath)
-    except Exception:
+    except _EXPORT_ERRORS:
         current_app.logger.exception(
             "Failed to parse session %s for export", session_id
         )
@@ -307,7 +315,7 @@ def export_session(project_name: str, session_id: str) -> FlaskReturn:
 
     try:
         stats = compute_stats(session)
-    except Exception:
+    except _EXPORT_ERRORS:
         current_app.logger.exception(
             "Failed to compute stats for export %s", session_id
         )

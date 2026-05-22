@@ -1,5 +1,6 @@
 """Session detail and stats endpoints."""
 
+import json
 import os
 
 from flask import Blueprint, current_app
@@ -12,6 +13,14 @@ from utils.session_stats import compute_stats
 from utils.exclusion_rules import is_session_excluded
 
 sessions_bp = Blueprint("sessions", __name__)
+
+_PARSE_ERRORS = (
+    json.JSONDecodeError,
+    KeyError,
+    ValueError,
+    OSError,
+    FileNotFoundError,
+)
 
 
 @sessions_bp.route("/api/sessions/<path:project_name>/<session_id>")
@@ -39,7 +48,7 @@ def get_session(project_name: str, session_id: str) -> FlaskReturn:
                 404,
             )
         return json_response(session)
-    except Exception:
+    except _PARSE_ERRORS:
         current_app.logger.exception("Failed to parse session %s", session_id)
         return error_response(
             ErrorCode.PARSE_ERROR,
@@ -65,7 +74,7 @@ def get_session_stats(project_name: str, session_id: str) -> FlaskReturn:
 
     try:
         session = parse_session(filepath)
-    except Exception:
+    except _PARSE_ERRORS:
         current_app.logger.exception("Failed to parse session %s", session_id)
         return error_response(
             ErrorCode.PARSE_ERROR,
@@ -84,7 +93,7 @@ def get_session_stats(project_name: str, session_id: str) -> FlaskReturn:
     try:
         stats = compute_stats(session)
         return json_response(stats)
-    except Exception:
+    except _PARSE_ERRORS:
         current_app.logger.exception("Failed to compute stats for %s", session_id)
         return error_response(
             ErrorCode.INTERNAL_ERROR,
