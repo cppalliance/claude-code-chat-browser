@@ -61,10 +61,9 @@ def test_search_limit_capped_at_max(client):
     assert len(results) <= 500
 
 
-def test_project_sessions_invalid_path_returns_400_empty_list(client):
+def test_project_sessions_invalid_path_returns_invalid_path(client):
     resp = client.get("/api/projects/../../outside/sessions")
-    assert resp.status_code == 400
-    assert resp.get_json() == []
+    assert_error_response(resp, expected_code="INVALID_PATH")
 
 
 def test_export_state_defaults(client_empty):

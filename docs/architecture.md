@@ -1,0 +1,133 @@
+# Architecture
+
+**claude-code-chat-browser** reads JSONL session files written by Claude Code under `~/.claude/projects/` and serves them through a JSON HTTP API to a single-page web UI, with a parallel CLI export tool. The app is **read-only** toward `~/.claude/` — it never writes session data back to that tree.
+
+## Component diagram
+
+```text
+                    ┌─────────────────────────────┐
+                    │  ~/.claude/projects/      │
+                    │    <project>/*.jsonl      │  (read-only data source)
+                    └──────────────┬────────────┘
+                                   │
+         ┌─────────────────────────┼─────────────────────────┐
+         │                         │                         │
+         ▼                         ▼                         ▼
+┌─────────────────┐    ┌─────────────────────┐    ┌──────────────────┐
+│ session_path    │    │ jsonl_parser        │    │ exclusion_rules  │
+│ list_projects   │    │ parse_session       │    │ load + match     │
+│ list_sessions   │    │ quick_session_info  │    └────────┬─────────┘
+│ safe_join       │    │ _parse_tool_result  │             │
+└────────┬────────┘    └──────────┬──────────┘             │
+         │                        │                        │
+         └────────────┬───────────┴────────────────────────┘
+                      │
+                      ▼
+         ┌────────────────────────────┐
+         │  api/                      │
+         │  projects · sessions       │
+         │  search · export_api       │
+         │  error_codes               │
+         └─────────────┬──────────────┘
+                       │  Flask blueprints
+                       ▼
+         ┌────────────────────────────┐
+         │  app.py — create_app()     │
+         └─────────────┬──────────────┘
+                       │
+       ┌───────────────┴───────────────┐
+       ▼                               ▼
+┌──────────────────┐          ┌──────────────────┐
+│ static/          │          │ scripts/export.py │
+│ index.html + js  │          │ (CLI, uses utils) │
+└──────────────────┘          └──────────────────┘
+```
+
+## Layers
+
+| Layer | Responsibility | Key modules |
+|-------|----------------|-------------|
+| **Data discovery** | Resolve `~/.claude/projects/`, list projects and sessions, prevent path traversal | `utils/session_path.py` |
+| **Parsing** | JSONL → session dict (messages, metadata, tool rendering) | `utils/jsonl_parser.py` |
+| **Filtering** | Exclude sensitive sessions via rules file | `utils/exclusion_rules.py` |
+| **Statistics** | Aggregates for API and exporters | `utils/session_stats.py` |
+| **Export — Markdown** | Session → YAML-frontmatter Markdown | `utils/md_exporter.py` |
+| **Export — JSON** | Session → JSON string for download | `utils/json_exporter.py` |
+| **Export — state** | Incremental export checkpoints on disk | `utils/export_state_store.py`, `api/export_api.py` |
+| **HTTP** | Routes, validation, error envelope | `api/*.py`, `api/error_codes.py` |
+| **App factory** | Blueprint registration, rules loading, SPA static route | `app.py` |
+| **Frontend** | Hash-routed UI, markdown render, shared state | `static/index.html`, `static/js/` |
+| **CLI** | Same export semantics as bulk API, no HTTP | `scripts/export.py` |
+
+## Data flow — typical UI session
+
+1. Browser loads `GET /` → `static/index.html`.
+2. SPA calls `GET /api/projects` → `list_projects()` + `quick_session_info()` for titled counts.
+3. User opens a project → `GET /api/projects/<name>/sessions` → full `parse_session()` per file, exclusion filter, summary rows.
+4. User opens a session → `GET /api/sessions/<project>/<id>` → full session JSON for the message panel.
+5. Optional: `GET /api/sessions/.../stats` for sidebar metrics without loading all messages.
+6. Search: `GET /api/search?q=...` scans all projects (brute force).
+7. Export: `POST /api/export` or `GET /api/export/session/...` → Markdown/zip via exporters; state file updated on successful bulk export.
+
+## Dispatch table
+
+In `utils/jsonl_parser.py`, tool results are classified through `_parse_tool_result`, a **predicate-ordered dispatch table** (not a simple `if tool_name == ...` chain). **Order is load-bearing**: the first matching predicate wins. Tests in `tests/test_jsonl_parser.py` guard ordering regressions.
+
+When adding a new tool renderer:
+
+1. Add predicate + builder pair in the dispatch table in the correct order (specific before generic).
+2. Add or extend a JSONL fixture under `tests/fixtures/` if needed.
+3. Run `pytest tests/test_jsonl_parser.py -v`.
+
+## Export state machine
+
+Bulk export (`POST /api/export`) is stateful. State lives in `~/.claude-code-chat-browser/export-state.json` (see `EXPORT_STATE_FILE` in `utils/export_state_store.py`).
+
+| `since` mode | Behavior |
+|--------------|----------|
+| `all` | Export all eligible sessions; update per-session mtimes in state |
+| `last` | Export sessions active on the latest UTC calendar day in history |
+| `incremental` | Export only sessions newer than last recorded mtime per id |
+
+Writes are atomic (temp file + `os.replace`) under a lock from `_state_lock()`.
+
+If zero sessions match, the API returns **`422`** with `EXPORT_NOTHING_TO_EXPORT` and echoes `since` — not an empty zip.
+
+`GET /api/export/state` reads the same file without mutating it.
+
+## Exclusion rules engine
+
+At startup, `create_app()` loads rules from `--exclude-rules` or the default path into `app.config["EXCLUSION_RULES"]`. `is_session_excluded()` is applied on list, detail, search, and export paths so filtered sessions never appear in the UI or downloads.
+
+## Frontend
+
+The UI is a **hash-routed** SPA with ES modules under `static/js/`:
+
+- `app.js` — routing and boot
+- `projects.js`, `sessions.js`, `search.js`, `export.js` — route handlers
+- `shared/markdown.js` — markdown + **DOMPurify** sanitization (do not render raw LLM HTML)
+- `shared/state.js`, `shared/utils.js`, `shared/theme.js` — shared UI state and helpers
+
+No bundler step — modern browsers load modules directly. Frontend unit tests use **vitest** + **jsdom** (`npm test`).
+
+## Continuous integration
+
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs on push/PR:
+
+- `prod-install-smoke` — production `requirements.txt` boots the app
+- `pytest` — full Python suite with coverage gate on `api/` + `utils/`
+- `integration-tests` — API integration subset + coverage artifact
+- `js-tests` — `npm ci` + vitest
+
+## What this codebase is not
+
+- **Not multi-user** — no authn/authz; single local operator.
+- **Not a writeback tool** — never modifies `~/.claude/`.
+- **Not a search engine** — `/api/search` is O(sessions × messages); fine for personal history, not for large multi-tenant indexes.
+- **Not a versioned public API** — no semver or OpenAPI contract yet; see [`docs/api-reference.md`](api-reference.md) as the human contract.
+
+## Related documentation
+
+- [API reference](api-reference.md)
+- [Contributing](../CONTRIBUTING.md)
+- [README](../README.md)

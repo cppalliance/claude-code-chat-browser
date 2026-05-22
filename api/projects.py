@@ -3,6 +3,7 @@
 from flask import Blueprint, current_app
 
 from api._flask_types import FlaskReturn, json_error, json_response
+from api.error_codes import ErrorCode, error_response
 from models.project import ProjectSessionRowDict, SessionListItemDict
 from models.session import SessionDict
 from utils.session_path import get_claude_projects_dir, list_projects, list_sessions, safe_join
@@ -76,7 +77,7 @@ def get_project_sessions(project_name: str) -> FlaskReturn:
     try:
         project_dir = safe_join(base, project_name)
     except ValueError:
-        return json_response([]), 400
+        return error_response(ErrorCode.INVALID_PATH, "Invalid path", 400)
     sessions = list_sessions(project_dir)
     # Add summary preview for each session
     from utils.jsonl_parser import parse_session

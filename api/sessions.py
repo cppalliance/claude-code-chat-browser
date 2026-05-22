@@ -74,6 +74,13 @@ def get_session_stats(project_name: str, session_id: str) -> FlaskReturn:
 
     try:
         session = parse_session(filepath)
+        rules = current_app.config.get("EXCLUSION_RULES") or []
+        if is_session_excluded(rules, session, project_name):
+            return error_response(
+                ErrorCode.SESSION_NOT_FOUND,
+                "Session not found",
+                404,
+            )
     except _PARSE_ERRORS:
         current_app.logger.exception("Failed to parse session %s", session_id)
         return error_response(
