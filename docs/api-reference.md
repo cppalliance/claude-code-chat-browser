@@ -25,15 +25,7 @@ Most `/api/*` error responses use this shape:
 }
 ```
 
-**Exception (no `{error, code}` body):**
-
-| Endpoint | Status | Body |
-|----------|--------|------|
-| `GET /api/projects/<project_name>/sessions` | 400 | `[]` (empty JSON array) when `project_name` fails path validation |
-
-*Legacy response shape — not the long-term contract. New clients should not treat bare `[]` as the intended error format; migration to structured `{error, code}` with `INVALID_PATH` is planned.*
-
-All other documented error paths below use the structured envelope.
+All documented error paths below use the structured envelope.
 
 Extra fields may appear for specific codes (for example `since` on invalid bulk-export mode).
 
@@ -174,7 +166,7 @@ Lists sessions in one project with summary fields for the workspace sidebar. Ski
 
 | Status | `code` | When |
 |--------|--------|------|
-| 400 | — | Invalid `project_name` (path escape). **Body is `[]`** (legacy — see [Error envelope](#error-envelope) exception); not a structured error |
+| 400 | `INVALID_PATH` | Invalid `project_name` (path escape) |
 
 ```bash
 curl -s "http://127.0.0.1:5000/api/projects/F--boost-capy/sessions" | jq '.[0]'
