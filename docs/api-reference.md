@@ -31,6 +31,8 @@ Most `/api/*` error responses use this shape:
 |----------|--------|------|
 | `GET /api/projects/<project_name>/sessions` | 400 | `[]` (empty JSON array) when `project_name` fails path validation |
 
+*Legacy response shape — not the long-term contract. New clients should not treat bare `[]` as the intended error format; migration to structured `{error, code}` with `INVALID_PATH` is planned.*
+
 All other documented error paths below use the structured envelope.
 
 Extra fields may appear for specific codes (for example `since` on invalid bulk-export mode).
@@ -172,7 +174,7 @@ Lists sessions in one project with summary fields for the workspace sidebar. Ski
 
 | Status | `code` | When |
 |--------|--------|------|
-| 400 | — | Invalid `project_name` (path escape). **Body is `[]`**, not a structured error — documented behavior |
+| 400 | — | Invalid `project_name` (path escape). **Body is `[]`** (legacy — see [Error envelope](#error-envelope) exception); not a structured error |
 
 ```bash
 curl -s "http://127.0.0.1:5000/api/projects/F--boost-capy/sessions" | jq '.[0]'
@@ -316,7 +318,7 @@ Read-only snapshot of bulk-export state persisted under `~/.claude-code-chat-bro
 |-------|------|-------------|
 | `last_export_time` | string \| null | ISO timestamp of last completed bulk export |
 | `last_export_session_count` | integer | Sessions in last bulk export run |
-| `export_count` | integer | Same as `last_export_session_count` (alias for UI) |
+| `export_count` | integer | **Legacy alias** — same value as `last_export_session_count`; prefer `last_export_session_count` in new integrations (kept for SPA backwards compatibility) |
 
 ```json
 {

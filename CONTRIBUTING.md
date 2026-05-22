@@ -50,7 +50,7 @@ Useful flags:
 pytest -q                              # full suite + coverage (see pyproject.toml)
 pytest tests/test_api_integration.py -v
 pytest tests/test_search.py -v
-pytest tests/test_api_routes.py -v     # when present on branch
+pytest tests/test_api_routes.py -v
 pytest tests/test_error_codes.py -v
 ```
 

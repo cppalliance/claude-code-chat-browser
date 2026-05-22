@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { cleanContent, renderMarkdown } from './markdown.js';
@@ -29,14 +29,20 @@ describe('renderMarkdown', () => {
     });
 
     it('sanitizes script tags from parsed output', () => {
+        const sanitizeSpy = vi.spyOn(DOMPurify, 'sanitize');
         const html = renderMarkdown('# Hello\n\n<script>alert(1)</script>');
+        expect(sanitizeSpy).toHaveBeenCalled();
         expect(html).not.toContain('<script');
         expect(html).not.toMatch(/alert\s*\(/);
+        sanitizeSpy.mockRestore();
     });
 
     it('strips event handlers from parsed output', () => {
+        const sanitizeSpy = vi.spyOn(DOMPurify, 'sanitize');
         const html = renderMarkdown('<img src=x onerror=alert(1)>');
+        expect(sanitizeSpy).toHaveBeenCalled();
         expect(html).not.toMatch(/onerror/i);
+        sanitizeSpy.mockRestore();
     });
 
     it('falls back to inline code when marked is unavailable', () => {
