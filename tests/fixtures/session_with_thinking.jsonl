@@ -1,0 +1,2 @@
+{"type": "user", "timestamp": "2026-05-19T12:00:00Z", "message": {"content": [{"type": "text", "text": "Think through this problem"}]}}
+{"type": "assistant", "timestamp": "2026-05-19T12:00:01Z", "message": {"model": "claude-test", "content": [{"type": "thinking", "thinking": "Considering options carefully."}, {"type": "text", "text": "Here is my answer after thinking."}], "usage": {"input_tokens": 15, "output_tokens": 12}}}

@@ -3,3 +3,20 @@ python_version = "3.12"
 strict = true
 packages = ["api", "utils", "models"]
 exclude = ["tests/"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=api --cov=utils --cov-report=term-missing --cov-report=xml:coverage.xml"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+# Exclude untested export/stats modules until Week 3+ adds coverage (see issue #4 follow-up).
+omit = [
+    "tests/*",
+    "utils/md_exporter.py",
+    "utils/session_stats.py",
+    "utils/json_exporter.py",
+]
+
+[tool.coverage.report]
+fail_under = 60
+include = ["api/*", "utils/*"]

@@ -10,3 +10,7 @@ build/
 .vscode/
 *.swp
 *.swo
+node_modules/
+.coverage
+coverage/
+coverage.xml

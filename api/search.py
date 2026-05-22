@@ -13,6 +13,7 @@ from utils.exclusion_rules import is_session_excluded
 search_bp = Blueprint("search", __name__)
 
 _DEFAULT_LIMIT = 50
+_MAX_LIMIT = 500
 
 
 def _parse_limit(raw: str | None, default: int = _DEFAULT_LIMIT) -> int:
@@ -20,12 +21,12 @@ def _parse_limit(raw: str | None, default: int = _DEFAULT_LIMIT) -> int:
     if raw is None or raw.strip() == "":
         return default
     try:
-        value = int(raw)
-    except ValueError:
-        raise ValueError("Invalid limit: must be a positive integer") from None
+        value = int(raw.strip())
+    except ValueError as exc:
+        raise ValueError("Invalid limit: must be a positive integer") from exc
     if value < 1:
         raise ValueError("Invalid limit: must be a positive integer")
-    return value
+    return min(value, _MAX_LIMIT)
 
 
 @search_bp.route("/api/search")
