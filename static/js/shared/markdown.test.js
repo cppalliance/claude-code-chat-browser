@@ -44,4 +44,13 @@ describe('renderMarkdown', () => {
         const html = renderMarkdown('`code`');
         expect(html).toBe('<code>code</code>');
     });
+
+    it('falls back to escaped output when DOMPurify is unavailable', () => {
+        delete globalThis.DOMPurify;
+        const html = renderMarkdown('Hello **world**');
+        expect(html).toBeDefined();
+        expect(html).toContain('Hello');
+        expect(html).toContain('**world**');
+        expect(html).not.toMatch(/<script/i);
+    });
 });

@@ -19,7 +19,22 @@ Browse and export Claude Code chat history — Web GUI and CLI.
 - **Smooth transitions** — staggered card/message animations, crossfade content swaps
 - **Scroll-to-top button** in bottom-right corner
 - **Per-model badges** in session header
-- **Bulk export** — download all sessions, incremental updates, or latest-day slice as a zip; if there is nothing to export, the API returns **422** with JSON body `{"error": "Nothing to export", "since": "<mode>"}` (the `since` field echoes your request: `"all"`, `"last"`, or `"incremental"`) instead of an empty zip
+- **Bulk export** — download all sessions, incremental updates, or latest-day slice as a zip; if there is nothing to export, the API returns **422** with JSON body `{"error": "Nothing to export", "code": "EXPORT_NOTHING_TO_EXPORT", "since": "<mode>"}` (the `since` field echoes your request: `"all"`, `"last"`, or `"incremental"`) instead of an empty zip
+
+### API error codes
+
+JSON error responses include a machine-readable `"code"` (stable `UPPER_SNAKE_CASE`) and a human-readable `"error"` message. Common codes:
+
+| Code | Typical HTTP | Meaning |
+|------|--------------|---------|
+| `SEARCH_INVALID_LIMIT` | 400 | Query param `limit` is not a positive integer |
+| `INVALID_PATH` | 400 | Path traversal or unsafe project/session path |
+| `SESSION_NOT_FOUND` | 404 | Session file missing or excluded |
+| `INVALID_REQUEST_BODY` | 400 | POST body is not a JSON object |
+| `INVALID_SINCE_MODE` | 400 | Bulk export `since` is not `all`, `last`, or `incremental` |
+| `EXPORT_NOTHING_TO_EXPORT` | 422 | No sessions matched the export scope |
+| `PARSE_ERROR` | 500 | Session file could not be parsed |
+| `INTERNAL_ERROR` | 500 | Unexpected failure (e.g. stats computation) |
 
 ### CLI Export
 - Standalone script to export all sessions to Markdown with YAML frontmatter

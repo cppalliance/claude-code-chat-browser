@@ -1,12 +1,20 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { state } from './state.js';
 
+function resetState() {
+    state.currentProject = null;
+    state.cachedSessions = [];
+    state.projectDisplayNames = {};
+    state.navInProgress = false;
+}
+
 describe('state', () => {
+    beforeEach(() => {
+        resetState();
+    });
+
     afterEach(() => {
-        state.currentProject = null;
-        state.cachedSessions = [];
-        state.projectDisplayNames = {};
-        state.navInProgress = false;
+        resetState();
     });
 
     it('initializes with null current project', () => {

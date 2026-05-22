@@ -33,6 +33,7 @@ def test_bulk_export_invalid_since_returns_400(isolated_state, tmp_path):
     assert resp.status_code == 400
     body = resp.get_json()
     assert body["error"] == "Invalid since mode"
+    assert body["code"] == "INVALID_SINCE_MODE"
     assert body["since"] == "lst"
 
 
@@ -48,7 +49,9 @@ def test_bulk_export_non_object_json_returns_400(isolated_state, tmp_path):
         content_type="application/json",
     )
     assert resp.status_code == 400
-    assert resp.get_json()["error"] == "Invalid request body"
+    body = resp.get_json()
+    assert body["error"] == "Invalid request body"
+    assert body["code"] == "INVALID_REQUEST_BODY"
 
 
 def test_bulk_export_empty_returns_422_json(isolated_state, tmp_path):
@@ -62,6 +65,7 @@ def test_bulk_export_empty_returns_422_json(isolated_state, tmp_path):
     assert resp.status_code == 422
     body = resp.get_json()
     assert body["error"] == "Nothing to export"
+    assert body["code"] == "EXPORT_NOTHING_TO_EXPORT"
     assert body["since"] == "all"
 
 

@@ -9,9 +9,9 @@ from typing import Any
 
 from flask import Blueprint, current_app, request, send_file
 
-from api._flask_types import FlaskReturn, json_error, json_response
+from api._flask_types import FlaskReturn, json_response
+from api.error_codes import ErrorCode, error_response
 from models.export import ExportStateDict
-
 from utils.export_state_store import (
     EXPORT_STATE_FILE,
     atomic_write_export_state,
@@ -35,6 +35,14 @@ export_bp = Blueprint("export", __name__)
 
 # Tests monkeypatch this path; keep in sync with utils.export_state_store.
 _STATE_FILE = EXPORT_STATE_FILE
+
+_EXPORT_ERRORS = (
+    json.JSONDecodeError,
+    KeyError,
+    ValueError,
+    OSError,
+    FileNotFoundError,
+)
 
 
 def _state_lock() -> Any:
@@ -84,11 +92,20 @@ def bulk_export() -> FlaskReturn:
     if body is None:
         body = {}
     if not isinstance(body, dict):
-        return json_error("Invalid request body", 400)
+        return error_response(
+            ErrorCode.INVALID_REQUEST_BODY,
+            "Invalid request body",
+            400,
+        )
 
     since = body.get("since", "all")
     if since not in ("all", "last", "incremental"):
-        return json_error({"error": "Invalid since mode", "since": since}, 400)
+        return error_response(
+            ErrorCode.INVALID_SINCE_MODE,
+            "Invalid since mode",
+            400,
+            since=since,
+        )
 
     base = (
         current_app.config.get("CLAUDE_PROJECTS_DIR")
@@ -153,7 +170,7 @@ def bulk_export() -> FlaskReturn:
                     )
                     new_sessions_map[sid] = sess_info.get("modified", 0)
                     count += 1
-                except Exception as e:
+                except _EXPORT_ERRORS as e:
                     current_app.logger.warning(
                         "Failed to export %s: %s", sid[:10], e
                     )
@@ -215,7 +232,7 @@ def bulk_export() -> FlaskReturn:
                         )
                         new_sessions_map[sid] = sess_info.get("modified", 0)
                         count += 1
-                    except Exception as e:
+                    except _EXPORT_ERRORS as e:
                         current_app.logger.warning(
                             "Failed to export %s: %s", sid[:10], e
                         )
@@ -226,11 +243,15 @@ def bulk_export() -> FlaskReturn:
             )
             zf.writestr("manifest.jsonl", manifest_str)
 
-    if count > 0:
-        _write_state(new_sessions_map, count)
-
     if count == 0:
-        return json_error({"error": "Nothing to export", "since": since}, 422)
+        return error_response(
+            ErrorCode.EXPORT_NOTHING_TO_EXPORT,
+            "Nothing to export",
+            422,
+            since=since,
+        )
+
+    _write_state(new_sessions_map, count)
 
     buf.seek(0)
     date_tag = datetime.now().strftime("%Y-%m-%d")
@@ -253,7 +274,6 @@ def bulk_export() -> FlaskReturn:
 
 @export_bp.route("/api/export/session/<path:project_name>/<session_id>")
 def export_session(project_name: str, session_id: str) -> FlaskReturn:
-    import os
     from utils.session_path import safe_join
 
     base = (
@@ -263,42 +283,67 @@ def export_session(project_name: str, session_id: str) -> FlaskReturn:
     try:
         filepath = safe_join(base, project_name, f"{session_id}.jsonl")
     except ValueError:
-        return json_error("Invalid path", 400)
+        return error_response(ErrorCode.INVALID_PATH, "Invalid path", 400)
 
     if not os.path.isfile(filepath):
-        return json_error("Session not found", 404)
+        return error_response(
+            ErrorCode.SESSION_NOT_FOUND,
+            "Session not found",
+            404,
+        )
 
     fmt = request.args.get("format", "md")
     try:
         session = parse_session(filepath)
-        rules = current_app.config.get("EXCLUSION_RULES") or []
-        if is_session_excluded(rules, session, project_name):
-            return json_error("Session not found", 404)
+    except _EXPORT_ERRORS:
+        current_app.logger.exception(
+            "Failed to parse session %s for export", session_id
+        )
+        return error_response(
+            ErrorCode.PARSE_ERROR,
+            "Failed to parse session",
+            500,
+        )
+
+    rules = current_app.config.get("EXCLUSION_RULES") or []
+    if is_session_excluded(rules, session, project_name):
+        return error_response(
+            ErrorCode.SESSION_NOT_FOUND,
+            "Session not found",
+            404,
+        )
+
+    try:
         stats = compute_stats(session)
-        title_slug = slugify(session["title"], default="session")
+    except _EXPORT_ERRORS:
+        current_app.logger.exception(
+            "Failed to compute stats for export %s", session_id
+        )
+        return error_response(
+            ErrorCode.INTERNAL_ERROR,
+            "Failed to compute session stats",
+            500,
+        )
 
-        if fmt == "json":
-            content = session_to_json(session, stats)
-            buf = io.BytesIO(content.encode("utf-8"))
-            buf.seek(0)
-            return send_file(
-                buf,
-                mimetype="application/json",
-                as_attachment=True,
-                download_name=f"{title_slug}.json",  # type: ignore[call-arg]
-            )
+    title_slug = slugify(session["title"], default="session")
 
-        md = session_to_markdown(session, stats)
-        buf = io.BytesIO(md.encode("utf-8"))
+    if fmt == "json":
+        content = session_to_json(session, stats)
+        buf = io.BytesIO(content.encode("utf-8"))
         buf.seek(0)
         return send_file(
             buf,
-            mimetype="text/markdown",
+            mimetype="application/json",
             as_attachment=True,
-            download_name=f"{title_slug}.md",  # type: ignore[call-arg]
+            download_name=f"{title_slug}.json",  # type: ignore[call-arg]
         )
-    except Exception:
-        current_app.logger.exception(
-            "Failed to export session %s/%s", project_name, session_id
-        )
-        return json_error("Internal server error exporting session", 500)
+
+    md = session_to_markdown(session, stats)
+    buf = io.BytesIO(md.encode("utf-8"))
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype="text/markdown",
+        as_attachment=True,
+        download_name=f"{title_slug}.md",  # type: ignore[call-arg]
+    )
