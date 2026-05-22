@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import DOMPurify from 'dompurify';
+import { marked } from 'marked';
 import { cleanContent, renderMarkdown } from './markdown.js';
 
 const _origMarked = globalThis.marked;
@@ -17,24 +19,24 @@ describe('cleanContent', () => {
 
 describe('renderMarkdown', () => {
     beforeEach(() => {
-        globalThis.marked = {
-            parse: vi.fn((text) => `<p>${text}</p>`),
-        };
-        globalThis.DOMPurify = {
-            sanitize: vi.fn((html) => html.replace(/<script[\s\S]*?<\/script>/gi, '')),
-        };
+        globalThis.marked = marked;
+        globalThis.DOMPurify = DOMPurify;
     });
 
     afterEach(() => {
-        vi.restoreAllMocks();
         globalThis.marked = _origMarked;
         globalThis.DOMPurify = _origDOMPurify;
     });
 
     it('sanitizes script tags from parsed output', () => {
-        globalThis.marked.parse.mockReturnValue('<p>ok</p><script>alert(1)</script>');
-        const html = renderMarkdown('# Hello');
+        const html = renderMarkdown('# Hello\n\n<script>alert(1)</script>');
         expect(html).not.toContain('<script');
+        expect(html).not.toMatch(/alert\s*\(/);
+    });
+
+    it('strips event handlers from parsed output', () => {
+        const html = renderMarkdown('<img src=x onerror=alert(1)>');
+        expect(html).not.toMatch(/onerror/i);
     });
 
     it('falls back to inline code when marked is unavailable', () => {
