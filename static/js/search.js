@@ -27,6 +27,15 @@ export function showSearchPage() {
             </div>
             <div id="search-results"></div>
         </div>`;
+    document.getElementById('search-results').addEventListener('click', (e) => {
+        if (!(e.target instanceof Element)) return;
+        const result = e.target.closest('.search-result[data-project]');
+        if (!result) return;
+        const project = result.getAttribute('data-project');
+        const sessionId = result.getAttribute('data-session-id');
+        if (!project || !sessionId) return;
+        window.location.hash = `#project/${encodeURIComponent(project)}/${encodeURIComponent(sessionId)}`;
+    });
     document.getElementById('search-input').focus();
 }
 
@@ -56,7 +65,7 @@ export async function doSearch() {
         html += '<div class="search-results">';
 
         for (const r of results) {
-            html += `<div class="search-result" onclick="window.location.hash='#project/${encodeURIComponent(r.project)}/${encodeURIComponent(r.session_id)}'">
+            html += `<div class="search-result" data-project="${esc(r.project)}" data-session-id="${esc(r.session_id)}">
                 <div><strong>${esc(r.title)}</strong> <span class="text-muted text-sm">${esc(r.project)} &bull; ${esc(r.role)}</span></div>
                 <div class="snippet">...${esc(r.snippet)}...</div>
             </div>`;

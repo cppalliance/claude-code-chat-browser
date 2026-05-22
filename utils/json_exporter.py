@@ -3,9 +3,17 @@ JSONL, but in a sane structure with computed stats included."""
 
 import json
 from datetime import datetime, timezone
+from typing import Any
+
+from models.session import SessionDict, SessionMetadataDict
+from models.stats import SessionStatsDict
 
 
-def session_to_json(session: dict, stats: dict = None, indent: int = 2) -> str:
+def session_to_json(
+    session: SessionDict,
+    stats: SessionStatsDict | None = None,
+    indent: int = 2,
+) -> str:
     """Serialize a parsed session to a JSON string with schema versioning.
     Pass indent=None if you want compact output for piping."""
     output = {
@@ -20,9 +28,9 @@ def session_to_json(session: dict, stats: dict = None, indent: int = 2) -> str:
     return json.dumps(output, indent=indent, default=str, ensure_ascii=False)
 
 
-def _serialize_metadata(meta: dict) -> dict:
+def _serialize_metadata(meta: SessionMetadataDict) -> dict[str, Any]:
     """json.dumps chokes on sets, so convert them to sorted lists."""
-    result = {}
+    result: dict[str, Any] = {}
     for key, val in meta.items():
         if isinstance(val, set):
             result[key] = sorted(val)
@@ -31,7 +39,7 @@ def _serialize_metadata(meta: dict) -> dict:
     return result
 
 
-def _serialize_messages(messages: list) -> list:
+def _serialize_messages(messages: list[Any]) -> list[dict[str, Any]]:
     """Same set-to-list cleanup, but for each message dict."""
     out = []
     for msg in messages:

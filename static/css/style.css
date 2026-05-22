@@ -82,6 +82,12 @@
   color-scheme: light;
 }
 
+/* Theme toggle icons (set before JS module loads; applyTheme keeps them in sync) */
+[data-theme="dark"] #icon-moon { display: block; }
+[data-theme="dark"] #icon-sun { display: none; }
+[data-theme="light"] #icon-moon { display: none; }
+[data-theme="light"] #icon-sun { display: block; }
+
 /* ---------- Reset & Base ---------- */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 

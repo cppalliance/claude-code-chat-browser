@@ -3,8 +3,13 @@
 
 from datetime import datetime
 
+from typing import Any
 
-def session_to_markdown(session: dict, stats: dict = None) -> str:
+from models.session import MessageDict, SessionDict
+from models.stats import SessionStatsDict
+
+
+def session_to_markdown(session: SessionDict, stats: SessionStatsDict | None = None) -> str:
     """Glue together frontmatter + header + summary + conversation body."""
     frontmatter = _build_frontmatter(session)
     header = _build_header(session)
@@ -18,7 +23,7 @@ def session_to_markdown(session: dict, stats: dict = None) -> str:
     return "\n".join(parts)
 
 
-def _build_frontmatter(session: dict) -> str:
+def _build_frontmatter(session: SessionDict) -> str:
     meta = session["metadata"]
     lines = ["---"]
     lines.append(f"title: \"{_escape_yaml(session['title'])}\"")
@@ -82,7 +87,7 @@ def _build_frontmatter(session: dict) -> str:
     return "\n".join(lines)
 
 
-def _build_header(session: dict) -> str:
+def _build_header(session: SessionDict) -> str:
     meta = session["metadata"]
     lines = []
     lines.append(f"\n# {session['title']}\n")
@@ -111,7 +116,7 @@ def _build_header(session: dict) -> str:
     return "\n".join(lines)
 
 
-def _build_summary(session: dict, stats: dict) -> str:
+def _build_summary(session: SessionDict, stats: SessionStatsDict) -> str:
     """The summary block that goes right after the header -- cost, files
     table, command list, URLs, tool result breakdown."""
     lines = ["## Session Summary\n"]
@@ -177,7 +182,7 @@ def _build_summary(session: dict, stats: dict) -> str:
     return "\n".join(lines)
 
 
-def _build_body(messages: list) -> str:
+def _build_body(messages: list[MessageDict]) -> str:
     parts = []
     for msg in messages:
         role = msg["role"]
@@ -191,7 +196,7 @@ def _build_body(messages: list) -> str:
     return "\n".join(parts)
 
 
-def _render_user(msg: dict) -> str:
+def _render_user(msg: MessageDict) -> str:
     lines = []
     lines.append("### User\n")
 
@@ -201,9 +206,11 @@ def _render_user(msg: dict) -> str:
     if msg.get("slug"):
         lines.append(f"_Tool response: {msg['slug']}_\n")
 
-    if msg.get("images"):
-        for img in msg["images"]:
-            lines.append(f'<img src="data:{img["media_type"]};base64,{img["data"]}" alt="User image" style="max-width:100%;max-height:600px">\n')
+    for img in msg.get("images") or []:
+        lines.append(
+            f'<img src="data:{img["media_type"]};base64,{img["data"]}" '
+            'alt="User image" style="max-width:100%;max-height:600px">\n'
+        )
 
     if msg.get("text"):
         from utils.jsonl_parser import _strip_system_tags
@@ -223,7 +230,7 @@ def _render_user(msg: dict) -> str:
     return "\n".join(lines)
 
 
-def _render_assistant(msg: dict) -> str:
+def _render_assistant(msg: MessageDict) -> str:
     lines = []
     lines.append("### Assistant\n")
 
@@ -245,24 +252,24 @@ def _render_assistant(msg: dict) -> str:
     if msg.get("is_api_error"):
         lines.append("**[API Error]**\n")
 
-    if msg.get("thinking"):
+    thinking = msg.get("thinking")
+    if thinking:
         lines.append("<details><summary>Thinking</summary>\n")
-        lines.append(msg["thinking"])
+        lines.append(thinking)
         lines.append("\n</details>\n")
 
     if msg.get("text"):
         from utils.jsonl_parser import _strip_system_tags
         lines.append(_strip_system_tags(msg["text"]))
 
-    if msg.get("tool_uses"):
-        for tool in msg["tool_uses"]:
+    for tool in msg.get("tool_uses") or []:
             lines.append(_render_tool_use(tool))
 
     lines.append("\n---\n")
     return "\n".join(lines)
 
 
-def _render_tool_use(tool: dict) -> str:
+def _render_tool_use(tool: dict[str, Any]) -> str:
     name = tool.get("name", "unknown")
     inp = tool.get("input", {})
     lines = []
@@ -320,7 +327,7 @@ def _render_tool_use(tool: dict) -> str:
     return "\n".join(lines)
 
 
-def _render_tool_result(parsed: dict) -> str:
+def _render_tool_result(parsed: dict[str, Any]) -> str:
     """Format a tool result nicely instead of dumping raw JSON."""
     rt = parsed.get("result_type", "unknown")
     lines = []
@@ -423,7 +430,7 @@ def _render_tool_result(parsed: dict) -> str:
     return "\n".join(lines)
 
 
-def _render_system(msg: dict) -> str:
+def _render_system(msg: MessageDict) -> str:
     lines = []
     subtype = msg.get("subtype", "")
     content = msg.get("content", "")
@@ -436,8 +443,10 @@ def _render_system(msg: dict) -> str:
     return "\n".join(lines)
 
 
-def _format_ts(ts: str) -> str:
+def _format_ts(ts: str | None) -> str:
     """2024-01-15T10:30:00.123Z -> 2024-01-15 10:30:00.123 UTC"""
+    if not ts:
+        return ""
     try:
         dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
         ms = dt.microsecond // 1000
