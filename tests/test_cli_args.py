@@ -91,10 +91,13 @@ def _is_sys_platform_ne_win32(node: ast.AST) -> bool:
 
 
 def _is_debug_and_platform_guard(node: ast.AST) -> bool:
-    """True for ``args.debug and (sys.platform != "win32")``."""
+    """True for ``args.debug and (sys.platform != "win32")`` in either operand order."""
     if not isinstance(node, ast.BoolOp) or not isinstance(node.op, ast.And) or len(node.values) != 2:
         return False
-    return _is_args_debug(node.values[0]) and _is_sys_platform_ne_win32(node.values[1])
+    a, b = node.values
+    return (_is_args_debug(a) and _is_sys_platform_ne_win32(b)) or (
+        _is_args_debug(b) and _is_sys_platform_ne_win32(a)
+    )
 
 
 def _use_reloader_kwarg_tied_to_debug(call: ast.Call) -> bool:
