@@ -39,6 +39,12 @@ class TestValidateSessionDict:
             validate_session_dict(_valid_payload(session_id=123))
         assert exc_info.value.path == "session_id"
 
+    def test_null_session_id(self):
+        with pytest.raises(SessionValidationError) as exc_info:
+            validate_session_dict(_valid_payload(session_id=None))
+        assert exc_info.value.path == "session_id"
+        assert exc_info.value.detail == "must not be null"
+
     def test_null_role_in_message(self):
         with pytest.raises(SessionValidationError) as exc_info:
             validate_session_dict(
