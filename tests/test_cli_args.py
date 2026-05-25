@@ -221,6 +221,7 @@ class TestAppArgparse:
         parser = argparse.ArgumentParser(description="Claude Code Chat Browser")
         parser.add_argument("--port", type=int, default=5000)
         parser.add_argument("--host", default="127.0.0.1")
+        parser.add_argument("--debug", action="store_true", default=False)
         parser.add_argument("--base-dir", default=None)
         parser.add_argument("--exclude-rules", "-e", default=None,
                             metavar="PATH", dest="exclude_rules")
@@ -236,6 +237,26 @@ class TestAppArgparse:
         parser = self._build_parser()
         args = parser.parse_args(["--host", "127.0.0.1"])
         assert args.host == "127.0.0.1"
+
+    def test_debug_default_is_false(self):
+        parser = self._build_parser()
+        args = parser.parse_args([])
+        assert args.debug is False
+
+    def test_debug_explicit_true(self):
+        parser = self._build_parser()
+        args = parser.parse_args(["--debug"])
+        assert args.debug is True
+
+    def test_app_py_debug_not_hardcoded_true(self):
+        """app.run() must not pass debug=True unconditionally."""
+        app_path = os.path.join(REPO_ROOT, "app.py")
+        with open(app_path, "r", encoding="utf-8") as f:
+            src = f.read()
+        run_block_start = src.find("app.run(")
+        assert run_block_start != -1
+        run_block = src[run_block_start : src.find(")", run_block_start) + 1]
+        assert "debug=True" not in run_block
 
     def test_port_default(self):
         parser = self._build_parser()

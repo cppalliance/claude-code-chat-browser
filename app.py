@@ -41,6 +41,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Claude Code Chat Browser")
     parser.add_argument("--port", type=int, default=5000)
     parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=False,
+        help="Enable Flask/Werkzeug debug mode (never use with --host 0.0.0.0 on untrusted networks).",
+    )
     parser.add_argument("--base-dir", default=None, help="Override Claude projects dir")
     parser.add_argument(
         "--exclude-rules", "-e",
@@ -56,6 +62,6 @@ if __name__ == "__main__":
     app.run(
         host=args.host,
         port=args.port,
-        debug=True,
+        debug=args.debug,
         use_reloader=(sys.platform != "win32"),
     )
