@@ -9,6 +9,7 @@ Run:
     pytest tests/test_cli_args.py -v
 """
 
+import ast
 import sys
 import os
 import importlib
@@ -21,6 +22,43 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
 
 from scripts.export import build_parser
+
+
+def _is_app_run_call(node: ast.AST) -> bool:
+    if not isinstance(node, ast.Call):
+        return False
+    func = node.func
+    return (
+        isinstance(func, ast.Attribute)
+        and func.attr == "run"
+        and isinstance(func.value, ast.Name)
+        and func.value.id == "app"
+    )
+
+
+def _call_passes_hardcoded_debug_true(call: ast.Call) -> bool:
+    """True if this Call passes literal True for debug (kwarg or positional)."""
+    for kw in call.keywords:
+        if kw.arg == "debug" and isinstance(kw.value, ast.Constant) and kw.value.value is True:
+            return True
+    for arg in call.args:
+        if isinstance(arg, ast.Constant) and arg.value is True:
+            return True
+    return False
+
+
+def _debug_kwarg_uses_args(call: ast.Call) -> bool:
+    for kw in call.keywords:
+        if kw.arg != "debug":
+            continue
+        val = kw.value
+        return (
+            isinstance(val, ast.Attribute)
+            and isinstance(val.value, ast.Name)
+            and val.value.id == "args"
+            and val.attr == "debug"
+        )
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -249,14 +287,14 @@ class TestAppArgparse:
         assert args.debug is True
 
     def test_app_py_debug_not_hardcoded_true(self):
-        """app.run() must not pass debug=True unconditionally."""
+        """app.run() must wire debug from args, not a literal True."""
         app_path = os.path.join(REPO_ROOT, "app.py")
-        with open(app_path, "r", encoding="utf-8") as f:
-            src = f.read()
-        run_block_start = src.find("app.run(")
-        assert run_block_start != -1
-        run_block = src[run_block_start : src.find(")", run_block_start) + 1]
-        assert "debug=True" not in run_block
+        with open(app_path, encoding="utf-8") as f:
+            tree = ast.parse(f.read(), filename=app_path)
+        app_run_calls = [n for n in ast.walk(tree) if _is_app_run_call(n)]
+        assert app_run_calls, "expected at least one app.run() call in app.py"
+        assert not any(_call_passes_hardcoded_debug_true(c) for c in app_run_calls)
+        assert any(_debug_kwarg_uses_args(c) for c in app_run_calls)
 
     def test_port_default(self):
         parser = self._build_parser()
