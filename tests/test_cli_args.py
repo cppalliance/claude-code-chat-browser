@@ -62,22 +62,45 @@ def _debug_kwarg_uses_args(call: ast.Call) -> bool:
     return False
 
 
-def _ast_mentions_args_debug(node: ast.AST) -> bool:
-    for child in ast.walk(node):
-        if (
-            isinstance(child, ast.Attribute)
-            and child.attr == "debug"
-            and isinstance(child.value, ast.Name)
-            and child.value.id == "args"
-        ):
-            return True
-    return False
+def _is_args_debug(node: ast.AST) -> bool:
+    return (
+        isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "args"
+        and node.attr == "debug"
+    )
+
+
+def _is_sys_platform_ne_win32(node: ast.AST) -> bool:
+    if not isinstance(node, ast.Compare) or len(node.ops) != 1 or len(node.comparators) != 1:
+        return False
+    if not isinstance(node.ops[0], ast.NotEq):
+        return False
+    left = node.left
+    if not (
+        isinstance(left, ast.Attribute)
+        and isinstance(left.value, ast.Name)
+        and left.value.id == "sys"
+        and left.attr == "platform"
+    ):
+        return False
+    right = node.comparators[0]
+    if isinstance(right, ast.Constant):
+        return right.value == "win32"
+    return isinstance(right, ast.Str) and right.s == "win32"  # py<3.8
+
+
+def _is_debug_and_platform_guard(node: ast.AST) -> bool:
+    """True for ``args.debug and (sys.platform != "win32")``."""
+    if not isinstance(node, ast.BoolOp) or not isinstance(node.op, ast.And) or len(node.values) != 2:
+        return False
+    return _is_args_debug(node.values[0]) and _is_sys_platform_ne_win32(node.values[1])
 
 
 def _use_reloader_kwarg_tied_to_debug(call: ast.Call) -> bool:
     for kw in call.keywords:
         if kw.arg == "use_reloader":
-            return _ast_mentions_args_debug(kw.value)
+            return _is_debug_and_platform_guard(kw.value)
     return False
 
 
@@ -362,15 +385,10 @@ class TestAppArgparse:
         assert '"127.0.0.1"' in src
 
     def test_app_py_use_reloader_is_platform_aware(self):
-        """use_reloader must be opt-in via --debug and gated on non-Windows platforms."""
+        """use_reloader must be ``args.debug and (sys.platform != \"win32\")``."""
         app_path = os.path.join(REPO_ROOT, "app.py")
         with open(app_path, encoding="utf-8") as f:
             tree = ast.parse(f.read(), filename=app_path)
         app_run_calls = [n for n in ast.walk(tree) if _is_app_run_call(n)]
         assert app_run_calls
         assert all(_use_reloader_kwarg_tied_to_debug(c) for c in app_run_calls)
-        with open(app_path, encoding="utf-8") as f:
-            src = f.read()
-        assert "sys.platform" in src
-        assert "win32" in src
-        assert "use_reloader=False" not in src
