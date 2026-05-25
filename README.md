@@ -63,9 +63,9 @@ python app.py --base-dir /path/to/claude/projects
 ```
 
 > **Security warning:** Do not use `--host 0.0.0.0` together with `--debug` on untrusted networks.
-> That combination exposes Werkzeug's interactive debugger, which allows arbitrary code execution
-> from any browser that can reach the server. For typical local browsing, keep the default
-> `--host 127.0.0.1` and omit `--debug`.
+> That combination exposes [Werkzeug's interactive debugger](https://werkzeug.palletsprojects.com/en/stable/debug/),
+> which allows arbitrary code execution from any browser that can reach the server.
+> For typical local browsing, keep the default `--host 127.0.0.1` and omit `--debug`.
 
 ### CLI Export
 

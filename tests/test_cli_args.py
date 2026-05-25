@@ -21,6 +21,7 @@ import pytest
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
 
+from app import build_cli_parser
 from scripts.export import build_parser
 
 
@@ -58,6 +59,25 @@ def _debug_kwarg_uses_args(call: ast.Call) -> bool:
             and val.value.id == "args"
             and val.attr == "debug"
         )
+    return False
+
+
+def _ast_mentions_args_debug(node: ast.AST) -> bool:
+    for child in ast.walk(node):
+        if (
+            isinstance(child, ast.Attribute)
+            and child.attr == "debug"
+            and isinstance(child.value, ast.Name)
+            and child.value.id == "args"
+        ):
+            return True
+    return False
+
+
+def _use_reloader_kwarg_tied_to_debug(call: ast.Call) -> bool:
+    for kw in call.keywords:
+        if kw.arg == "use_reloader":
+            return _ast_mentions_args_debug(kw.value)
     return False
 
 
@@ -252,37 +272,26 @@ class TestExportParserFlags:
 # ---------------------------------------------------------------------------
 
 class TestAppArgparse:
-    """app.py __main__ block must expose the same flags as cursor's app.py."""
-
-    def _build_parser(self) -> argparse.ArgumentParser:
-        """Re-create the argparse parser from app.py without importing Flask."""
-        parser = argparse.ArgumentParser(description="Claude Code Chat Browser")
-        parser.add_argument("--port", type=int, default=5000)
-        parser.add_argument("--host", default="127.0.0.1")
-        parser.add_argument("--debug", action="store_true", default=False)
-        parser.add_argument("--base-dir", default=None)
-        parser.add_argument("--exclude-rules", "-e", default=None,
-                            metavar="PATH", dest="exclude_rules")
-        return parser
+    """app.py CLI must expose the same flags as cursor's app.py."""
 
     def test_host_default_is_localhost(self):
         """Default host must be 127.0.0.1 to match cursor which binds to localhost only."""
-        parser = self._build_parser()
+        parser = build_cli_parser()
         args = parser.parse_args([])
         assert args.host == "127.0.0.1"
 
     def test_host_override(self):
-        parser = self._build_parser()
+        parser = build_cli_parser()
         args = parser.parse_args(["--host", "127.0.0.1"])
         assert args.host == "127.0.0.1"
 
     def test_debug_default_is_false(self):
-        parser = self._build_parser()
+        parser = build_cli_parser()
         args = parser.parse_args([])
         assert args.debug is False
 
     def test_debug_explicit_true(self):
-        parser = self._build_parser()
+        parser = build_cli_parser()
         args = parser.parse_args(["--debug"])
         assert args.debug is True
 
@@ -297,38 +306,38 @@ class TestAppArgparse:
         assert any(_debug_kwarg_uses_args(c) for c in app_run_calls)
 
     def test_port_default(self):
-        parser = self._build_parser()
+        parser = build_cli_parser()
         args = parser.parse_args([])
         assert args.port == 5000
 
     def test_port_override(self):
-        parser = self._build_parser()
+        parser = build_cli_parser()
         args = parser.parse_args(["--port", "8080"])
         assert args.port == 8080
 
     def test_base_dir_default_none(self):
-        parser = self._build_parser()
+        parser = build_cli_parser()
         args = parser.parse_args([])
         assert args.base_dir is None
 
     def test_base_dir_override(self):
-        parser = self._build_parser()
+        parser = build_cli_parser()
         args = parser.parse_args(["--base-dir", "/tmp/projects"])
         assert args.base_dir == "/tmp/projects"
 
     def test_exclude_rules_default_none(self):
-        parser = self._build_parser()
+        parser = build_cli_parser()
         args = parser.parse_args([])
         assert args.exclude_rules is None
 
     def test_exclude_rules_long_form(self):
-        parser = self._build_parser()
+        parser = build_cli_parser()
         args = parser.parse_args(["--exclude-rules", "/tmp/rules.txt"])
         assert args.exclude_rules == "/tmp/rules.txt"
 
     def test_exclude_rules_short_form(self):
         """Cursor's app.py uses -e as the short form; claude must too."""
-        parser = self._build_parser()
+        parser = build_cli_parser()
         args = parser.parse_args(["-e", "/tmp/rules.txt"])
         assert args.exclude_rules == "/tmp/rules.txt"
 
@@ -353,11 +362,15 @@ class TestAppArgparse:
         assert '"127.0.0.1"' in src
 
     def test_app_py_use_reloader_is_platform_aware(self):
-        """use_reloader must depend on sys.platform, not be hardcoded False."""
+        """use_reloader must be opt-in via --debug and gated on non-Windows platforms."""
         app_path = os.path.join(REPO_ROOT, "app.py")
-        with open(app_path, "r", encoding="utf-8") as f:
+        with open(app_path, encoding="utf-8") as f:
+            tree = ast.parse(f.read(), filename=app_path)
+        app_run_calls = [n for n in ast.walk(tree) if _is_app_run_call(n)]
+        assert app_run_calls
+        assert all(_use_reloader_kwarg_tied_to_debug(c) for c in app_run_calls)
+        with open(app_path, encoding="utf-8") as f:
             src = f.read()
         assert "sys.platform" in src
         assert "win32" in src
-        # Must NOT have unconditional use_reloader=False
         assert "use_reloader=False" not in src
