@@ -1,5 +1,6 @@
 """Flask app that serves the web GUI for browsing sessions."""
 
+import argparse
 import os
 import sys
 
@@ -35,10 +36,8 @@ def create_app(
     return app
 
 
-def build_cli_parser():
+def build_cli_parser() -> argparse.ArgumentParser:
     """CLI argument parser for ``python app.py`` (stdlib only; safe to import in tests)."""
-    import argparse
-
     parser = argparse.ArgumentParser(description="Claude Code Chat Browser")
     parser.add_argument("--port", type=int, default=5000)
     parser.add_argument("--host", default="127.0.0.1")

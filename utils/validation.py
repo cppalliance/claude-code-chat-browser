@@ -3,13 +3,14 @@
 from typing import Any, cast
 
 from models.errors import SessionValidationError
-from models.session import MessageDict, SessionDict
+from models.session import SessionDict
 
 _REQUIRED_SESSION_KEYS = ("session_id", "title", "messages", "metadata")
 
 
 def validate_session_dict(data: dict[str, Any]) -> SessionDict:
     """Validate a plain dict matches SessionDict before returning it."""
+    # Runtime guard for dynamic callers; mypy already types the parameter as dict.
     if not isinstance(data, dict):
         raise SessionValidationError("$", "expected dict")
 
@@ -18,6 +19,7 @@ def validate_session_dict(data: dict[str, Any]) -> SessionDict:
             raise SessionValidationError(key, "missing required field")
 
     session_id = data["session_id"]
+    # Explicit null check before isinstance so errors say "must not be null".
     if session_id is None:
         raise SessionValidationError("session_id", "must not be null")
     if not isinstance(session_id, str):
@@ -67,12 +69,4 @@ def validate_session_dict(data: dict[str, Any]) -> SessionDict:
             "metadata", f"expected dict, got {type(metadata).__name__}"
         )
 
-    return cast(
-        SessionDict,
-        {
-            "session_id": session_id,
-            "title": title,
-            "messages": cast(list[MessageDict], messages),
-            "metadata": metadata,
-        },
-    )
+    return cast(SessionDict, data)

@@ -46,6 +46,13 @@ class TestValidateSessionDict:
             )
         assert exc_info.value.path == "messages[0].role"
 
+    def test_missing_role_in_message(self):
+        with pytest.raises(SessionValidationError) as exc_info:
+            validate_session_dict(
+                _valid_payload(messages=[{"text": "no role key"}])
+            )
+        assert exc_info.value.path == "messages[0].role"
+
     def test_metadata_not_dict(self):
         with pytest.raises(SessionValidationError) as exc_info:
             validate_session_dict(_valid_payload(metadata="not-a-dict"))
