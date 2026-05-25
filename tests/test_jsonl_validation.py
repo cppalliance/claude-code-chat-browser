@@ -2,6 +2,7 @@
 
 import os
 import sys
+from typing import Any
 
 import pytest
 
@@ -14,8 +15,8 @@ from utils.validation import validate_session_dict  # noqa: E402
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
-def _valid_payload(**overrides: object) -> dict:
-    base = {
+def _valid_payload(**overrides: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
         "session_id": "abc123",
         "title": "Test Session",
         "messages": [{"role": "user", "text": "hello"}],
