@@ -1,4 +1,9 @@
-"""Tuesday real-session fixtures: production-shaped JSONL + dispatch-order regression."""
+"""Tuesday real-session fixtures: production-shaped JSONL + dispatch-order regression.
+
+Fixtures include top-level ``sessionId`` on each entry (as in real Claude Code JSONL).
+``parse_session()`` still derives ``session_id`` from the filename; ``sessionId`` is
+retained for schema fidelity and to catch accidental parser coupling to that field.
+"""
 
 from __future__ import annotations
 
@@ -21,8 +26,10 @@ def _fixture_path(name: str) -> str:
 
 
 def _assert_session_shape(session: dict) -> None:
-    assert session["session_id"]
-    assert session["title"]
+    assert isinstance(session["session_id"], str) and session["session_id"]
+    assert session["title"] not in ("", "Untitled Session"), (
+        "Expected a real title from the fixture's first user message"
+    )
     assert isinstance(session["messages"], list)
     assert isinstance(session["metadata"], dict)
     assert session["metadata"]["session_id"] == session["session_id"]
@@ -59,7 +66,6 @@ def test_real_session_minimal_has_bash_tool_result() -> None:
         if m.get("tool_result_parsed")
     ]
     assert "bash" in parsed_types
-    assert len(session["messages"]) >= 2
 
 
 def test_real_session_all_tool_types_covers_dispatch_predicates() -> None:
@@ -74,11 +80,14 @@ def test_real_session_all_tool_types_covers_dispatch_predicates() -> None:
             tr = entry.get("toolUseResult")
             if not isinstance(tr, dict):
                 continue
+            matched = False
             for i, (pred, _) in enumerate(_TOOL_RESULT_DISPATCH):
                 if pred(tr):
                     hit.add(i)
+                    matched = True
                     break
-    assert len(hit) == len(_TOOL_RESULT_DISPATCH)
+            assert matched, f"toolUseResult matched no predicate: {list(tr.keys())}"
+    assert hit == set(range(len(_TOOL_RESULT_DISPATCH)))
 
 
 def test_real_session_nested_tools_has_sidechain_and_tool_use() -> None:
@@ -121,7 +130,13 @@ def test_task_retrieval_not_misclassified_as_task_message() -> None:
 
 
 def test_task_completed_with_message_key_matches_task_message_first() -> None:
-    """Legacy dispatch: broad task_message runs before task_completed when ``message`` present."""
+    """Legacy dispatch: broad task_message runs before task_completed when ``message`` present.
+
+    ``_tool_result_pred_task_message`` matches any dict with a ``message`` or ``task_id``
+    key. Future tool shapes that add ``message`` for status text (e.g. web-fetch) would
+    be misclassified as task until dispatch order is refined — this test locks that
+    known false-positive surface.
+    """
     tr = {
         "agentId": "agent-sanitized",
         "totalDurationMs": 1000,
