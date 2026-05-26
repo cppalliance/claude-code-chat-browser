@@ -25,6 +25,27 @@ def _fixture_path(name: str) -> str:
     return os.path.join(FIXTURES_DIR, name)
 
 
+def _overlap_tool_result_from_all_tool_types_fixture() -> dict:
+    """Last toolUseResult in real_session_all_tool_types (task_message overlap blob)."""
+    path = _fixture_path("real_session_all_tool_types.jsonl")
+    overlap: dict | None = None
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            entry = json.loads(line)
+            tr = entry.get("toolUseResult")
+            if isinstance(tr, dict) and tr.get("agentId") == "agent-sanitized-overlap":
+                overlap = tr
+    if overlap is None:
+        pytest.fail(
+            "overlap toolUseResult (agent-sanitized-overlap) missing from "
+            "real_session_all_tool_types.jsonl"
+        )
+    return overlap
+
+
 def _assert_session_shape(session: dict) -> None:
     assert isinstance(session["session_id"], str) and session["session_id"]
     assert isinstance(session["title"], str) and session["title"] not in (
@@ -61,12 +82,12 @@ def test_real_fixture_parses_with_expected_message_count(
 
 def test_real_session_minimal_has_bash_tool_result() -> None:
     session = parse_session(_fixture_path("real_session_minimal.jsonl"))
-    parsed_types = [
-        m["tool_result_parsed"]["result_type"]
-        for m in session["messages"]
-        if m.get("tool_result_parsed")
-    ]
-    assert "bash" in parsed_types
+    assert len(session["messages"]) == _FIXTURE_MESSAGE_COUNTS["real_session_minimal.jsonl"]
+    parsed = session["messages"][2]["tool_result_parsed"]
+    assert parsed is not None
+    assert parsed["result_type"] == "bash"
+    assert parsed["stdout"] == "sanitized output\n"
+    assert parsed["exit_code"] == 0
 
 
 def test_real_session_all_tool_types_covers_dispatch_predicates() -> None:
@@ -152,12 +173,7 @@ def test_task_completed_with_message_key_matches_task_message_first() -> None:
 
 
 def test_overlap_blob_from_all_tool_types_fixture_locks_task_message_order() -> None:
-    tr = {
-        "agentId": "agent-sanitized-overlap",
-        "totalDurationMs": 500,
-        "status": "completed",
-        "message": "status update sanitized",
-    }
+    tr = _overlap_tool_result_from_all_tool_types_fixture()
     result = _parse_tool_result(tr)
     assert result is not None
     assert result["result_type"] == "task"

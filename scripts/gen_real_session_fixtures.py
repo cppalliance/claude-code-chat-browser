@@ -243,6 +243,10 @@ def write_malformed_lines() -> None:
         for obj in valid:
             f.write(_line(obj))
         f.write("\n")
+        f.write(
+            "# parse_session skips lines where json.loads raises JSONDecodeError "
+            "(blank, garbage, truncated JSON below).\n"
+        )
         f.write("{not valid json\n")
         f.write('{"type": "user", "timestamp": "2026-05-26T10:02:00Z", "message": {"content": ')
         f.write("\n")
