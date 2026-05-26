@@ -27,9 +27,10 @@ def _fixture_path(name: str) -> str:
 
 def _assert_session_shape(session: dict) -> None:
     assert isinstance(session["session_id"], str) and session["session_id"]
-    assert session["title"] not in ("", "Untitled Session"), (
-        "Expected a real title from the fixture's first user message"
-    )
+    assert isinstance(session["title"], str) and session["title"] not in (
+        "",
+        "Untitled Session",
+    ), "Expected a real title from the fixture's first user message"
     assert isinstance(session["messages"], list)
     assert isinstance(session["metadata"], dict)
     assert session["metadata"]["session_id"] == session["session_id"]
