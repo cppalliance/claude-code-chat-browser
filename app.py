@@ -35,12 +35,19 @@ def create_app(
     return app
 
 
-if __name__ == "__main__":
+def build_cli_parser():
+    """CLI argument parser for ``python app.py`` (stdlib only; safe to import in tests)."""
     import argparse
 
     parser = argparse.ArgumentParser(description="Claude Code Chat Browser")
     parser.add_argument("--port", type=int, default=5000)
     parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=False,
+        help="Enable Flask/Werkzeug debug mode (never use with --host 0.0.0.0 on untrusted networks).",
+    )
     parser.add_argument("--base-dir", default=None, help="Override Claude projects dir")
     parser.add_argument(
         "--exclude-rules", "-e",
@@ -49,13 +56,18 @@ if __name__ == "__main__":
         help="Path to exclusion rules file (sensitive sessions are omitted). "
              "If omitted, uses ~/.claude-code-chat-browser/exclusion-rules.txt if present.",
     )
-    args = parser.parse_args()
+    return parser
+
+
+if __name__ == "__main__":
+    args = build_cli_parser().parse_args()
 
     app = create_app(base_dir=args.base_dir, exclusion_rules_path=args.exclude_rules)
     print(f"Claude Code Chat Browser running at http://{args.host}:{args.port}")
+    # Reloader follows --debug on Unix only (Werkzeug file watcher, not the interactive debugger).
     app.run(
         host=args.host,
         port=args.port,
-        debug=True,
-        use_reloader=(sys.platform != "win32"),
+        debug=args.debug,
+        use_reloader=args.debug and (sys.platform != "win32"),
     )
