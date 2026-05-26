@@ -4,9 +4,10 @@ actually work with -- messages, tool calls, token counts, file activity, etc."""
 import json
 import os
 from datetime import datetime
-from typing import Any, cast
+from typing import Any
 
 from models.session import MessageDict, QuickSessionInfoDict, SessionDict
+from utils.validation import validate_session_dict
 
 
 def parse_session(filepath: str) -> SessionDict:
@@ -120,14 +121,13 @@ def parse_session(filepath: str) -> SessionDict:
 
     title = _infer_title(messages)
 
-    return cast(
-        SessionDict,
+    return validate_session_dict(
         {
             "session_id": session_id,
             "title": title,
             "messages": messages,
             "metadata": metadata,
-        },
+        }
     )
 
 
