@@ -43,6 +43,7 @@ def _overlap_tool_result_from_all_tool_types_fixture() -> dict:
             "overlap toolUseResult (agent-sanitized-overlap) missing from "
             "real_session_all_tool_types.jsonl"
         )
+    assert overlap is not None  # narrow for mypy (pytest.fail is not NoReturn)
     return overlap
 
 
