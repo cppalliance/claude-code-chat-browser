@@ -18,31 +18,21 @@ from utils.export_state_store import (
     export_state_lock,
     load_export_state_from_disk,
 )
-from utils.session_path import (
-    get_claude_projects_dir,
-    list_projects,
-    list_sessions,
-)
+from utils.session_path import get_claude_projects_dir, list_projects
 from utils.jsonl_parser import parse_session
+from utils.exclusion_rules import is_session_excluded
 from utils.session_stats import compute_stats
 from utils.md_exporter import session_to_markdown
 from utils.json_exporter import session_to_json
-from utils.exclusion_rules import is_session_excluded
 from utils.slugify import slugify
-from utils.export_day_filter import collect_sessions_for_latest_activity_day
+from utils.export_engine import EXPORT_ERRORS, ZipSink, run_bulk_export
 
 export_bp = Blueprint("export", __name__)
 
 # Tests monkeypatch this path; keep in sync with utils.export_state_store.
 _STATE_FILE = EXPORT_STATE_FILE
 
-_EXPORT_ERRORS = (
-    json.JSONDecodeError,
-    KeyError,
-    ValueError,
-    OSError,
-    FileNotFoundError,
-)
+_EXPORT_ERRORS = EXPORT_ERRORS
 
 
 def _state_lock() -> Any:
@@ -120,128 +110,28 @@ def bulk_export() -> FlaskReturn:
     )
 
     buf = io.BytesIO()
-    count = 0
-    manifest: list[dict[str, Any]] = []
-    new_sessions_map: dict[str, float] = {}
-    latest_day = None
+
+    def _on_export_error(sid: str, exc: Exception) -> None:
+        current_app.logger.warning(
+            "Failed to export %s: %s", sid[:10], exc
+        )
 
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        if since == "last":
-            d, rows, _n = collect_sessions_for_latest_activity_day(
-                projects,
-                list_sessions=list_sessions,
-                parse_session=parse_session,
-                is_session_excluded=is_session_excluded,
-                rules=rules,
-            )
-            latest_day = d
-            for project, sess_info, session, _st, _en in rows:
-                sid = sess_info["id"]
-                try:
-                    stats = compute_stats(session)
-                    md = session_to_markdown(session, stats)
-                    title_slug = slugify(session["title"], default="session")
-                    short_id = sid[:8]
-                    proj_slug = slugify(project["name"], default="project")
-                    ts = session["metadata"].get("first_timestamp", "")
-                    ts_file = (
-                        ts[:19].replace(":", "-")
-                        if ts
-                        else "0000-00-00T00-00-00"
-                    )
-                    rel_path = (
-                        f"{proj_slug}/{ts_file}__{title_slug}__{short_id}.md"
-                    )
-                    zf.writestr(rel_path, md)
-                    manifest.append(
-                        {
-                            "session_id": sid,
-                            "title": session["title"],
-                            "project": project["name"],
-                            "tokens": session["metadata"]["total_input_tokens"]
-                            + session["metadata"]["total_output_tokens"],
-                            "tool_calls": session["metadata"][
-                                "total_tool_calls"
-                            ],
-                            "cost_estimate_usd": stats.get(
-                                "cost_estimate_usd"
-                            ),
-                        }
-                    )
-                    new_sessions_map[sid] = sess_info.get("modified", 0)
-                    count += 1
-                except _EXPORT_ERRORS as e:
-                    current_app.logger.warning(
-                        "Failed to export %s: %s", sid[:10], e
-                    )
-                    continue
-        else:
-            for project in projects:
-                sessions = list_sessions(project["path"])
-                for sess_info in sessions:
-                    sid = sess_info["id"]
-                    try:
-                        if since == "incremental":
-                            prev_mtime = last_export_sessions.get(sid, 0)
-                            curr_mtime = sess_info.get("modified", 0)
-                            if curr_mtime and curr_mtime <= prev_mtime:
-                                continue
+        result = run_bulk_export(
+            projects=projects,
+            since=since,
+            rules=rules,
+            last_export_sessions=last_export_sessions,
+            sink=ZipSink(zf),
+            fmt="md",
+            path_layout="api",
+            manifest_style="api",
+            on_export_error=_on_export_error,
+        )
 
-                        session = parse_session(sess_info["path"])
-                        if session["title"] == "Untitled Session":
-                            continue
-
-                        if is_session_excluded(
-                            rules,
-                            session,
-                            project.get("display_name") or project["name"],
-                        ):
-                            continue
-
-                        stats = compute_stats(session)
-                        md = session_to_markdown(session, stats)
-                        title_slug = slugify(
-                            session["title"], default="session"
-                        )
-                        short_id = sid[:8]
-                        proj_slug = slugify(project["name"], default="project")
-                        ts = session["metadata"].get("first_timestamp", "")
-                        ts_file = (
-                            ts[:19].replace(":", "-")
-                            if ts
-                            else "0000-00-00T00-00-00"
-                        )
-                        rel_path = f"{proj_slug}/{ts_file}__{title_slug}__{short_id}.md"
-                        zf.writestr(rel_path, md)
-                        manifest.append(
-                            {
-                                "session_id": sid,
-                                "title": session["title"],
-                                "project": project["name"],
-                                "tokens": session["metadata"][
-                                    "total_input_tokens"
-                                ]
-                                + session["metadata"]["total_output_tokens"],
-                                "tool_calls": session["metadata"][
-                                    "total_tool_calls"
-                                ],
-                                "cost_estimate_usd": stats.get(
-                                    "cost_estimate_usd"
-                                ),
-                            }
-                        )
-                        new_sessions_map[sid] = sess_info.get("modified", 0)
-                        count += 1
-                    except _EXPORT_ERRORS as e:
-                        current_app.logger.warning(
-                            "Failed to export %s: %s", sid[:10], e
-                        )
-                        continue
-        if manifest:
-            manifest_str = "\n".join(
-                json.dumps(e, default=str) for e in manifest
-            )
-            zf.writestr("manifest.jsonl", manifest_str)
+    count = result.exported_session_count
+    new_sessions_map = result.new_sessions_map
+    latest_day = result.latest_day
 
     if count == 0:
         return error_response(
