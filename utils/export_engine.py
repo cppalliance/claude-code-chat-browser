@@ -31,8 +31,10 @@ EXPORT_ERRORS = (
 
 PathLayout = Literal["api", "cli"]
 ManifestStyle = Literal["api", "cli"]
+SinceMode = Literal["all", "last", "incremental"]
+ExportFormat = Literal["md", "json", "both"]
 
-_MANIFEST_SHARED_KEYS = (
+MANIFEST_SHARED_KEYS: tuple[str, ...] = (
     "session_id",
     "title",
     "project",
@@ -41,10 +43,18 @@ _MANIFEST_SHARED_KEYS = (
 )
 
 
+def serialize_manifest_jsonl(manifest: list[dict[str, Any]]) -> str:
+    """JSONL manifest body with a trailing newline (empty string if no rows)."""
+    if not manifest:
+        return ""
+    return "\n".join(json.dumps(e, default=str) for e in manifest) + "\n"
+
+
 @dataclass
 class BulkExportResult:
     """Outcome of a bulk export run."""
 
+    # Canonical list of (rel_path, content); sinks do not duplicate this.
     exports: list[tuple[str, str]] = field(default_factory=list)
     manifest: list[dict[str, Any]] = field(default_factory=list)
     new_sessions_map: dict[str, float] = field(default_factory=dict)
@@ -64,16 +74,17 @@ class ExportSink(Protocol):
         self,
         files: list[tuple[str, str]],
         manifest_entry: dict[str, Any],
-    ) -> None: ...
+    ) -> None:
+        """Write one session's export file(s) to the sink target."""
 
-    def finalize(self, manifest: list[dict[str, Any]]) -> None: ...
+    def finalize(self, manifest: list[dict[str, Any]]) -> None:
+        """Flush manifest and any sink-specific completion (e.g. manifest.jsonl)."""
 
 
 @dataclass
 class ListSink:
-    """In-memory sink for tests and parity checks."""
+    """In-memory sink for tests; use :attr:`BulkExportResult.exports` for file pairs."""
 
-    exports: list[tuple[str, str]] = field(default_factory=list)
     manifest: list[dict[str, Any]] = field(default_factory=list)
 
     def add_session(
@@ -81,7 +92,6 @@ class ListSink:
         files: list[tuple[str, str]],
         manifest_entry: dict[str, Any],
     ) -> None:
-        self.exports.extend(files)
         self.manifest.append(manifest_entry)
 
     def finalize(self, manifest: list[dict[str, Any]]) -> None:
@@ -105,21 +115,20 @@ class ZipSink:
         self._manifest.append(manifest_entry)
 
     def finalize(self, manifest: list[dict[str, Any]]) -> None:
-        if manifest:
-            manifest_str = "\n".join(json.dumps(e, default=str) for e in manifest) + "\n"
-            self._zf.writestr("manifest.jsonl", manifest_str)
+        body = serialize_manifest_jsonl(manifest)
+        if body:
+            self._zf.writestr("manifest.jsonl", body)
 
 
-def _ensure_first_timestamp(
+def _resolve_first_timestamp(
     meta: SessionMetadataDict, sess_info: SessionListItemDict
 ) -> str:
-    ts_raw = meta.get("first_timestamp") or ""
-    ts = ts_raw if ts_raw else ""
+    """Return first_timestamp from metadata, or synthesise from mtime without mutating *meta*."""
+    ts = (meta.get("first_timestamp") or "").strip()
     if not ts:
         ts = datetime.fromtimestamp(sess_info["modified"]).strftime(
             "%Y-%m-%dT%H:%M:%S"
         )
-        meta["first_timestamp"] = ts
     return ts
 
 
@@ -138,10 +147,8 @@ def build_export_rel_path(
     """Build zip/disk-relative path for one exported session file."""
     sid = sess_info["id"]
     meta = session["metadata"]
-    ts = meta.get("first_timestamp") or ""
-    if layout == "cli" and not ts:
-        ts = _ensure_first_timestamp(meta, sess_info)
-    date_str = ts[:10] if ts else "0000-00-00"
+    ts = _resolve_first_timestamp(meta, sess_info)
+    date_str = ts[:10]
     ts_file = _ts_file_slug(ts)
     title_slug = slugify(session["title"], default="session")
     short_id = sid[:8]
@@ -185,7 +192,7 @@ def build_manifest_entry(
 
 def manifest_shared_subset(entry: dict[str, Any]) -> dict[str, Any]:
     """Core manifest fields compared in HTTP vs CLI parity tests."""
-    return {k: entry[k] for k in _MANIFEST_SHARED_KEYS if k in entry}
+    return {k: entry[k] for k in MANIFEST_SHARED_KEYS if k in entry}
 
 
 def _session_files(
@@ -193,7 +200,7 @@ def _session_files(
     stats: SessionStatsDict,
     project: ProjectDict,
     sess_info: SessionListItemDict,
-    fmt: str,
+    fmt: ExportFormat,
     layout: PathLayout,
 ) -> list[tuple[str, str]]:
     files: list[tuple[str, str]] = []
@@ -223,11 +230,11 @@ def _session_files(
 def run_bulk_export(
     *,
     projects: list[ProjectDict],
-    since: str,
+    since: SinceMode,
     rules: list[Any],
     last_export_sessions: dict[str, float],
     sink: ExportSink,
-    fmt: str = "md",
+    fmt: ExportFormat = "md",
     path_layout: PathLayout = "api",
     manifest_style: ManifestStyle | None = None,
     on_export_error: Callable[[str, Exception], None] | None = None,
@@ -237,6 +244,9 @@ def run_bulk_export(
     *since* must be one of ``all``, ``last``, or ``incremental``.
     Per-session failures are caught, counted, and skipped (batch continues).
     """
+    if since not in ("all", "last", "incremental"):
+        raise ValueError(f"Invalid since mode: {since!r}")
+
     if manifest_style is None:
         manifest_style = path_layout
 

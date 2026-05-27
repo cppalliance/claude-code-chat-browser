@@ -18,6 +18,7 @@ import os
 import sys
 import zipfile
 from datetime import datetime
+from typing import cast
 
 # Allow running from repo root or scripts/ directory
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -26,12 +27,19 @@ sys.path.insert(0, REPO_ROOT)
 
 from utils.session_path import get_claude_projects_dir, list_projects, list_sessions
 from utils.jsonl_parser import parse_session
-from utils.session_stats import compute_stats, _format_duration
+from utils.session_stats import compute_stats, format_duration
 from utils.md_exporter import session_to_markdown
 from utils.json_exporter import session_to_json
 from utils.exclusion_rules import resolve_exclusion_rules_path, load_rules
 from utils.slugify import slugify
-from utils.export_engine import ListSink, run_bulk_export
+from utils.export_engine import (
+    ExportFormat,
+    ListSink,
+    SinceMode,
+    ZipSink,
+    run_bulk_export,
+    serialize_manifest_jsonl,
+)
 from utils.export_state_store import (
     atomic_write_export_state,
     export_state_lock,
@@ -247,7 +255,7 @@ def _session_stats(session_id: str, base_dir: str, fmt: str):
     print(f"  Title:      {session['title']}")
     if meta["first_timestamp"]:
         print(f"  Created:    {meta['first_timestamp'][:19]}")
-    dur = _format_duration(meta.get("session_wall_time_seconds"))
+    dur = format_duration(meta.get("session_wall_time_seconds"))
     if dur:
         print(f"  Duration:   {dur}")
     print(f"  Models:     {', '.join(meta['models_used']) or 'unknown'}")
@@ -432,11 +440,11 @@ def cmd_export(args):
     collect_sink = ListSink()
     export_result = run_bulk_export(
         projects=projects,
-        since=since,
+        since=cast(SinceMode, since),
         rules=rules,
         last_export_sessions=last_export,
         sink=collect_sink,
-        fmt=fmt,
+        fmt=cast(ExportFormat, fmt),
         path_layout="cli",
         manifest_style="cli",
         on_export_error=_on_export_error,
@@ -502,8 +510,7 @@ def cmd_export(args):
                 f.write(content)
         manifest_path = os.path.join(out_dir, "manifest.jsonl")
         with open(manifest_path, "w", encoding="utf-8") as f:
-            for entry in manifest:
-                f.write(json.dumps(entry, default=str) + "\n")
+            f.write(serialize_manifest_jsonl(manifest))
         print(f"Exported {exported} file(s) to {out_dir}")
     else:
         date_tag = datetime.now().strftime("%Y-%m-%d")
@@ -518,10 +525,7 @@ def cmd_export(args):
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for rel_path, content in all_exports:
                 zf.writestr(rel_path, content)
-            manifest_str = "\n".join(
-                json.dumps(e, default=str) for e in manifest
-            )
-            zf.writestr("manifest.jsonl", manifest_str)
+            ZipSink(zf).finalize(manifest)
         print(f"Exported {exported} file(s) to {zip_path}")
 
     _save_state(last_export, count=len(manifest), out_dir=out_dir)

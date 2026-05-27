@@ -18,19 +18,12 @@ from flask import Flask  # noqa: E402
 from api.export_api import export_bp  # noqa: E402
 from tests.test_cli_e2e import _run_cli, _seed_base_dir  # noqa: E402
 from utils.export_engine import (  # noqa: E402
+    MANIFEST_SHARED_KEYS,
     ListSink,
     manifest_shared_subset,
     run_bulk_export,
 )
 from utils.session_path import list_projects  # noqa: E402
-
-_MANIFEST_KEYS = (
-    "session_id",
-    "title",
-    "project",
-    "tokens",
-    "tool_calls",
-)
 
 
 def _markdown_from_exports(exports: list[tuple[str, str]]) -> str:
@@ -75,7 +68,7 @@ def test_engine_api_vs_cli_layout_same_markdown_and_manifest(tmp_path: Path) -> 
 
     api_core = manifest_shared_subset(api_result.manifest[0])
     cli_core = manifest_shared_subset(cli_result.manifest[0])
-    for key in _MANIFEST_KEYS:
+    for key in MANIFEST_SHARED_KEYS:
         assert api_core[key] == cli_core[key]
 
 
@@ -126,6 +119,6 @@ def test_http_post_export_matches_cli_no_zip(tmp_path: Path, monkeypatch) -> Non
     ]
 
     assert http_md == cli_md
-    http_core = {k: http_manifest[0][k] for k in _MANIFEST_KEYS}
-    cli_core = {k: cli_manifest[0][k] for k in _MANIFEST_KEYS}
+    http_core = {k: http_manifest[0][k] for k in MANIFEST_SHARED_KEYS}
+    cli_core = {k: cli_manifest[0][k] for k in MANIFEST_SHARED_KEYS}
     assert http_core == cli_core
