@@ -106,7 +106,7 @@ class ZipSink:
 
     def finalize(self, manifest: list[dict[str, Any]]) -> None:
         if manifest:
-            manifest_str = "\n".join(json.dumps(e, default=str) for e in manifest)
+            manifest_str = "\n".join(json.dumps(e, default=str) for e in manifest) + "\n"
             self._zf.writestr("manifest.jsonl", manifest_str)
 
 

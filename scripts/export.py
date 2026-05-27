@@ -427,7 +427,7 @@ def cmd_export(args):
     skipped_mtime_unchanged = 0
 
     def _on_export_error(sid: str, exc: Exception) -> None:
-        print(f"  Warning: failed to export {sid}: {exc}")
+        print(f"  Warning: failed to export {sid}: {exc}", file=sys.stderr)
 
     collect_sink = ListSink()
     export_result = run_bulk_export(

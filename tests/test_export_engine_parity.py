@@ -92,14 +92,15 @@ def test_http_post_export_matches_cli_no_zip(tmp_path: Path, monkeypatch) -> Non
     assert resp.status_code == 200
 
     zf = zipfile.ZipFile(io.BytesIO(resp.data))
-    http_md = zf.read(
-        next(n for n in zf.namelist() if n.endswith(".md"))
-    ).decode("utf-8")
+    http_md_names = [n for n in zf.namelist() if n.endswith(".md")]
+    assert len(http_md_names) == 1, f"expected one .md in zip, got {http_md_names}"
+    http_md = zf.read(http_md_names[0]).decode("utf-8")
     http_manifest = [
         json.loads(line)
         for line in zf.read("manifest.jsonl").decode("utf-8").splitlines()
         if line.strip()
     ]
+    assert len(http_manifest) == 1, f"expected one manifest row, got {len(http_manifest)}"
 
     out_dir = tmp_path / "cli_out"
     proc = _run_cli([
