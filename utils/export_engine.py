@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
-import os
+import posixpath
 import zipfile
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any, Callable, Literal, Protocol
 
 from models.project import ProjectDict, SessionListItemDict
@@ -41,6 +41,15 @@ MANIFEST_SHARED_KEYS: tuple[str, ...] = (
     "tokens",
     "tool_calls",
 )
+
+_VALID_SINCE: frozenset[str] = frozenset({"all", "last", "incremental"})
+_VALID_FMT: frozenset[str] = frozenset({"md", "json", "both"})
+_VALID_LAYOUT: frozenset[str] = frozenset({"api", "cli"})
+
+
+def _validate_mode(name: str, value: str, allowed: frozenset[str]) -> None:
+    if value not in allowed:
+        raise ValueError(f"Invalid {name}: {value!r}")
 
 
 def serialize_manifest_jsonl(manifest: list[dict[str, Any]]) -> str:
@@ -106,18 +115,19 @@ class ZipSink:
 
     def __init__(self, zf: zipfile.ZipFile) -> None:
         self._zf = zf
-        self._manifest: list[dict[str, Any]] = []
+        self._pending_files: list[tuple[str, str]] = []
 
     def add_session(
         self,
         files: list[tuple[str, str]],
         manifest_entry: dict[str, Any],
     ) -> None:
-        for rel_path, content in files:
-            self._zf.writestr(rel_path, content)
-        self._manifest.append(manifest_entry)
+        del manifest_entry
+        self._pending_files.extend(files)
 
     def finalize(self, manifest: list[dict[str, Any]]) -> None:
+        for rel_path, content in self._pending_files:
+            self._zf.writestr(rel_path, content)
         body = serialize_manifest_jsonl(manifest)
         if body:
             self._zf.writestr("manifest.jsonl", body)
@@ -129,9 +139,9 @@ def _resolve_first_timestamp(
     """Return first_timestamp from metadata, or synthesise from mtime without mutating *meta*."""
     ts = (meta.get("first_timestamp") or "").strip()
     if not ts:
-        ts = datetime.fromtimestamp(sess_info["modified"]).strftime(
-            "%Y-%m-%dT%H:%M:%S"
-        )
+        ts = datetime.fromtimestamp(
+            sess_info["modified"], tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%S")
     return ts
 
 
@@ -159,7 +169,7 @@ def build_export_rel_path(
     filename = f"{ts_file}__{title_slug}__{short_id}.{ext}"
     if layout == "api":
         return f"{proj_slug}/{filename}"
-    return os.path.join(date_str, proj_slug, filename)
+    return posixpath.join(date_str, proj_slug, filename)
 
 
 def build_manifest_entry(
@@ -247,11 +257,13 @@ def run_bulk_export(
     *since* must be one of ``all``, ``last``, or ``incremental``.
     Per-session failures are caught, counted, and skipped (batch continues).
     """
-    if since not in ("all", "last", "incremental"):
-        raise ValueError(f"Invalid since mode: {since!r}")
+    _validate_mode("since", since, _VALID_SINCE)
+    _validate_mode("fmt", fmt, _VALID_FMT)
+    _validate_mode("path_layout", path_layout, _VALID_LAYOUT)
 
     if manifest_style is None:
         manifest_style = path_layout
+    _validate_mode("manifest_style", manifest_style, _VALID_LAYOUT)
 
     result = BulkExportResult()
     manifest: list[dict[str, Any]] = []
