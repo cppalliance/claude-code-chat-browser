@@ -10,6 +10,12 @@ Examples:
     export.py --format json --no-zip   # JSON files instead of zip
     export.py --since incremental      # only sessions new/changed since last run (mtime)
     export.py --since last             # all sessions active on latest UTC calendar day
+
+Exit codes (export subcommand):
+  0 — all sessions exported successfully (or nothing to export, no errors)
+  1 — total failure (no sessions exported; one or more errors)
+  2 — partial failure (some sessions exported, some failed)
+  (exit codes apply to bulk export only; --session single-export always exits 0)
 """
 
 import argparse
@@ -33,6 +39,7 @@ from utils.json_exporter import session_to_json
 from utils.exclusion_rules import resolve_exclusion_rules_path, load_rules
 from utils.slugify import slugify
 from utils.export_engine import (
+    BulkExportResult,
     ExportFormat,
     NoopSink,
     SinceMode,
@@ -393,6 +400,25 @@ def _aggregate_stats(base_dir: str, project_filter: str, fmt: str):
         print(f"  Est. cost:    ~${totals['total_cost']:.2f} USD")
 
 
+def _exit_bulk_export(result: BulkExportResult) -> None:
+    """Map bulk-export counts to process exit code (CLI wrapper only).
+
+    Prints a summary to stderr on any failure, stdout on clean success.
+    Raises SystemExit(1) for total failure, SystemExit(2) for partial.
+    """
+    n = result.exported_session_count
+    k = result.failure_count
+    # "attempted" = exported + failed; excludes untitled/excluded/mtime-skipped
+    m = n + k
+    if n > 0 or k > 0:
+        dest = sys.stderr if k > 0 else sys.stdout
+        print(f"Exported {n} of {m} sessions ({k} failed)", file=dest)
+    if n == 0 and k > 0:   # total failure
+        sys.exit(1)
+    elif k > 0:             # partial failure
+        sys.exit(2)
+
+
 def cmd_export(args):
     """The main export command. Writes md/json files, optionally zipped."""
     base_dir = getattr(args, "base_dir", None) or get_claude_projects_dir()
@@ -460,6 +486,7 @@ def cmd_export(args):
     if since == "last":
         if latest_day is None:
             print("Nothing to export (no qualifying sessions in scope).")
+            _exit_bulk_export(export_result)
             return
         print(
             f"Latest activity end-date (UTC): {latest_day.isoformat()} — "
@@ -470,6 +497,7 @@ def cmd_export(args):
                 f"No sessions overlap {latest_day.isoformat()} (UTC); "
                 "nothing to export."
             )
+            _exit_bulk_export(export_result)
             return
     elif since == "incremental":
         skipped_mtime_unchanged = export_result.skipped_mtime_unchanged_count
@@ -494,6 +522,7 @@ def cmd_export(args):
                     "All sessions on disk were already at or before the last "
                     "recorded export time (nothing new to write)."
                 )
+        _exit_bulk_export(export_result)
         return
 
     os.makedirs(out_dir, exist_ok=True)
@@ -526,6 +555,7 @@ def cmd_export(args):
 
     _save_state(last_export, count=len(manifest), out_dir=out_dir)
     print(f"State saved to {STATE_FILE}")
+    _exit_bulk_export(export_result)
 
 
 def _export_single(session: dict, stats: dict, fmt: str, out_dir: str):
