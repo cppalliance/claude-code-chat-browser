@@ -61,6 +61,7 @@ class BulkExportResult:
     exported_session_count: int = 0
     failure_count: int = 0
     skipped_count: int = 0
+    skipped_mtime_unchanged_count: int = 0
     total_candidates: int = 0
     latest_day: date | None = None
     latest_day_scan_total: int = 0
@@ -82,20 +83,22 @@ class ExportSink(Protocol):
 
 
 @dataclass
-class ListSink:
-    """In-memory sink for tests; use :attr:`BulkExportResult.exports` for file pairs."""
-
-    manifest: list[dict[str, Any]] = field(default_factory=list)
+class NoopSink:
+    """Satisfies :class:`ExportSink` when only :attr:`BulkExportResult` fields are needed."""
 
     def add_session(
         self,
         files: list[tuple[str, str]],
         manifest_entry: dict[str, Any],
     ) -> None:
-        self.manifest.append(manifest_entry)
+        del files, manifest_entry
 
     def finalize(self, manifest: list[dict[str, Any]]) -> None:
-        self.manifest = manifest
+        del manifest
+
+
+# Backward-compatible alias for tests/docs written during PR1.
+ListSink = NoopSink
 
 
 class ZipSink:
@@ -277,7 +280,7 @@ def run_bulk_export(
             result.exports.extend(files)
             result.new_sessions_map[sid] = float(sess_info.get("modified", 0))
             result.exported_session_count += 1
-        except EXPORT_ERRORS as exc:
+        except Exception as exc:
             _record_failure(sid, exc)
 
     if since == "last":
@@ -306,6 +309,7 @@ def run_bulk_export(
                         curr_mtime = float(sess_info.get("modified", 0))
                         if curr_mtime and curr_mtime <= prev_mtime:
                             result.skipped_count += 1
+                            result.skipped_mtime_unchanged_count += 1
                             continue
 
                     session = parse_session(sess_info["path"])
@@ -322,7 +326,7 @@ def run_bulk_export(
                         continue
 
                     _export_parsed(project, sess_info, session)
-                except EXPORT_ERRORS as exc:
+                except Exception as exc:
                     _record_failure(sid, exc)
 
     result.manifest = manifest

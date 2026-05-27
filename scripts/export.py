@@ -34,7 +34,7 @@ from utils.exclusion_rules import resolve_exclusion_rules_path, load_rules
 from utils.slugify import slugify
 from utils.export_engine import (
     ExportFormat,
-    ListSink,
+    NoopSink,
     SinceMode,
     ZipSink,
     run_bulk_export,
@@ -437,7 +437,7 @@ def cmd_export(args):
     def _on_export_error(sid: str, exc: Exception) -> None:
         print(f"  Warning: failed to export {sid}: {exc}", file=sys.stderr)
 
-    collect_sink = ListSink()
+    collect_sink = NoopSink()
     export_result = run_bulk_export(
         projects=projects,
         since=cast(SinceMode, since),
@@ -471,12 +471,8 @@ def cmd_export(args):
                 "nothing to export."
             )
             return
-        skipped = (
-            export_result.latest_day_scan_total
-            - export_result.latest_day_match_count
-        )
     elif since == "incremental":
-        skipped_mtime_unchanged = skipped
+        skipped_mtime_unchanged = export_result.skipped_mtime_unchanged_count
 
     exported = len(all_exports)
     print(

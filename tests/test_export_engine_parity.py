@@ -19,7 +19,7 @@ from api.export_api import export_bp  # noqa: E402
 from tests.test_cli_e2e import _run_cli, _seed_base_dir  # noqa: E402
 from utils.export_engine import (  # noqa: E402
     MANIFEST_SHARED_KEYS,
-    ListSink,
+    NoopSink,
     manifest_shared_subset,
     run_bulk_export,
 )
@@ -37,7 +37,7 @@ def test_engine_api_vs_cli_layout_same_markdown_and_manifest(tmp_path: Path) -> 
     projects = list_projects(str(base))
     rules: list = []
 
-    api_sink = ListSink()
+    api_sink = NoopSink()
     api_result = run_bulk_export(
         projects=projects,
         since="all",
@@ -48,7 +48,7 @@ def test_engine_api_vs_cli_layout_same_markdown_and_manifest(tmp_path: Path) -> 
         path_layout="api",
         manifest_style="api",
     )
-    cli_sink = ListSink()
+    cli_sink = NoopSink()
     cli_result = run_bulk_export(
         projects=projects,
         since="all",

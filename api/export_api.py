@@ -25,14 +25,12 @@ from utils.session_stats import compute_stats
 from utils.md_exporter import session_to_markdown
 from utils.json_exporter import session_to_json
 from utils.slugify import slugify
-from utils.export_engine import EXPORT_ERRORS, ZipSink, run_bulk_export
+from utils.export_engine import EXPORT_ERRORS as _EXPORT_ERRORS, ZipSink, run_bulk_export
 
 export_bp = Blueprint("export", __name__)
 
 # Tests monkeypatch this path; keep in sync with utils.export_state_store.
 _STATE_FILE = EXPORT_STATE_FILE
-
-_EXPORT_ERRORS = EXPORT_ERRORS
 
 
 def _state_lock() -> Any:
