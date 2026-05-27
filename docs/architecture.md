@@ -71,7 +71,7 @@
 
 ## Dispatch table
 
-In `utils/jsonl_parser.py`, tool results are classified through `_parse_tool_result`, a **predicate-ordered dispatch table** (not a simple `if tool_name == ...` chain). **Order is load-bearing**: the first matching predicate wins. Tests in `tests/test_jsonl_parser.py` guard ordering regressions.
+In `utils/tool_dispatch.py`, tool results are classified through `_parse_tool_result`, a **predicate-ordered dispatch table** (not a simple `if tool_name == ...` chain). **Order is load-bearing**: the first matching predicate wins. Tests in `tests/test_jsonl_parser.py` and `tests/test_real_session_fixtures.py` guard ordering regressions.
 
 When adding a new tool renderer:
 
