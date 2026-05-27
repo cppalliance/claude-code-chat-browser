@@ -57,8 +57,9 @@ def test_cli_export_clean_exits_zero(tmp_path):
     ])
     assert proc.returncode == 0, proc.stderr
     assert list(out_dir.rglob("*.md"))
-    if proc.stderr.strip():
-        assert "failed" not in proc.stderr.lower() or "0 failed" in proc.stderr
+    # Success summary must go to stdout, not stderr
+    assert "Exported" not in proc.stderr
+    assert "Exported 1 of 1 sessions (0 failed)" in proc.stdout
 
 
 def test_cli_export_partial_failure_exits_two(
@@ -66,7 +67,7 @@ def test_cli_export_partial_failure_exits_two(
 ):
     """One session exports; a second fails parse (simulated corrupt file)."""
     base = _seed_base_dir(tmp_path)
-    project_dir = next(base.iterdir())
+    project_dir = base / "test-project"
     bad = project_dir / "session_bad.jsonl"
     bad.write_text('{"type": "user"}\n', encoding="utf-8")
     out_dir = tmp_path / "out"
@@ -132,6 +133,34 @@ def test_since_last_early_return_invokes_exit_bulk_export(
     captured = capsys.readouterr()
     assert "no qualifying sessions" in captured.out.lower()
     assert "Exported" not in captured.err
+
+
+def test_since_last_early_return_exits_one_on_failure(
+    tmp_path, monkeypatch, capsys
+):
+    """Since-last early-return with failure_count>0 must produce real exit code 1."""
+    fake_result = BulkExportResult(latest_day=None, failure_count=1)
+
+    monkeypatch.setattr(export, "run_bulk_export", lambda **kwargs: fake_result)
+    monkeypatch.setattr(export, "list_projects", lambda base: [{"name": "p", "path": "/p"}])
+
+    args = types.SimpleNamespace(
+        base_dir=str(tmp_path),
+        out=str(tmp_path / "out"),
+        since="last",
+        no_zip=True,
+        project=None,
+        format="md",
+        session=None,
+        exclude_rules=None,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        export.cmd_export(args)
+
+    assert exc_info.value.code == 1
+    captured = capsys.readouterr()
+    assert "Exported 0 of 1 sessions (1 failed)" in captured.err
 
 
 def test_cli_export_incremental_noop_no_stderr_summary(tmp_path):

@@ -15,6 +15,7 @@ Exit codes (export subcommand):
   0 — all sessions exported successfully (or nothing to export, no errors)
   1 — total failure (no sessions exported; one or more errors)
   2 — partial failure (some sessions exported, some failed)
+  (exit codes apply to bulk export only; --session single-export always exits 0)
 """
 
 import argparse
@@ -400,15 +401,21 @@ def _aggregate_stats(base_dir: str, project_filter: str, fmt: str):
 
 
 def _exit_bulk_export(result: BulkExportResult) -> None:
-    """Map bulk-export counts to process exit code (CLI wrapper only)."""
+    """Map bulk-export counts to process exit code (CLI wrapper only).
+
+    Prints a summary to stderr on any failure, stdout on clean success.
+    Raises SystemExit(1) for total failure, SystemExit(2) for partial.
+    """
     n = result.exported_session_count
-    m = result.total_candidates
     k = result.failure_count
+    # "attempted" = exported + failed; excludes untitled/excluded/mtime-skipped
+    m = n + k
     if n > 0 or k > 0:
-        print(f"Exported {n} of {m} sessions ({k} failed)", file=sys.stderr)
-    if n == 0 and k > 0:
+        dest = sys.stderr if k > 0 else sys.stdout
+        print(f"Exported {n} of {m} sessions ({k} failed)", file=dest)
+    if n == 0 and k > 0:   # total failure
         sys.exit(1)
-    if k > 0:
+    elif k > 0:             # partial failure
         sys.exit(2)
 
 
