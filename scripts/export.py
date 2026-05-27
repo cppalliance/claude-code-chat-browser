@@ -479,6 +479,7 @@ def cmd_export(args):
     if since == "last":
         if latest_day is None:
             print("Nothing to export (no qualifying sessions in scope).")
+            _exit_bulk_export(export_result)
             return
         print(
             f"Latest activity end-date (UTC): {latest_day.isoformat()} — "
@@ -489,6 +490,7 @@ def cmd_export(args):
                 f"No sessions overlap {latest_day.isoformat()} (UTC); "
                 "nothing to export."
             )
+            _exit_bulk_export(export_result)
             return
     elif since == "incremental":
         skipped_mtime_unchanged = export_result.skipped_mtime_unchanged_count

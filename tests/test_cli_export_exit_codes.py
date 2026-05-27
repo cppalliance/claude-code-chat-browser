@@ -14,6 +14,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 import scripts.export as export  # noqa: E402
 from tests.test_cli_e2e import _run_cli, _seed_base_dir  # noqa: E402
+from utils.export_engine import BulkExportResult  # noqa: E402
 from utils.jsonl_parser import parse_session  # noqa: E402
 
 _SUMMARY_RE = re.compile(
@@ -85,6 +86,51 @@ def test_cli_export_partial_failure_exits_two(
     assert _SUMMARY_RE.search(captured.err), captured.err
     assert "Exported 1 of 2 sessions (1 failed)" in captured.err
     assert len(list(out_dir.rglob("*.md"))) == 1
+
+
+def test_since_last_early_return_invokes_exit_bulk_export(
+    tmp_path, monkeypatch, capsys
+):
+    """cmd_export --since last must call _exit_bulk_export on early-return paths."""
+    exit_calls: list[BulkExportResult] = []
+
+    def _track_exit(result: BulkExportResult) -> None:
+        exit_calls.append(result)
+        if result.failure_count > 0:
+            raise SystemExit(1)
+
+    fake_result = BulkExportResult(
+        total_candidates=3,
+        failure_count=1,
+        latest_day=None,
+    )
+
+    monkeypatch.setattr(export, "_exit_bulk_export", _track_exit)
+    monkeypatch.setattr(
+        export,
+        "run_bulk_export",
+        lambda **kwargs: fake_result,
+    )
+    monkeypatch.setattr(export, "list_projects", lambda base: [{"name": "p", "path": "/p"}])
+
+    args = types.SimpleNamespace(
+        base_dir=str(tmp_path),
+        out=str(tmp_path / "out"),
+        since="last",
+        no_zip=True,
+        project=None,
+        format="md",
+        session=None,
+        exclude_rules=None,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        export.cmd_export(args)
+
+    assert exc_info.value.code == 1
+    assert len(exit_calls) == 1
+    assert exit_calls[0] is fake_result
+    assert "no qualifying sessions" in capsys.readouterr().out.lower()
 
 
 def test_cli_export_total_failure_exits_one(tmp_path, monkeypatch, capsys):
