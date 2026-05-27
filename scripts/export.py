@@ -15,7 +15,8 @@ Exit codes (export subcommand):
   0 — all sessions exported successfully (or nothing to export, no errors)
   1 — total failure (no sessions exported; one or more errors)
   2 — partial failure (some sessions exported, some failed)
-  (exit codes apply to bulk export only; --session single-export always exits 0)
+  (0/1/2 mapping applies only to bulk export; single-session exports may exit
+  0 or non-zero, e.g. cmd_export can call _die and exit 1)
 """
 
 import argparse
