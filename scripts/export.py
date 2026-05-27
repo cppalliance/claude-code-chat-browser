@@ -404,7 +404,7 @@ def _exit_bulk_export(result: BulkExportResult) -> None:
     n = result.exported_session_count
     m = result.total_candidates
     k = result.failure_count
-    if m > 0 or n > 0 or k > 0:
+    if n > 0 or k > 0:
         print(f"Exported {n} of {m} sessions ({k} failed)", file=sys.stderr)
     if n == 0 and k > 0:
         sys.exit(1)

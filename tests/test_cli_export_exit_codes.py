@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 import types
@@ -20,6 +21,12 @@ from utils.jsonl_parser import parse_session  # noqa: E402
 _SUMMARY_RE = re.compile(
     r"Exported \d+ of \d+ sessions \(\d+ failed\)",
 )
+
+
+def _isolated_home_env(tmp_path: Path) -> dict[str, str]:
+    """Redirect ~/.claude-code-chat-browser export state for subprocess CLI runs."""
+    home = str(tmp_path / "home")
+    return {"HOME": home, "USERPROFILE": home}
 
 
 def _export_args(tmp_path: Path, base: Path, out_dir: Path) -> types.SimpleNamespace:
@@ -96,14 +103,8 @@ def test_since_last_early_return_invokes_exit_bulk_export(
 
     def _track_exit(result: BulkExportResult) -> None:
         exit_calls.append(result)
-        if result.failure_count > 0:
-            raise SystemExit(1)
 
-    fake_result = BulkExportResult(
-        total_candidates=3,
-        failure_count=1,
-        latest_day=None,
-    )
+    fake_result = BulkExportResult(latest_day=None)
 
     monkeypatch.setattr(export, "_exit_bulk_export", _track_exit)
     monkeypatch.setattr(
@@ -124,13 +125,36 @@ def test_since_last_early_return_invokes_exit_bulk_export(
         exclude_rules=None,
     )
 
-    with pytest.raises(SystemExit) as exc_info:
-        export.cmd_export(args)
+    export.cmd_export(args)
 
-    assert exc_info.value.code == 1
     assert len(exit_calls) == 1
     assert exit_calls[0] is fake_result
-    assert "no qualifying sessions" in capsys.readouterr().out.lower()
+    captured = capsys.readouterr()
+    assert "no qualifying sessions" in captured.out.lower()
+    assert "Exported" not in captured.err
+
+
+def test_cli_export_incremental_noop_no_stderr_summary(tmp_path):
+    """Second incremental run after state is saved: exit 0, no stderr summary."""
+    base = _seed_base_dir(tmp_path)
+    out_dir = tmp_path / "out"
+    home_env = _isolated_home_env(tmp_path)
+    argv = [
+        "export",
+        "--base-dir",
+        str(base),
+        "--no-zip",
+        "--out",
+        str(out_dir),
+    ]
+    first = _run_cli([*argv, "--since", "all"], env=home_env)
+    assert first.returncode == 0, first.stderr
+    assert list(out_dir.rglob("*.md"))
+
+    second = _run_cli([*argv, "--since", "incremental"], env=home_env)
+    assert second.returncode == 0, second.stderr
+    assert "Exported" not in second.stderr
+    assert "Nothing to export" in second.stdout
 
 
 def test_cli_export_total_failure_exits_one(tmp_path, monkeypatch, capsys):
