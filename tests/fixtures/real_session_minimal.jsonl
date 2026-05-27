@@ -1,0 +1,3 @@
+{"type": "user", "timestamp": "2026-05-26T10:00:00Z", "cwd": "/sanitized/project/path", "message": {"content": [{"type": "text", "text": "Sanitized minimal real-shaped session opener"}]}, "sessionId": "session-sanitized-minimal"}
+{"type": "assistant", "timestamp": "2026-05-26T10:01:00Z", "message": {"model": "claude-sanitized", "content": [{"type": "text", "text": "Acknowledged."}], "usage": {"input_tokens": 10, "output_tokens": 5}}, "sessionId": "session-sanitized-minimal"}
+{"type": "user", "timestamp": "2026-05-26T10:02:00Z", "cwd": "/sanitized/project/path", "message": {"content": []}, "toolUseResult": {"stdout": "sanitized output\n", "stderr": "", "exitCode": 0}, "sessionId": "session-sanitized-minimal"}

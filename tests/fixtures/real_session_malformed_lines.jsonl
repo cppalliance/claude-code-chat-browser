@@ -1,0 +1,7 @@
+{"type": "user", "timestamp": "2026-05-26T10:00:00Z", "cwd": "/sanitized/project/path", "message": {"content": [{"type": "text", "text": "Valid line before malformed section"}]}, "sessionId": "session-sanitized-malformed-lines"}
+{"type": "assistant", "timestamp": "2026-05-26T10:01:00Z", "message": {"model": "claude-sanitized", "content": [{"type": "text", "text": "Recovered after bad lines."}], "usage": {"input_tokens": 10, "output_tokens": 5}}, "sessionId": "session-sanitized-malformed-lines"}
+
+# parse_session skips lines where json.loads raises JSONDecodeError (blank, garbage, truncated JSON below).
+{not valid json
+{"type": "user", "timestamp": "2026-05-26T10:02:00Z", "message": {"content": 
+{"type": "user", "timestamp": "2026-05-26T10:03:00Z", "cwd": "/sanitized/project/path", "message": {"content": [{"type": "text", "text": "Valid line after malformed section"}]}, "toolUseResult": {"stderr": "warn only", "exitCode": 1}, "sessionId": "session-sanitized-malformed-lines"}
