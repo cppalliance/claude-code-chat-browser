@@ -197,7 +197,7 @@ def _summarize_tool_results(messages: list[MessageDict]) -> dict[str, int]:
     return summary
 
 
-def _format_duration(seconds: float | int | None) -> str | None:
+def format_duration(seconds: float | int | None) -> str | None:
     """Turn seconds into something like '2h 15m' or '45s'."""
     if seconds is None:
         return None
@@ -211,3 +211,6 @@ def _format_duration(seconds: float | int | None) -> str | None:
     hours = minutes // 60
     mins = minutes % 60
     return f"{hours}h {mins}m"
+
+
+_format_duration = format_duration  # backward compat for internal callers

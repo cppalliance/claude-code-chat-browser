@@ -18,6 +18,7 @@ import os
 import sys
 import zipfile
 from datetime import datetime
+from typing import cast
 
 # Allow running from repo root or scripts/ directory
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -26,16 +27,19 @@ sys.path.insert(0, REPO_ROOT)
 
 from utils.session_path import get_claude_projects_dir, list_projects, list_sessions
 from utils.jsonl_parser import parse_session
-from utils.session_stats import compute_stats, _format_duration
+from utils.session_stats import compute_stats, format_duration
 from utils.md_exporter import session_to_markdown
 from utils.json_exporter import session_to_json
-from utils.exclusion_rules import (
-    resolve_exclusion_rules_path,
-    load_rules,
-    is_session_excluded,
-)
+from utils.exclusion_rules import resolve_exclusion_rules_path, load_rules
 from utils.slugify import slugify
-from utils.export_day_filter import collect_sessions_for_latest_activity_day
+from utils.export_engine import (
+    ExportFormat,
+    NoopSink,
+    SinceMode,
+    ZipSink,
+    run_bulk_export,
+    serialize_manifest_jsonl,
+)
 from utils.export_state_store import (
     atomic_write_export_state,
     export_state_lock,
@@ -251,7 +255,7 @@ def _session_stats(session_id: str, base_dir: str, fmt: str):
     print(f"  Title:      {session['title']}")
     if meta["first_timestamp"]:
         print(f"  Created:    {meta['first_timestamp'][:19]}")
-    dur = _format_duration(meta.get("session_wall_time_seconds"))
+    dur = format_duration(meta.get("session_wall_time_seconds"))
     if dur:
         print(f"  Duration:   {dur}")
     print(f"  Models:     {', '.join(meta['models_used']) or 'unknown'}")
@@ -389,66 +393,6 @@ def _aggregate_stats(base_dir: str, project_filter: str, fmt: str):
         print(f"  Est. cost:    ~${totals['total_cost']:.2f} USD")
 
 
-def _append_export_for_session(
-    project: dict,
-    sess_info: dict,
-    session: dict,
-    fmt: str,
-    all_exports: list,
-    manifest: list,
-    last_export: dict,
-) -> None:
-    """Append markdown/json entries and manifest row; update *last_export* mtime."""
-    sid = sess_info["id"]
-    stats = compute_stats(session)
-    meta = session["metadata"]
-    ts = meta.get("first_timestamp", "")
-    if not ts:
-        from datetime import datetime as _dt
-
-        ts = _dt.fromtimestamp(sess_info["modified"]).strftime(
-            "%Y-%m-%dT%H:%M:%S"
-        )
-        meta["first_timestamp"] = ts
-    date_str = ts[:10]
-    ts_file = ts[:19].replace(":", "-")
-    title_slug = slugify(session["title"], default="session")
-    short_id = sid[:8]
-    project_slug = slugify(project["name"], default="project")
-
-    if fmt in ("md", "both"):
-        md = session_to_markdown(session, stats)
-        rel_path = os.path.join(
-            date_str, project_slug, f"{ts_file}__{title_slug}__{short_id}.md"
-        )
-        all_exports.append((rel_path, md))
-
-    if fmt in ("json", "both"):
-        js = session_to_json(session, stats)
-        rel_path = os.path.join(
-            date_str, project_slug, f"{ts_file}__{title_slug}__{short_id}.json"
-        )
-        all_exports.append((rel_path, js))
-
-    manifest.append({
-        "session_id": sid,
-        "title": session["title"],
-        "project": project["name"],
-        "updated_at": meta.get("last_timestamp", ""),
-        "models": meta.get("models_used", []),
-        "tokens": meta["total_input_tokens"] + meta["total_output_tokens"],
-        "tool_calls": meta["total_tool_calls"],
-        "files_touched": stats.get("files_touched", {}).get(
-            "total_unique", 0
-        ),
-        "commands_run": len(stats.get("commands_run", [])),
-        "cost_estimate_usd": stats.get("cost_estimate_usd"),
-        "wall_clock_seconds": meta.get("session_wall_time_seconds"),
-    })
-
-    last_export[sid] = sess_info["modified"]
-
-
 def cmd_export(args):
     """The main export command. Writes md/json files, optionally zipped."""
     base_dir = getattr(args, "base_dir", None) or get_claude_projects_dir()
@@ -488,86 +432,47 @@ def cmd_export(args):
 
     print(f"Found {len(projects)} project(s) in {base_dir}")
 
-    all_exports = []  # list of (rel_path, content)
-    manifest = []
-    total_sessions = 0
-    skipped = 0
     skipped_mtime_unchanged = 0
-    latest_day = None
+
+    def _on_export_error(sid: str, exc: Exception) -> None:
+        print(f"  Warning: failed to export {sid}: {exc}", file=sys.stderr)
+
+    collect_sink = NoopSink()
+    export_result = run_bulk_export(
+        projects=projects,
+        since=cast(SinceMode, since),
+        rules=rules,
+        last_export_sessions=last_export,
+        sink=collect_sink,
+        fmt=cast(ExportFormat, fmt),
+        path_layout="cli",
+        manifest_style="cli",
+        on_export_error=_on_export_error,
+    )
+
+    all_exports = export_result.exports
+    manifest = export_result.manifest
+    last_export.update(export_result.new_sessions_map)
+    total_sessions = export_result.total_candidates
+    skipped = export_result.skipped_count
+    latest_day = export_result.latest_day
 
     if since == "last":
-        d, rows, total_sessions = collect_sessions_for_latest_activity_day(
-            projects,
-            list_sessions=list_sessions,
-            parse_session=parse_session,
-            is_session_excluded=is_session_excluded,
-            rules=rules,
-        )
-        if d is None:
+        if latest_day is None:
             print("Nothing to export (no qualifying sessions in scope).")
             return
-        latest_day = d
         print(
-            f"Latest activity end-date (UTC): {d.isoformat()} — "
-            f"exporting sessions that overlap that calendar day."
+            f"Latest activity end-date (UTC): {latest_day.isoformat()} — "
+            "exporting sessions that overlap that calendar day."
         )
-        if not rows:
+        if export_result.latest_day_match_count == 0:
             print(
-                f"No sessions overlap {d.isoformat()} (UTC); nothing to export."
+                f"No sessions overlap {latest_day.isoformat()} (UTC); "
+                "nothing to export."
             )
             return
-        skipped = total_sessions - len(rows)
-        for project, sess_info, session, _st, _en in rows:
-            _append_export_for_session(
-                project,
-                sess_info,
-                session,
-                fmt,
-                all_exports,
-                manifest,
-                last_export,
-            )
-    else:
-        for project in projects:
-            sessions = list_sessions(project["path"])
-            for sess_info in sessions:
-                total_sessions += 1
-                sid = sess_info["id"]
-
-                if since == "incremental":
-                    prev_mtime = last_export.get(sid, 0)
-                    if sess_info["modified"] <= prev_mtime:
-                        skipped += 1
-                        skipped_mtime_unchanged += 1
-                        continue
-
-                try:
-                    session = parse_session(sess_info["path"])
-                except Exception as e:
-                    print(f"  Warning: failed to parse {sid}: {e}")
-                    continue
-
-                if session["title"] == "Untitled Session":
-                    skipped += 1
-                    continue
-
-                if is_session_excluded(
-                    rules,
-                    session,
-                    project.get("display_name") or project["name"],
-                ):
-                    skipped += 1
-                    continue
-
-                _append_export_for_session(
-                    project,
-                    sess_info,
-                    session,
-                    fmt,
-                    all_exports,
-                    manifest,
-                    last_export,
-                )
+    elif since == "incremental":
+        skipped_mtime_unchanged = export_result.skipped_mtime_unchanged_count
 
     exported = len(all_exports)
     print(
@@ -601,8 +506,7 @@ def cmd_export(args):
                 f.write(content)
         manifest_path = os.path.join(out_dir, "manifest.jsonl")
         with open(manifest_path, "w", encoding="utf-8") as f:
-            for entry in manifest:
-                f.write(json.dumps(entry, default=str) + "\n")
+            f.write(serialize_manifest_jsonl(manifest))
         print(f"Exported {exported} file(s) to {out_dir}")
     else:
         date_tag = datetime.now().strftime("%Y-%m-%d")
@@ -617,10 +521,7 @@ def cmd_export(args):
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for rel_path, content in all_exports:
                 zf.writestr(rel_path, content)
-            manifest_str = "\n".join(
-                json.dumps(e, default=str) for e in manifest
-            )
-            zf.writestr("manifest.jsonl", manifest_str)
+            ZipSink(zf).finalize(manifest)
         print(f"Exported {exported} file(s) to {zip_path}")
 
     _save_state(last_export, count=len(manifest), out_dir=out_dir)
