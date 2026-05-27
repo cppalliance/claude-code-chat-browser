@@ -93,6 +93,14 @@ python scripts/export.py --project boost-capy
 
 The `--project` flag matches a **case-insensitive substring** of either the **Project** column from `list` (derived from the session working directory) or the internal directory name under `~/.claude/projects/` (for example `F--boost-capy` or `d--harbor-forge`). A substring like `boost-capy` matches `F--boost-capy`; you can also paste the friendly name shown in `list`.
 
+**Exit codes** (`export` subcommand; stderr prints `Exported N of M sessions (K failed)` when any session was attempted):
+
+| Code | Meaning |
+|------|---------|
+| 0 | All attempted sessions exported successfully, or nothing to export with no errors |
+| 1 | Total failure — no sessions exported, one or more errors |
+| 2 | Partial failure — some sessions exported, some failed |
+
 ## Data Source
 
 Reads from `~/.claude/projects/` which contains JSONL session files created by Claude Code.
