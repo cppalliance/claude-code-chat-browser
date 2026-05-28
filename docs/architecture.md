@@ -15,9 +15,9 @@
          ▼                         ▼                         ▼
 ┌─────────────────┐    ┌─────────────────────┐    ┌──────────────────┐
 │ session_path    │    │ jsonl_parser        │    │ exclusion_rules  │
-│ list_projects   │    │ parse_session       │    │ load + match     │
-│ list_sessions   │    │ quick_session_info  │    └────────┬─────────┘
-│ safe_join       │    │ _parse_tool_result  │             │
+│ list_projects   │    │ session_peek        │    │ load + match     │
+│ list_sessions   │    │ tool_dispatch       │    └────────┬─────────┘
+│ safe_join       │    │ jsonl_helpers       │             │
 └────────┬────────┘    └──────────┬──────────┘             │
          │                        │                        │
          └────────────┬───────────┴────────────────────────┘
@@ -48,7 +48,7 @@
 | Layer | Responsibility | Key modules |
 |-------|----------------|-------------|
 | **Data discovery** | Resolve `~/.claude/projects/`, list projects and sessions, prevent path traversal | `utils/session_path.py` |
-| **Parsing** | JSONL → session dict (messages, metadata, tool rendering) | `utils/jsonl_parser.py` |
+| **Parsing** | JSONL → session dict (messages, metadata, tool rendering) | `utils/jsonl_parser.py`, `utils/tool_dispatch.py`, `utils/session_peek.py`, `utils/jsonl_helpers.py` |
 | **Filtering** | Exclude sensitive sessions via rules file | `utils/exclusion_rules.py` |
 | **Statistics** | Aggregates for API and exporters | `utils/session_stats.py` |
 | **Export — Markdown** | Session → YAML-frontmatter Markdown | `utils/md_exporter.py` |
@@ -71,13 +71,13 @@
 
 ## Dispatch table
 
-In `utils/jsonl_parser.py`, tool results are classified through `_parse_tool_result`, a **predicate-ordered dispatch table** (not a simple `if tool_name == ...` chain). **Order is load-bearing**: the first matching predicate wins. Tests in `tests/test_jsonl_parser.py` guard ordering regressions.
+In `utils/tool_dispatch.py`, tool results are classified through `_parse_tool_result`, a **predicate-ordered dispatch table** (not a simple `if tool_name == ...` chain). **Order is load-bearing**: the first matching predicate wins. Tests in `tests/test_jsonl_parser.py` and `tests/test_real_session_fixtures.py` guard ordering regressions.
 
 When adding a new tool renderer:
 
-1. Add predicate + builder pair in the dispatch table in the correct order (specific before generic).
-2. Add or extend a JSONL fixture under `tests/fixtures/` if needed.
-3. Run `pytest tests/test_jsonl_parser.py -v`.
+1. Add a `(predicate, builder)` pair to `_TOOL_RESULT_DISPATCH` in `utils/tool_dispatch.py`, preserving existing predicate order unless you also update fixtures and ordering tests (`tests/test_jsonl_parser.py`, `tests/test_real_session_fixtures.py`). Order is **not** “specific before generic” in general — the first match wins. `_tool_result_pred_task_message` is the intentional broad-before-narrow exception (`task_id` or `message` before retrieval/completed/async).
+2. Add or extend a JSONL fixture under `tests/fixtures/` (especially for overlaps with existing predicates).
+3. Run `pytest tests/test_jsonl_parser.py tests/test_real_session_fixtures.py -v`.
 
 ## Export state machine
 
