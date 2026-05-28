@@ -15,7 +15,6 @@ from utils.jsonl_helpers import (
     normalize_content as _normalize_content,
     strip_system_tags as _strip_system_tags,
 )
-from utils.session_peek import quick_session_info
 from utils.tool_dispatch import _TOOL_RESULT_DISPATCH, _parse_tool_result
 from utils.validation import validate_session_dict
 
@@ -36,6 +35,14 @@ __all__ = [
     "_strip_system_tags",
     "_track_file_activity",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "quick_session_info":
+        from utils.session_peek import quick_session_info
+
+        return quick_session_info
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def parse_session(filepath: str) -> SessionDict:

@@ -15,8 +15,8 @@ def quick_session_info(filepath: str) -> QuickSessionInfoDict:
     without fully parsing all messages.  Much faster than parse_session() for
     large files.
 
-    Strategy: read the first ~50 lines for the title, then seek to the end of
-    the file and read the last chunk to find the last timestamp."""
+    Strategy: files over 10 KiB cap the head scan at 80 lines for title, then
+    tail-read for last_timestamp; smaller files are scanned fully in pass 1."""
     title = None
     first_ts = None
     last_ts = None

@@ -229,20 +229,11 @@ def _tool_result_build_user_input(tr: dict[str, Any], base: dict[str, Any]) -> d
     return result
 
 
-# Dispatch registry: **first matching predicate wins** (same as legacy if/elif).
-# Order is load-bearing — do not sort alphabetically or “more specific first”
-# without replaying tests and real session fixtures.
-#
-# Notably ``task_message`` is intentionally broad (``task_id`` or ``message``)
-# and sits before ``task_retrieval`` / ``task_completed`` / ``task_async`` so
-# payloads that include overlapping keys still match the legacy branch order.
-#
-# To add a shape: append ``(pred, build)`` here, or insert only after verifying
-# predicates above would not steal intended matches.
+# Registry order is load-bearing (see module docstring).
+# ``plan`` before ``file_write``: plan blobs may carry ``filePath`` + ``content``.
 _TOOL_RESULT_DISPATCH = (
     (_tool_result_pred_bash, _tool_result_build_bash),
     (_tool_result_pred_file_edit, _tool_result_build_file_edit),
-    # plan before file_write: plan blobs may also carry filePath + content
     (_tool_result_pred_plan, _tool_result_build_plan),
     (_tool_result_pred_file_write, _tool_result_build_file_write),
     (_tool_result_pred_glob, _tool_result_build_glob),

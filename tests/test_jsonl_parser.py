@@ -234,6 +234,16 @@ class TestParseToolResult:
         r = _parse_tool_result({"plan": [], "filePath": "/plan.md"})
         assert r["result_type"] == "plan"
 
+    def test_plan_with_content_not_classified_as_file_write(self):
+        """plan is registered before file_write in _TOOL_RESULT_DISPATCH."""
+        r = _parse_tool_result({
+            "plan": [],
+            "filePath": "/plan.md",
+            "content": "plan body",
+        })
+        assert r["result_type"] == "plan"
+        assert r["file_path"] == "/plan.md"
+
     def test_unknown_fallback(self):
         r = _parse_tool_result({"unexpected": True})
         assert r["result_type"] == "unknown"
