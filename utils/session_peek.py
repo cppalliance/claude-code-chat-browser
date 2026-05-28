@@ -6,7 +6,7 @@ import os
 from models.session import QuickSessionInfoDict
 from utils.jsonl_helpers import entry_message, extract_text, first_title_line
 
-_TAIL_READ_MIN_BYTES = 10 * 1024
+_TAIL_READ_MIN_BYTES = 10000
 _MAX_HEAD_LINES = 80
 
 
@@ -15,8 +15,8 @@ def quick_session_info(filepath: str) -> QuickSessionInfoDict:
     without fully parsing all messages.  Much faster than parse_session() for
     large files.
 
-    Strategy: files over 10 KiB cap the head scan at 80 lines for title, then
-    tail-read for last_timestamp; smaller files are scanned fully in pass 1."""
+    Strategy: read at most the first 80 lines for title, then tail-read the end
+    of files larger than 10_000 bytes for last_timestamp."""
     title = None
     first_ts = None
     last_ts = None
@@ -27,8 +27,7 @@ def quick_session_info(filepath: str) -> QuickSessionInfoDict:
         lines_read = 0
         for line in f:
             lines_read += 1
-            # Large files use pass-2 tail read for last_timestamp; cap head scan only then.
-            if file_size > _TAIL_READ_MIN_BYTES and lines_read > _MAX_HEAD_LINES:
+            if lines_read > _MAX_HEAD_LINES:
                 break
             line = line.strip()
             if not line:
