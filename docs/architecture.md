@@ -15,9 +15,9 @@
          ▼                         ▼                         ▼
 ┌─────────────────┐    ┌─────────────────────┐    ┌──────────────────┐
 │ session_path    │    │ jsonl_parser        │    │ exclusion_rules  │
-│ list_projects   │    │ parse_session       │    │ load + match     │
-│ list_sessions   │    │ quick_session_info  │    └────────┬─────────┘
-│ safe_join       │    │ _parse_tool_result  │             │
+│ list_projects   │    │ session_peek        │    │ load + match     │
+│ list_sessions   │    │ tool_dispatch       │    └────────┬─────────┘
+│ safe_join       │    │ jsonl_helpers       │             │
 └────────┬────────┘    └──────────┬──────────┘             │
          │                        │                        │
          └────────────┬───────────┴────────────────────────┘
@@ -48,7 +48,7 @@
 | Layer | Responsibility | Key modules |
 |-------|----------------|-------------|
 | **Data discovery** | Resolve `~/.claude/projects/`, list projects and sessions, prevent path traversal | `utils/session_path.py` |
-| **Parsing** | JSONL → session dict (messages, metadata, tool rendering) | `utils/jsonl_parser.py` |
+| **Parsing** | JSONL → session dict (messages, metadata, tool rendering) | `utils/jsonl_parser.py`, `utils/tool_dispatch.py`, `utils/session_peek.py`, `utils/jsonl_helpers.py` |
 | **Filtering** | Exclude sensitive sessions via rules file | `utils/exclusion_rules.py` |
 | **Statistics** | Aggregates for API and exporters | `utils/session_stats.py` |
 | **Export — Markdown** | Session → YAML-frontmatter Markdown | `utils/md_exporter.py` |

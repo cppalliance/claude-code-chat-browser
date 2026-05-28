@@ -37,10 +37,22 @@ def _tool_result_pred_file_edit(tr: dict[str, Any]) -> bool:
 
 
 def _tool_result_build_file_edit(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+    # Summary fields only; full blob (e.g. structuredPatch) stays on message tool_result.
     result = dict(base)
     result["result_type"] = "file_edit"
     result["file_path"] = tr.get("filePath", "")
     result["replace_all"] = tr.get("replaceAll", False)
+    return result
+
+
+def _tool_result_pred_plan(tr: dict[str, Any]) -> bool:
+    return "plan" in tr and "filePath" in tr
+
+
+def _tool_result_build_plan(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+    result = dict(base)
+    result["result_type"] = "plan"
+    result["file_path"] = tr.get("filePath", "")
     return result
 
 
@@ -82,7 +94,7 @@ def _tool_result_build_grep(tr: dict[str, Any], base: dict[str, Any]) -> dict[st
     result["num_lines"] = tr.get("numLines", 0)
     result["duration_ms"] = tr.get("durationMs")
     content = tr.get("content", "")
-    if content and isinstance(content, str):
+    if isinstance(content, str):
         result["content"] = content
     return result
 
@@ -98,7 +110,7 @@ def _tool_result_build_file_read(tr: dict[str, Any], base: dict[str, Any]) -> di
     result["file_path"] = file_obj.get("filePath", "")
     result["num_lines"] = file_obj.get("numLines")
     content = file_obj.get("content", "")
-    if content and isinstance(content, str):
+    if isinstance(content, str):
         result["content"] = content
     return result
 
@@ -217,17 +229,6 @@ def _tool_result_build_user_input(tr: dict[str, Any], base: dict[str, Any]) -> d
     return result
 
 
-def _tool_result_pred_plan(tr: dict[str, Any]) -> bool:
-    return "plan" in tr and "filePath" in tr
-
-
-def _tool_result_build_plan(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
-    result = dict(base)
-    result["result_type"] = "plan"
-    result["file_path"] = tr.get("filePath", "")
-    return result
-
-
 # Dispatch registry: **first matching predicate wins** (same as legacy if/elif).
 # Order is load-bearing — do not sort alphabetically or “more specific first”
 # without replaying tests and real session fixtures.
@@ -241,6 +242,8 @@ def _tool_result_build_plan(tr: dict[str, Any], base: dict[str, Any]) -> dict[st
 _TOOL_RESULT_DISPATCH = (
     (_tool_result_pred_bash, _tool_result_build_bash),
     (_tool_result_pred_file_edit, _tool_result_build_file_edit),
+    # plan before file_write: plan blobs may also carry filePath + content
+    (_tool_result_pred_plan, _tool_result_build_plan),
     (_tool_result_pred_file_write, _tool_result_build_file_write),
     (_tool_result_pred_glob, _tool_result_build_glob),
     (_tool_result_pred_grep, _tool_result_build_grep),
@@ -253,7 +256,6 @@ _TOOL_RESULT_DISPATCH = (
     (_tool_result_pred_task_async, _tool_result_build_task_async),
     (_tool_result_pred_todo_write, _tool_result_build_todo_write),
     (_tool_result_pred_user_input, _tool_result_build_user_input),
-    (_tool_result_pred_plan, _tool_result_build_plan),
 )
 
 

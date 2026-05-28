@@ -51,6 +51,7 @@ def extract_images(content_parts: Any) -> list[dict[str, Any]]:
                     "data": source["data"],
                 })
         elif part.get("type") == "tool_result":
+            # Nested content is usually a block list; string content is not normalized here.
             nested = part.get("content", [])
             if isinstance(nested, list):
                 for sub in nested:
@@ -64,12 +65,16 @@ def extract_images(content_parts: Any) -> list[dict[str, Any]]:
     return images
 
 
+def first_title_line(text: str, max_chars: int = 100) -> str:
+    """First non-empty line after system-tag strip, truncated for session titles."""
+    return strip_system_tags(text).strip().split("\n")[0][:max_chars]
+
+
 def infer_title(messages: list[MessageDict]) -> str:
     """Use the first line of the first real user message as the session title."""
     for msg in messages:
         if msg["role"] == "user" and msg.get("text"):
-            text = strip_system_tags(msg["text"]).strip()
-            first_line = text.split("\n")[0][:100]
+            first_line = first_title_line(msg["text"])
             if first_line:
                 return first_line
     return "Untitled Session"

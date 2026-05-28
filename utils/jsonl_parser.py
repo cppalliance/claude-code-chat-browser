@@ -24,6 +24,7 @@ __all__ = [
     "quick_session_info",
     "_parse_tool_result",
     "_TOOL_RESULT_DISPATCH",
+    "_entry_message",
     "_process_user",
     "_process_assistant",
     "_process_system",

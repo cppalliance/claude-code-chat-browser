@@ -4,7 +4,7 @@ import json
 import os
 
 from models.session import QuickSessionInfoDict
-from utils.jsonl_helpers import entry_message, extract_text, strip_system_tags
+from utils.jsonl_helpers import entry_message, extract_text, first_title_line
 
 _TAIL_READ_MIN_BYTES = 10 * 1024
 _MAX_HEAD_LINES = 80
@@ -48,8 +48,7 @@ def quick_session_info(filepath: str) -> QuickSessionInfoDict:
                 msg = entry_message(entry)
                 text = extract_text(msg.get("content", []))
                 if text:
-                    clean = strip_system_tags(text).strip()
-                    first_line = clean.split("\n")[0][:100]
+                    first_line = first_title_line(text)
                     if first_line:
                         title = first_line
 
@@ -60,6 +59,7 @@ def quick_session_info(filepath: str) -> QuickSessionInfoDict:
         with open(filepath, "rb") as f:
             f.seek(file_size - chunk_size)
             tail = f.read().decode("utf-8", errors="replace")
+        # First line in tail is often a partial record after seek; json.loads skips it.
         # Parse lines in reverse to find latest timestamp
         for line in reversed(tail.splitlines()):
             line = line.strip()
