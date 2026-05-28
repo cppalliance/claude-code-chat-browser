@@ -75,9 +75,9 @@ In `utils/tool_dispatch.py`, tool results are classified through `_parse_tool_re
 
 When adding a new tool renderer:
 
-1. Add predicate + builder pair in the dispatch table in the correct order (specific before generic).
-2. Add or extend a JSONL fixture under `tests/fixtures/` if needed.
-3. Run `pytest tests/test_jsonl_parser.py -v`.
+1. Add a `(predicate, builder)` pair to `_TOOL_RESULT_DISPATCH` in `utils/tool_dispatch.py`, preserving existing predicate order unless you also update fixtures and ordering tests (`tests/test_jsonl_parser.py`, `tests/test_real_session_fixtures.py`). Order is **not** “specific before generic” in general — the first match wins. `_tool_result_pred_task_message` is the intentional broad-before-narrow exception (`task_id` or `message` before retrieval/completed/async).
+2. Add or extend a JSONL fixture under `tests/fixtures/` (especially for overlaps with existing predicates).
+3. Run `pytest tests/test_jsonl_parser.py tests/test_real_session_fixtures.py -v`.
 
 ## Export state machine
 
