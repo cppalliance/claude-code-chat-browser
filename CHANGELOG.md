@@ -20,3 +20,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Deprecated
 
 - `export_count` on `GET /api/export/state` (documented only; still returned). Use `last_export_session_count`. Removal planned in a follow-up release per [deprecation policy](docs/deprecation-policy.md).
+
+[Unreleased]: https://github.com/cppalliance/claude-code-chat-browser/compare/f70505982d435f8b1f754cb18c0c9f65609f11b4...HEAD
