@@ -1,5 +1,7 @@
 """Flask app that serves the web GUI for browsing sessions."""
 
+__version__ = "0.1.0.dev0"
+
 import argparse
 import os
 import sys
@@ -11,6 +13,59 @@ from api.sessions import sessions_bp
 from api.search import search_bp
 from api.export_api import export_bp
 from utils.exclusion_rules import resolve_exclusion_rules_path, load_rules
+
+
+def _normalize_bind_host(host: str) -> str:
+    """Lowercase host for checks; strip optional IPv6 brackets (e.g. ``[::1]`` → ``::1``)."""
+    h = (host or "").strip().lower()
+    if len(h) >= 2 and h.startswith("[") and h.endswith("]"):
+        return h[1:-1]
+    return h
+
+
+def is_loopback_host(host: str) -> bool:
+    """True if ``host`` binds only to the local machine (safe with ``--debug``).
+
+    Accepts ``127.0.0.1``, ``localhost``, ``::1``, ``[::1]``, and other ``127.x.x.x`` addresses.
+    Rejects all-interfaces forms such as ``0.0.0.0`` and bare ``::`` (not loopback).
+    """
+    h = _normalize_bind_host(host)
+    if h in ("127.0.0.1", "localhost", "::1"):
+        return True
+    if h.startswith("127.") and h.count(".") == 3:
+        parts = h.split(".")
+        try:
+            return all(0 <= int(p) <= 255 for p in parts)
+        except ValueError:
+            return False
+    return False
+
+
+def format_listen_url(host: str, port: int) -> str:
+    """Return a valid ``http://`` URL for the startup banner (IPv6 hosts bracketed)."""
+    h = (host or "").strip()
+    if not h:
+        raise ValueError("host must not be empty")
+    if h.startswith("[") and h.endswith("]"):
+        display_host = h
+    elif ":" in h:
+        display_host = f"[{h}]"
+    else:
+        display_host = h
+    return f"http://{display_host}:{port}"
+
+
+def validate_startup_cli(args: argparse.Namespace) -> None:
+    """Refuse ``--debug`` when ``--host`` is reachable off loopback."""
+    if args.debug and not is_loopback_host(args.host):
+        print(
+            "error: --debug is only allowed with a loopback --host "
+            "(127.0.0.1, localhost, ::1, [::1], or 127.x.x.x). "
+            "Combining --debug with a network-visible --host exposes the "
+            "Werkzeug debugger and session data to other machines.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 def create_app(
@@ -60,9 +115,10 @@ def build_cli_parser() -> argparse.ArgumentParser:
 
 if __name__ == "__main__":
     args = build_cli_parser().parse_args()
+    validate_startup_cli(args)
 
     app = create_app(base_dir=args.base_dir, exclusion_rules_path=args.exclude_rules)
-    print(f"Claude Code Chat Browser running at http://{args.host}:{args.port}")
+    print(f"Claude Code Chat Browser running at {format_listen_url(args.host, args.port)}")
     # Reloader follows --debug on Unix only (Werkzeug file watcher, not the interactive debugger).
     app.run(
         host=args.host,

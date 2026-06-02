@@ -58,7 +58,7 @@ python app.py
 
 Options:
 ```bash
-python app.py --port 8080 --host 0.0.0.0
+python app.py --port 8080 --host 0.0.0.0   # never add --debug on 0.0.0.0
 python app.py --base-dir /path/to/claude/projects
 ```
 
@@ -66,6 +66,8 @@ python app.py --base-dir /path/to/claude/projects
 > That combination exposes [Werkzeug's interactive debugger](https://werkzeug.palletsprojects.com/en/stable/debug/),
 > which allows arbitrary code execution from any browser that can reach the server.
 > For typical local browsing, keep the default `--host 127.0.0.1` and omit `--debug`.
+> The server **refuses to start** if `--debug` is combined with a non-loopback `--host` (e.g. `0.0.0.0`).
+> That check runs only when you start the app with **`python app.py`** (not via `flask run` or other WSGI entrypoints).
 
 ### CLI Export
 

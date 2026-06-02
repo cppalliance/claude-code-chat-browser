@@ -21,7 +21,7 @@ import pytest
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
 
-from app import build_cli_parser
+from app import build_cli_parser, format_listen_url, is_loopback_host, validate_startup_cli
 from scripts.export import build_parser
 
 
@@ -320,6 +320,65 @@ class TestAppArgparse:
         parser = build_cli_parser()
         args = parser.parse_args(["--debug"])
         assert args.debug is True
+
+    @pytest.mark.parametrize(
+        "host", ["127.0.0.1", "localhost", "::1", "[::1]", "127.0.0.2"]
+    )
+    def test_is_loopback_host_accepts_loopback(self, host: str) -> None:
+        assert is_loopback_host(host)
+
+    @pytest.mark.parametrize(
+        "host",
+        [
+            "0.0.0.0",
+            "192.168.1.1",
+            "",
+            "example.com",
+            "127.0.0.",
+            "127.256.0.0",
+            "127.-1.0.0",
+        ],
+    )
+    def test_is_loopback_host_rejects_non_loopback(self, host: str) -> None:
+        assert not is_loopback_host(host)
+
+    @pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "[::1]"])
+    def test_validate_startup_cli_allows_loopback_debug(self, host: str) -> None:
+        parser = build_cli_parser()
+        args = parser.parse_args(["--host", host, "--debug"])
+        validate_startup_cli(args)
+
+    def test_validate_startup_cli_rejects_non_loopback_debug(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        parser = build_cli_parser()
+        args = parser.parse_args(["--host", "0.0.0.0", "--debug"])
+        with pytest.raises(SystemExit) as exc_info:
+            validate_startup_cli(args)
+        assert exc_info.value.code == 1
+        err = capsys.readouterr().err
+        assert "debug" in err.lower()
+        assert "loopback" in err.lower()
+
+    @pytest.mark.parametrize(
+        ("host", "port", "expected"),
+        [
+            ("127.0.0.1", 5000, "http://127.0.0.1:5000"),
+            ("::1", 8080, "http://[::1]:8080"),
+            ("[::1]", 8080, "http://[::1]:8080"),
+        ],
+    )
+    def test_format_listen_url(self, host: str, port: int, expected: str) -> None:
+        assert format_listen_url(host, port) == expected
+
+    def test_format_listen_url_rejects_empty_host(self) -> None:
+        with pytest.raises(ValueError, match="host must not be empty"):
+            format_listen_url("", 5000)
+
+    def test_validate_startup_cli_allows_non_loopback_without_debug(self) -> None:
+        parser = build_cli_parser()
+        args = parser.parse_args(["--host", "0.0.0.0"])
+        validate_startup_cli(args)
 
     def test_app_py_debug_not_hardcoded_true(self):
         """app.run() must wire debug from args, not a literal True."""

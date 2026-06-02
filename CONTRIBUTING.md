@@ -40,7 +40,16 @@ Useful flags:
 
 - `--base-dir PATH` — point at a different `projects/` tree (for tests or fixtures)
 - `--exclude-rules PATH` — session exclusion rules file
-- `--host 0.0.0.0` — listen on all interfaces (use only on trusted networks)
+- `--host 0.0.0.0` — listen on all interfaces (use only on trusted networks; never with `--debug`)
+- `--debug` — Flask/Werkzeug debug mode (loopback hosts only; enforced when starting via `python app.py`, not `flask run` or WSGI). Extending the guard to `FLASK_DEBUG` / `flask run` is a planned follow-up.
+
+## API and release policy
+
+- [CHANGELOG.md](CHANGELOG.md) — user-visible changes per release
+- [docs/deprecation-policy.md](docs/deprecation-policy.md) — how deprecated API fields are removed
+- [docs/api-reference.md](docs/api-reference.md) — field **stability** (`stable` / `experimental` / `deprecated`)
+
+When changing JSON response shapes, update the API reference stability column and CHANGELOG before removing fields.
 
 ## Running tests
 
@@ -116,6 +125,8 @@ npm run test:coverage   # optional
 | SPA shell + routing | [`static/index.html`](static/index.html), [`static/js/app.js`](static/js/app.js) |
 | Shared frontend utilities | [`static/js/shared/`](static/js/shared/) |
 | API documentation | [`docs/api-reference.md`](docs/api-reference.md) |
+| Deprecation policy | [`docs/deprecation-policy.md`](docs/deprecation-policy.md) |
+| Changelog | [`CHANGELOG.md`](CHANGELOG.md) |
 
 ## Architecture
 
