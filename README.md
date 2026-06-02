@@ -67,6 +67,7 @@ python app.py --base-dir /path/to/claude/projects
 > which allows arbitrary code execution from any browser that can reach the server.
 > For typical local browsing, keep the default `--host 127.0.0.1` and omit `--debug`.
 > The server **refuses to start** if `--debug` is combined with a non-loopback `--host` (e.g. `0.0.0.0`).
+> That check runs only when you start the app with **`python app.py`** (not via `flask run` or other WSGI entrypoints).
 
 ### CLI Export
 

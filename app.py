@@ -16,7 +16,11 @@ from utils.exclusion_rules import resolve_exclusion_rules_path, load_rules
 
 
 def is_loopback_host(host: str) -> bool:
-    """True if ``host`` binds only to the local machine (safe with ``--debug``)."""
+    """True if ``host`` binds only to the local machine (safe with ``--debug``).
+
+    Accepts ``127.0.0.1``, ``localhost``, ``::1``, and other ``127.x.x.x`` addresses.
+    Rejects all-interfaces forms such as ``0.0.0.0`` and bare ``::`` (not loopback).
+    """
     h = (host or "").strip().lower()
     if h in ("127.0.0.1", "localhost", "::1"):
         return True

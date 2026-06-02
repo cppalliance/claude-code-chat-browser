@@ -6,7 +6,7 @@ This document defines how **claude-code-chat-browser** evolves its HTTP JSON API
 
 1. **Documented fields are a contract.** See [API reference](api-reference.md) — each field is marked `stable`, `experimental`, or `deprecated`.
 2. **Additive first.** Prefer adding a new field over renaming an existing one.
-3. **Deprecate before removing.** A deprecated field remains in responses for at least **one release** after the deprecation is announced in [CHANGELOG](../CHANGELOG.md) and the API reference.
+3. **Deprecate before removing.** A deprecated field remains in responses for at least **one release** after the deprecation is announced in [CHANGELOG](../CHANGELOG.md) and the API reference. Fields still read by the bundled SPA need **at least two releases** — see [Removal criteria](#removal-criteria) below.
 4. **SPA and scripts.** Update `static/js/*.js` and any internal callers before removing a field.
 
 ## How we announce deprecation
