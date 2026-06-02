@@ -11,6 +11,7 @@ import { renderWebFetchUse } from './tool_use/web_fetch.js';
 import { renderWebSearchUse } from './tool_use/web_search.js';
 import { renderToolUseFallback } from './tool_use/fallback.js';
 import { getToolSummary } from './tool_use/summary.js';
+import { UNKNOWN_DISPATCH_KEY } from './constants.js';
 
 import { renderBashResult } from './tool_result/bash.js';
 import { renderFileReadResult } from './tool_result/file_read.js';
@@ -71,11 +72,13 @@ function getToolResultRenderer(resultType) {
 }
 
 export function renderToolUse(tool) {
-    const name = tool.name || 'unknown';
+    if (!tool) return '';
+    const name = tool.name || UNKNOWN_DISPATCH_KEY;
     return getToolUseRenderer(name)(tool);
 }
 
 export function renderToolResult(parsed) {
-    const rt = parsed.result_type || 'unknown';
+    if (!parsed) return '';
+    const rt = parsed.result_type || UNKNOWN_DISPATCH_KEY;
     return getToolResultRenderer(rt)(parsed);
 }

@@ -5,7 +5,9 @@ import {
     renderToolUse,
     renderToolResult,
     getToolSummary,
+    toolResultHasBody,
 } from './registry.js';
+import { UNKNOWN_DISPATCH_KEY } from './constants.js';
 import { renderWebFetchUse } from './tool_use/web_fetch.js';
 
 const CORE_TOOL_USE = ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Task', 'TodoWrite', 'AskUserQuestion', 'WebFetch', 'WebSearch'];
@@ -32,6 +34,10 @@ describe('TOOL_USE_RENDERERS', () => {
         }
     });
 
+    it('does not register the unknown dispatch sentinel as a tool renderer', () => {
+        expect(Object.prototype.hasOwnProperty.call(TOOL_USE_RENDERERS, UNKNOWN_DISPATCH_KEY)).toBe(false);
+    });
+
     it('renderBashUse escapes HTML in command', () => {
         const html = renderToolUse({
             name: 'Bash',
@@ -39,6 +45,11 @@ describe('TOOL_USE_RENDERERS', () => {
         });
         expect(html).not.toContain('<script>');
         expect(html).toContain('&lt;script&gt;');
+    });
+
+    it('returns empty string for null or undefined tool', () => {
+        expect(renderToolUse(null)).toBe('');
+        expect(renderToolUse(undefined)).toBe('');
     });
 
     it('renderReadUse escapes file path in body and summary', () => {
@@ -72,6 +83,41 @@ describe('TOOL_RESULT_RENDERERS', () => {
         const html = renderToolResult({ result_type: 'bash' });
         expect(html).toContain('Bash Result (unknown)');
         expect(html).not.toContain('undefined');
+    });
+
+    it('returns empty string for null or undefined parsed', () => {
+        expect(renderToolResult(null)).toBe('');
+        expect(renderToolResult(undefined)).toBe('');
+    });
+});
+
+describe('toolResultHasBody', () => {
+    it('returns false for null or undefined', () => {
+        expect(toolResultHasBody(null)).toBe(false);
+        expect(toolResultHasBody(undefined)).toBe(false);
+    });
+
+    it('returns true for bash with stdout or stderr', () => {
+        expect(toolResultHasBody({ result_type: 'bash', stdout: 'ok' })).toBe(true);
+        expect(toolResultHasBody({ result_type: 'bash', stderr: 'err' })).toBe(true);
+        expect(toolResultHasBody({ result_type: 'bash' })).toBe(false);
+    });
+
+    it('returns false for summary-only result types', () => {
+        expect(toolResultHasBody({ result_type: 'file_read', file_path: '/a' })).toBe(false);
+        expect(toolResultHasBody({ result_type: 'glob', num_files: 3 })).toBe(false);
+    });
+
+    it('returns true for user_input and todo_write with todos', () => {
+        expect(toolResultHasBody({ result_type: 'user_input' })).toBe(true);
+        expect(toolResultHasBody({ result_type: 'todo_write', todos: [{ content: 'x' }] })).toBe(true);
+        expect(toolResultHasBody({ result_type: 'todo_write', todo_count: 1 })).toBe(false);
+    });
+
+    it('returns true for task when duration, retrieval, or description is set', () => {
+        expect(toolResultHasBody({ result_type: 'task', description: 'subagent' })).toBe(true);
+        expect(toolResultHasBody({ result_type: 'task', total_duration_ms: 100 })).toBe(true);
+        expect(toolResultHasBody({ result_type: 'task', status: 'completed' })).toBe(false);
     });
 });
 
