@@ -66,6 +66,7 @@ python app.py --base-dir /path/to/claude/projects
 > That combination exposes [Werkzeug's interactive debugger](https://werkzeug.palletsprojects.com/en/stable/debug/),
 > which allows arbitrary code execution from any browser that can reach the server.
 > For typical local browsing, keep the default `--host 127.0.0.1` and omit `--debug`.
+> The server **refuses to start** if `--debug` is combined with a non-loopback `--host` (e.g. `0.0.0.0`).
 
 ### CLI Export
 

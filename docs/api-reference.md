@@ -6,6 +6,22 @@ HTTP API for **claude-code-chat-browser**. All `/api/*` routes return JSON unles
 
 **Source of truth for error codes:** [`api/error_codes.py`](../api/error_codes.py)
 
+**Field stability:** [`deprecation-policy.md`](deprecation-policy.md)
+
+---
+
+## API field stability
+
+Each response field below is labeled:
+
+| Label | Meaning |
+|-------|---------|
+| **stable** | Will not be renamed or removed without a documented deprecation period |
+| **experimental** | May change in any release; do not build long-lived integrations on these fields |
+| **deprecated** | Still returned; use the documented replacement; removal announced in [CHANGELOG](../CHANGELOG.md) |
+
+**Migration:** Breaking changes use additive deprecation first (new field → deprecate old → remove after policy period). Versioned routes (e.g. `/api/v2/...`) are reserved for future breaking reshapes; none exist today.
+
 ---
 
 ## Authentication
@@ -100,13 +116,13 @@ None.
 
 `application/json` — array of project objects:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | string | Directory name under `~/.claude/projects/` (e.g. `F--boost-capy`) |
-| `path` | string | Absolute path to project directory |
-| `display_name` | string | Friendly name derived from session `cwd` when available |
-| `session_count` | integer | Count of titled sessions (updated in handler) |
-| `last_modified` | string (ISO 8601) | Latest message timestamp across titled sessions |
+| Field | Type | Stability | Description |
+|-------|------|-----------|-------------|
+| `name` | string | stable | Directory name under `~/.claude/projects/` (e.g. `F--boost-capy`) |
+| `path` | string | stable | Absolute path to project directory |
+| `display_name` | string | stable | Friendly name derived from session `cwd` when available |
+| `session_count` | integer | stable | Count of titled sessions (updated in handler) |
+| `last_modified` | string (ISO 8601) | stable | Latest message timestamp across titled sessions |
 
 ```json
 [
@@ -148,19 +164,19 @@ Lists sessions in one project with summary fields for the workspace sidebar. Ski
 
 `application/json` — array of session row objects:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string | Session id (filename without `.jsonl`) |
-| `path` | string | Absolute path to JSONL file |
-| `size_bytes` | integer | File size |
-| `modified` | number | File mtime (epoch seconds) |
-| `title` | string | Parsed session title |
-| `models` | string[] | Models used in session |
-| `tokens` | integer | Sum of input + output tokens |
-| `tool_calls` | integer | Total tool calls |
-| `first_timestamp` | string \| null | First message timestamp |
-| `last_timestamp` | string \| null | Last message timestamp |
-| `error` | boolean | Optional; `true` if parse failed (card shows error state) |
+| Field | Type | Stability | Description |
+|-------|------|-----------|-------------|
+| `id` | string | stable | Session id (filename without `.jsonl`) |
+| `path` | string | stable | Absolute path to JSONL file |
+| `size_bytes` | integer | stable | File size |
+| `modified` | number | stable | File mtime (epoch seconds) |
+| `title` | string | stable | Parsed session title |
+| `models` | string[] | stable | Models used in session |
+| `tokens` | integer | stable | Sum of input + output tokens |
+| `tool_calls` | integer | stable | Total tool calls |
+| `first_timestamp` | string \| null | stable | First message timestamp |
+| `last_timestamp` | string \| null | stable | Last message timestamp |
+| `error` | boolean | stable | Optional; `true` if parse failed (card shows error state) |
 
 #### Errors
 
@@ -191,14 +207,14 @@ Returns the full parsed session: title, metadata, and messages (including tool c
 
 `application/json` — session object:
 
-| Top-level field | Type | Description |
-|-----------------|------|-------------|
-| `session_id` | string | Session identifier |
-| `title` | string | Inferred title from first human message |
-| `messages` | array | Ordered message objects (`role`, `text`/`content`, tool fields, etc.) |
-| `metadata` | object | Tokens, models, timestamps, file activity, tool counts, `cwd`, `git_branch`, … |
+| Top-level field | Type | Stability | Description |
+|-----------------|------|-----------|-------------|
+| `session_id` | string | stable | Session identifier |
+| `title` | string | stable | Inferred title from first human message |
+| `messages` | array | stable | Ordered message objects (`role`, `text`/`content`, tool fields, etc.) |
+| `metadata` | object | stable | Tokens, models, timestamps, file activity, tool counts, `cwd`, `git_branch`, … |
 
-See [`utils/jsonl_parser.py`](../utils/jsonl_parser.py) `parse_session()` for the full metadata shape.
+Nested keys inside `messages[]` and `metadata` follow the parser output; new parser fields may appear as **experimental** until listed here. See [`utils/jsonl_parser.py`](../utils/jsonl_parser.py) `parse_session()` for the full metadata shape.
 
 #### Errors
 
@@ -306,11 +322,11 @@ Read-only snapshot of bulk-export state persisted under `~/.claude-code-chat-bro
 
 #### Response — `200 OK`
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `last_export_time` | string \| null | ISO timestamp of last completed bulk export |
-| `last_export_session_count` | integer | Sessions in last bulk export run |
-| `export_count` | integer | **Legacy alias** — same value as `last_export_session_count`; prefer `last_export_session_count` in new integrations (kept for SPA backwards compatibility) |
+| Field | Type | Stability | Description |
+|-------|------|-----------|-------------|
+| `last_export_time` | string \| null | stable | ISO timestamp of last completed bulk export |
+| `last_export_session_count` | integer | stable | Sessions in last bulk export run |
+| `export_count` | integer | deprecated | Legacy alias of `last_export_session_count`; prefer `last_export_session_count` in new code (still returned for SPA compatibility; removal per [deprecation-policy.md](deprecation-policy.md)) |
 
 ```json
 {

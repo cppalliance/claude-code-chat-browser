@@ -1,5 +1,7 @@
 """Flask app that serves the web GUI for browsing sessions."""
 
+__version__ = "0.1.0"
+
 import argparse
 import os
 import sys
@@ -11,6 +13,33 @@ from api.sessions import sessions_bp
 from api.search import search_bp
 from api.export_api import export_bp
 from utils.exclusion_rules import resolve_exclusion_rules_path, load_rules
+
+
+def is_loopback_host(host: str) -> bool:
+    """True if ``host`` binds only to the local machine (safe with ``--debug``)."""
+    h = (host or "").strip().lower()
+    if h in ("127.0.0.1", "localhost", "::1"):
+        return True
+    if h.startswith("127.") and h.count(".") == 3:
+        parts = h.split(".")
+        try:
+            return len(parts) == 4 and all(0 <= int(p) <= 255 for p in parts)
+        except ValueError:
+            return False
+    return False
+
+
+def validate_startup_cli(args: argparse.Namespace) -> None:
+    """Refuse ``--debug`` when ``--host`` is reachable off loopback."""
+    if args.debug and not is_loopback_host(args.host):
+        print(
+            "error: --debug is only allowed with a loopback --host "
+            "(127.0.0.1, localhost, ::1, or 127.x.x.x). "
+            "Combining --debug with a network-visible --host exposes the "
+            "Werkzeug debugger and session data to other machines.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
 
 
 def create_app(
@@ -60,6 +89,7 @@ def build_cli_parser() -> argparse.ArgumentParser:
 
 if __name__ == "__main__":
     args = build_cli_parser().parse_args()
+    validate_startup_cli(args)
 
     app = create_app(base_dir=args.base_dir, exclusion_rules_path=args.exclude_rules)
     print(f"Claude Code Chat Browser running at http://{args.host}:{args.port}")
