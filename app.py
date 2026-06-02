@@ -29,6 +29,18 @@ def is_loopback_host(host: str) -> bool:
     return False
 
 
+def format_listen_url(host: str, port: int) -> str:
+    """Return a valid ``http://`` URL for the startup banner (IPv6 hosts bracketed)."""
+    h = (host or "").strip()
+    if h.startswith("[") and h.endswith("]"):
+        display_host = h
+    elif ":" in h:
+        display_host = f"[{h}]"
+    else:
+        display_host = h
+    return f"http://{display_host}:{port}"
+
+
 def validate_startup_cli(args: argparse.Namespace) -> None:
     """Refuse ``--debug`` when ``--host`` is reachable off loopback."""
     if args.debug and not is_loopback_host(args.host):
@@ -92,7 +104,7 @@ if __name__ == "__main__":
     validate_startup_cli(args)
 
     app = create_app(base_dir=args.base_dir, exclusion_rules_path=args.exclude_rules)
-    print(f"Claude Code Chat Browser running at http://{args.host}:{args.port}")
+    print(f"Claude Code Chat Browser running at {format_listen_url(args.host, args.port)}")
     # Reloader follows --debug on Unix only (Werkzeug file watcher, not the interactive debugger).
     app.run(
         host=args.host,

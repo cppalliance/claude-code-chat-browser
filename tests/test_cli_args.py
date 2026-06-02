@@ -21,7 +21,7 @@ import pytest
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
 
-from app import build_cli_parser, is_loopback_host, validate_startup_cli
+from app import build_cli_parser, format_listen_url, is_loopback_host, validate_startup_cli
 from scripts.export import build_parser
 
 
@@ -334,12 +334,28 @@ class TestAppArgparse:
         args = parser.parse_args(["--host", "127.0.0.1", "--debug"])
         validate_startup_cli(args)
 
-    def test_validate_startup_cli_rejects_non_loopback_debug(self) -> None:
+    def test_validate_startup_cli_rejects_non_loopback_debug(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         parser = build_cli_parser()
         args = parser.parse_args(["--host", "0.0.0.0", "--debug"])
         with pytest.raises(SystemExit) as exc_info:
             validate_startup_cli(args)
         assert exc_info.value.code == 1
+        err = capsys.readouterr().err
+        assert "debug" in err.lower()
+        assert "loopback" in err.lower()
+
+    @pytest.mark.parametrize(
+        ("host", "port", "expected"),
+        [
+            ("127.0.0.1", 5000, "http://127.0.0.1:5000"),
+            ("::1", 8080, "http://[::1]:8080"),
+            ("[::1]", 8080, "http://[::1]:8080"),
+        ],
+    )
+    def test_format_listen_url(self, host: str, port: int, expected: str) -> None:
+        assert format_listen_url(host, port) == expected
 
     def test_validate_startup_cli_allows_non_loopback_without_debug(self) -> None:
         parser = build_cli_parser()

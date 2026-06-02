@@ -244,21 +244,21 @@ Same as session detail.
 
 `application/json` — stats object from [`utils/session_stats.py`](../utils/session_stats.py) `compute_stats()`:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `files_touched` | object | `read`, `written`, `created`, `total_unique` file lists |
-| `commands_run` | array | Bash commands with exit metadata |
-| `urls_accessed` | string[] | Web fetch URLs |
-| `conversation_turns` | integer | Human/assistant turn count |
-| `wall_clock_seconds` | number \| null | Session duration |
-| `wall_clock_display` | string \| null | Human-readable duration |
-| `cost_estimate_usd` | number | Best-effort USD estimate from token usage |
-| `tool_result_summary` | object | Aggregated tool result stats |
-| `stop_reason_summary` | object | Stop reason counts |
-| `entry_type_counts` | object | JSONL entry type counts |
-| `sidechain_message_count` | integer | Sidechain entries |
-| `api_error_count` | integer | API errors in session |
-| `compaction_events` | array | Context compaction markers |
+| Field | Type | Stability | Description |
+|-------|------|-----------|-------------|
+| `files_touched` | object | stable | `read`, `written`, `created`, `total_unique` file lists |
+| `commands_run` | array | stable | Bash commands with exit metadata |
+| `urls_accessed` | string[] | stable | Web fetch URLs |
+| `conversation_turns` | integer | stable | Human/assistant turn count |
+| `wall_clock_seconds` | number \| null | stable | Session duration |
+| `wall_clock_display` | string \| null | stable | Human-readable duration |
+| `cost_estimate_usd` | number | stable | Best-effort USD estimate from token usage |
+| `tool_result_summary` | object | stable | Aggregated tool result stats |
+| `stop_reason_summary` | object | stable | Stop reason counts |
+| `entry_type_counts` | object | stable | JSONL entry type counts |
+| `sidechain_message_count` | integer | stable | Sidechain entries |
+| `api_error_count` | integer | stable | API errors in session |
+| `compaction_events` | array | stable | Context compaction markers |
 
 #### Errors
 
