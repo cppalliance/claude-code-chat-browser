@@ -25,6 +25,8 @@ A deprecated field may be removed when:
 - The bundled SPA no longer reads the field, and
 - Tests and CHANGELOG document the removal.
 
+For fields actively read by the bundled SPA (which does not track an external API version), the deprecation period will span **at least two releases** so the SPA and policy can be updated in the same release cycle as the final removal.
+
 ## Example (in progress)
 
 | Field | Endpoint | Status | Replacement |

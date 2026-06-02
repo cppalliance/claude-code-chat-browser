@@ -292,14 +292,14 @@ Case-insensitive substring search across all non-excluded messages in all projec
 
 `application/json` — array of hit objects:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `project` | string | Project `name` |
-| `session_id` | string | Session id |
-| `title` | string | Session title |
-| `role` | string | Message role (`human`, `assistant`, …) |
-| `timestamp` | string \| null | Message timestamp |
-| `snippet` | string | ~160 chars around match |
+| Field | Type | Stability | Description |
+|-------|------|-----------|-------------|
+| `project` | string | stable | Project `name` |
+| `session_id` | string | stable | Session id |
+| `title` | string | stable | Session title |
+| `role` | string | stable | Message role (`human`, `assistant`, …) |
+| `timestamp` | string \| null | stable | Message timestamp |
+| `snippet` | string | experimental | ~160 chars around match; length may change |
 
 #### Errors
 

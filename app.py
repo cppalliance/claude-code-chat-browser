@@ -23,7 +23,7 @@ def is_loopback_host(host: str) -> bool:
     if h.startswith("127.") and h.count(".") == 3:
         parts = h.split(".")
         try:
-            return len(parts) == 4 and all(0 <= int(p) <= 255 for p in parts)
+            return all(0 <= int(p) <= 255 for p in parts)
         except ValueError:
             return False
     return False
@@ -32,6 +32,8 @@ def is_loopback_host(host: str) -> bool:
 def format_listen_url(host: str, port: int) -> str:
     """Return a valid ``http://`` URL for the startup banner (IPv6 hosts bracketed)."""
     h = (host or "").strip()
+    if not h:
+        raise ValueError("host must not be empty")
     if h.startswith("[") and h.endswith("]"):
         display_host = h
     elif ":" in h:
@@ -51,7 +53,7 @@ def validate_startup_cli(args: argparse.Namespace) -> None:
             "Werkzeug debugger and session data to other machines.",
             file=sys.stderr,
         )
-        raise SystemExit(1)
+        sys.exit(1)
 
 
 def create_app(

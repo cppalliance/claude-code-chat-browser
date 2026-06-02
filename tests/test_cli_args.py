@@ -325,7 +325,18 @@ class TestAppArgparse:
     def test_is_loopback_host_accepts_loopback(self, host: str) -> None:
         assert is_loopback_host(host)
 
-    @pytest.mark.parametrize("host", ["0.0.0.0", "192.168.1.1", "", "example.com"])
+    @pytest.mark.parametrize(
+        "host",
+        [
+            "0.0.0.0",
+            "192.168.1.1",
+            "",
+            "example.com",
+            "127.0.0.",
+            "127.256.0.0",
+            "127.-1.0.0",
+        ],
+    )
     def test_is_loopback_host_rejects_non_loopback(self, host: str) -> None:
         assert not is_loopback_host(host)
 
@@ -356,6 +367,10 @@ class TestAppArgparse:
     )
     def test_format_listen_url(self, host: str, port: int, expected: str) -> None:
         assert format_listen_url(host, port) == expected
+
+    def test_format_listen_url_rejects_empty_host(self) -> None:
+        with pytest.raises(ValueError, match="host must not be empty"):
+            format_listen_url("", 5000)
 
     def test_validate_startup_cli_allows_non_loopback_without_debug(self) -> None:
         parser = build_cli_parser()

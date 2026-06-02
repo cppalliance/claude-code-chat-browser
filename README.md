@@ -58,7 +58,7 @@ python app.py
 
 Options:
 ```bash
-python app.py --port 8080 --host 0.0.0.0
+python app.py --port 8080 --host 0.0.0.0   # never add --debug on 0.0.0.0
 python app.py --base-dir /path/to/claude/projects
 ```
 
