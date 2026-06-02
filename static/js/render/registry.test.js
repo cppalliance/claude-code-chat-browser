@@ -6,6 +6,7 @@ import {
     renderToolResult,
     getToolSummary,
 } from './registry.js';
+import { renderWebFetchUse } from './tool_use/web_fetch.js';
 
 const CORE_TOOL_USE = ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Task', 'TodoWrite', 'AskUserQuestion', 'WebFetch', 'WebSearch'];
 
@@ -96,14 +97,23 @@ describe('renderToolUse fallback', () => {
         expect(TOOL_USE_RENDERERS.UnknownToolXYZ).toBeUndefined();
     });
 
-    it('renders WebFetch via registry (JSON body, not unknown-tool path)', () => {
+    it('uses fallback when name is an inherited property (e.g. constructor)', () => {
+        const html = renderToolUse({
+            name: 'constructor',
+            input: { foo: 'bar' },
+        });
+        expect(html).toContain('tool-call');
+        expect(html).toContain('&quot;foo&quot;');
+    });
+
+    it('dispatches WebFetch to registered renderer (not generic unknown-tool fallback)', () => {
+        expect(TOOL_USE_RENDERERS.WebFetch).toBe(renderWebFetchUse);
         const html = renderToolUse({
             name: 'WebFetch',
             input: { url: 'https://example.com' },
         });
         expect(html).toContain('tool-call');
         expect(html).toContain('example.com');
-        expect(html).toContain('<pre><code>');
     });
 
     it('renders WebSearch via registry', () => {
@@ -113,6 +123,21 @@ describe('renderToolUse fallback', () => {
         });
         expect(html).toContain('tool-call');
         expect(html).toContain('vitest registry');
+    });
+});
+
+describe('renderTodoWriteResult', () => {
+    it('summary count matches parsed.todos length when todos are present', () => {
+        const html = renderToolResult({
+            result_type: 'todo_write',
+            todo_count: 99,
+            todos: [
+                { status: 'pending', content: 'one' },
+                { status: 'completed', content: 'two' },
+            ],
+        });
+        expect(html).toContain('Todos updated (2 items)');
+        expect(html).not.toContain('99 items');
     });
 });
 

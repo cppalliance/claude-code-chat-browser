@@ -58,14 +58,24 @@ export const TOOL_RESULT_RENDERERS = {
     plan: renderPlanResult,
 };
 
+function getToolUseRenderer(name) {
+    return Object.prototype.hasOwnProperty.call(TOOL_USE_RENDERERS, name)
+        ? TOOL_USE_RENDERERS[name]
+        : renderToolUseFallback;
+}
+
+function getToolResultRenderer(resultType) {
+    return Object.prototype.hasOwnProperty.call(TOOL_RESULT_RENDERERS, resultType)
+        ? TOOL_RESULT_RENDERERS[resultType]
+        : renderToolResultFallback;
+}
+
 export function renderToolUse(tool) {
     const name = tool.name || 'unknown';
-    const fn = TOOL_USE_RENDERERS[name] ?? renderToolUseFallback;
-    return fn(tool);
+    return getToolUseRenderer(name)(tool);
 }
 
 export function renderToolResult(parsed) {
     const rt = parsed.result_type || 'unknown';
-    const fn = TOOL_RESULT_RENDERERS[rt] ?? renderToolResultFallback;
-    return fn(parsed);
+    return getToolResultRenderer(rt)(parsed);
 }
