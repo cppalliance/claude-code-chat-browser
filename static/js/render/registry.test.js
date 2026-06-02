@@ -41,7 +41,7 @@ describe('TOOL_USE_RENDERERS', () => {
         expect(html).toContain('&lt;script&gt;');
     });
 
-    it('renderReadUse escapes file path in body', () => {
+    it('renderReadUse escapes file path in body and summary', () => {
         const html = renderToolUse({
             name: 'Read',
             input: { file_path: 'C:\\tmp\\<evil>.txt' },
@@ -81,8 +81,8 @@ describe('getToolSummary', () => {
         expect(getToolSummary('Bash', { command: 'ls -la' })).toContain('ls -la');
     });
 
-    it('formats Read summary with escaped path', () => {
-        expect(getToolSummary('Read', { file_path: 'a<b' })).toContain('&lt;b');
+    it('formats Read summary as plain text (escaping deferred to wrapToolUse)', () => {
+        expect(getToolSummary('Read', { file_path: 'a<b' })).toBe('Read: a<b');
     });
 });
 
@@ -146,5 +146,12 @@ describe('renderToolResult fallback', () => {
         const html = renderToolResult({ result_type: 'custom_type' });
         expect(html).toContain('Tool result (custom_type)');
         expect(html).toContain('tool-result');
+    });
+
+    it('uses fallback when result_type is an inherited property (e.g. constructor)', () => {
+        const html = renderToolResult({ result_type: 'constructor' });
+        expect(html).toContain('Tool result (constructor)');
+        expect(html).toContain('tool-result');
+        expect(Object.prototype.hasOwnProperty.call(TOOL_RESULT_RENDERERS, 'constructor')).toBe(false);
     });
 });
