@@ -1,10 +1,11 @@
 // Session workspace — sidebar, session loading, message rendering.
 
 import { state } from './shared/state.js';
-import { esc, truncate, formatDate, formatTs, smoothSet, loadingBar, showToast, closeSidebar, setHamburgerVisible } from './shared/utils.js';
+import { esc, formatDate, formatTs, smoothSet, loadingBar, showToast, closeSidebar, setHamburgerVisible } from './shared/utils.js';
 import { renderMarkdown, cleanContent } from './shared/markdown.js';
 import { setWorkspaceMode } from './shared/theme.js';
 import { downloadSession } from './export.js';
+import { renderToolUse, renderToolResult, toolResultHasBody } from './render/registry.js';
 
 // ==================== Workspace (split layout) ====================
 
@@ -228,7 +229,7 @@ function renderUser(msg) {
     if (!hasText && !hasImages && !hasToolResult) return '';
 
     if (hasToolResult && !hasText && !hasImages) {
-        if (_toolResultHasBody(msg.tool_result_parsed)) return renderToolResult(msg.tool_result_parsed);
+        if (toolResultHasBody(msg.tool_result_parsed)) return renderToolResult(msg.tool_result_parsed);
         return '';
     }
 
@@ -278,145 +279,6 @@ function renderSystem(msg) {
         return `<div class="bubble bubble-system">${esc(msg.content)}</div>`;
     }
     return '';
-}
-
-function getToolSummary(name, inp) {
-    if (name === 'Bash') return `Bash: ${truncate(inp.command || '', 80)}`;
-    if (name === 'Read') return `Read: ${esc(inp.file_path || '')}`;
-    if (name === 'Write') return `Write: ${esc(inp.file_path || '')}`;
-    if (name === 'Edit') return `Edit: ${esc(inp.file_path || '')}`;
-    if (name === 'Glob') return `Glob: ${esc(inp.pattern || '')}`;
-    if (name === 'Grep') return `Grep: /${esc(inp.pattern || '')}/` + (inp.path ? ` in ${esc(inp.path)}` : '');
-    if (name === 'WebFetch') return `Fetch: ${truncate(inp.url || '', 80)}`;
-    if (name === 'WebSearch') return `Search: ${truncate(inp.query || '', 80)}`;
-    if (name === 'Task') return `Task: ${esc(inp.subagent_type || '')} - ${esc(inp.description || '')}`;
-    if (name === 'TodoWrite') return 'TodoWrite';
-    if (name === 'AskUserQuestion') return 'AskUserQuestion';
-    return name;
-}
-
-function renderToolUse(tool) {
-    const name = tool.name || 'unknown';
-    const inp = tool.input || {};
-    const summary = getToolSummary(name, inp);
-
-    let body = '';
-
-    if (name === 'Bash') {
-        body += `<div class="tool-call-section"><div class="tool-call-section-title">Command</div><pre><code>${esc(inp.command || '')}</code></pre></div>`;
-        if (inp.description) body += `<div class="tool-call-section"><div class="tool-call-section-title">Description</div><div>${esc(inp.description)}</div></div>`;
-    } else if (name === 'Read') {
-        body += `<div class="tool-call-section">File: <code>${esc(inp.file_path || '')}</code></div>`;
-    } else if (name === 'Write') {
-        body += `<div class="tool-call-section">File: <code>${esc(inp.file_path || '')}</code></div>`;
-        if (inp.content) body += `<div class="tool-call-section"><div class="tool-call-section-title">Content</div><pre><code>${esc(truncate(inp.content, 500))}</code></pre></div>`;
-    } else if (name === 'Edit') {
-        body += `<div class="tool-call-section">File: <code>${esc(inp.file_path || '')}</code></div>`;
-        if (inp.old_string) body += `<div class="tool-call-section"><div class="tool-call-section-title">Old</div><pre style="border-left:3px solid var(--danger)"><code>${esc(truncate(inp.old_string, 300))}</code></pre></div>`;
-        if (inp.new_string) body += `<div class="tool-call-section"><div class="tool-call-section-title">New</div><pre style="border-left:3px solid var(--success)"><code>${esc(truncate(inp.new_string, 300))}</code></pre></div>`;
-    } else if (name === 'Glob') {
-        body += `<div class="tool-call-section">Pattern: <code>${esc(inp.pattern || '')}</code>${inp.path ? ' in <code>' + esc(inp.path) + '</code>' : ''}</div>`;
-    } else if (name === 'Grep') {
-        body += `<div class="tool-call-section">Pattern: <code>${esc(inp.pattern || '')}</code>${inp.path ? ' in <code>' + esc(inp.path) + '</code>' : ''}</div>`;
-    } else if (name === 'Task') {
-        body += `<div class="tool-call-section">${esc(inp.subagent_type || '')} &mdash; ${esc(inp.description || '')}</div>`;
-        if (inp.prompt) body += `<div class="tool-call-section"><div class="tool-call-section-title">Prompt</div><pre><code>${esc(truncate(inp.prompt, 500))}</code></pre></div>`;
-    } else if (name === 'TodoWrite') {
-        const todos = inp.todos || [];
-        for (const t of todos) {
-            const icon = {'completed': '[x]', 'in_progress': '[~]', 'pending': '[ ]'}[t.status] || '[ ]';
-            body += `<div>${icon} ${esc(t.content || '')}</div>`;
-        }
-    } else if (name === 'AskUserQuestion') {
-        const questions = inp.questions || [];
-        for (const q of questions) {
-            body += `<div class="tool-call-section"><strong>Q:</strong> ${esc(q.question || '')}</div>`;
-        }
-    } else {
-        const s = JSON.stringify(inp, null, 2);
-        body += `<pre><code>${esc(truncate(s, 500))}</code></pre>`;
-    }
-
-    return `<details class="tool-call"><summary class="tool-name">${esc(summary)}</summary><div class="tool-call-body">${body}</div></details>`;
-}
-
-function _toolResultHasBody(parsed) {
-    const rt = parsed.result_type || 'unknown';
-    if (rt === 'bash') return !!(parsed.stdout || parsed.stderr);
-    if (rt === 'todo_write') return !!(parsed.todos && parsed.todos.length);
-    if (rt === 'user_input') return true;
-    if (rt === 'task' && (parsed.total_duration_ms || parsed.retrieval_status || parsed.description)) return true;
-    return false;
-}
-
-function renderToolResult(parsed) {
-    const rt = parsed.result_type || 'unknown';
-    let summary = '';
-    let body = '';
-
-    if (rt === 'bash') {
-        const exitCode = parsed.exit_code;
-        const status = parsed.interrupted ? 'interrupted' : (parsed.is_error ? `error (exit ${exitCode})` : (exitCode === 0 ? 'success' : `exit ${exitCode}`));
-        summary = `Bash Result (${status})`;
-        if (parsed.stdout) body += `<div class="tool-call-section"><div class="tool-call-section-title">stdout</div><pre><code>${esc(truncate(parsed.stdout, 2000))}</code></pre></div>`;
-        if (parsed.stderr) body += `<div class="tool-call-section"><div class="tool-call-section-title">stderr</div><pre style="border-left:3px solid var(--danger)"><code>${esc(truncate(parsed.stderr, 1000))}</code></pre></div>`;
-    } else if (rt === 'file_read') {
-        const numLines = parsed.num_lines ? ` (${parsed.num_lines} lines)` : '';
-        summary = `Read: ${parsed.file_path || ''}${numLines}`;
-    } else if (rt === 'file_edit') {
-        summary = `Edited: ${parsed.file_path || ''}`;
-    } else if (rt === 'file_write') {
-        summary = `Wrote: ${parsed.file_path || ''}`;
-    } else if (rt === 'glob') {
-        const trunc = parsed.truncated ? ' (truncated)' : '';
-        summary = `Glob: ${parsed.num_files || 0} files found${trunc}`;
-    } else if (rt === 'grep') {
-        summary = `Grep: ${parsed.num_files || 0} files, ${parsed.num_lines || 0} lines`;
-    } else if (rt === 'web_search') {
-        summary = `Search: "${parsed.query || ''}" - ${parsed.result_count || 0} results`;
-    } else if (rt === 'web_fetch') {
-        summary = `Fetch: ${parsed.url || ''} (${parsed.status_code || '?'})`;
-    } else if (rt === 'task') {
-        const status = parsed.status || 'completed';
-        const dur = parsed.total_duration_ms;
-        const durStr = dur ? ` (${(dur / 1000).toFixed(1)}s)` : '';
-        const tokStr = parsed.total_tokens ? `, ${parsed.total_tokens.toLocaleString()} tokens` : '';
-        const toolStr = parsed.total_tool_use_count ? `, ${parsed.total_tool_use_count} tool calls` : '';
-        summary = `Task ${status}${durStr}${tokStr}${toolStr}`;
-        if (parsed.retrieval_status) summary = `Task retrieval: ${parsed.retrieval_status}`;
-        if (parsed.description) summary = `Task launched: ${parsed.description}`;
-    } else if (rt === 'todo_write') {
-        const count = parsed.todo_count || 0;
-        summary = `Todos updated (${count} items)`;
-        if (parsed.todos && parsed.todos.length) {
-            for (const t of parsed.todos) {
-                const icon = {'completed': '\u2705', 'in_progress': '\u23f3', 'pending': '\u2b1c'}[t.status] || '\u2b1c';
-                body += `<div>${icon} ${esc(t.content || '')}</div>`;
-            }
-        }
-    } else if (rt === 'user_input') {
-        summary = 'User input received';
-        const qs = parsed.questions || [];
-        const ans = parsed.answers || {};
-        for (const q of qs) {
-            body += `<div class="tool-call-section"><strong>Q:</strong> ${esc(q.question || '')}</div>`;
-        }
-        const ansKeys = Object.keys(ans);
-        if (ansKeys.length) {
-            for (const k of ansKeys) {
-                body += `<div class="tool-call-section"><strong>A:</strong> ${esc(String(ans[k]))}</div>`;
-            }
-        }
-    } else if (rt === 'plan') {
-        summary = `Plan: ${parsed.file_path || ''}`;
-    } else {
-        summary = `Tool result (${rt})`;
-    }
-
-    if (!body) {
-        return `<div class="tool-result"><span class="tool-result-summary">${esc(summary)}</span></div>`;
-    }
-    return `<details class="tool-result"><summary class="tool-result-summary">${esc(summary)}</summary><div class="tool-call-body">${body}</div></details>`;
 }
 
 export function copyAll() {
