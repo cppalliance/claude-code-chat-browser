@@ -7,7 +7,7 @@ import {
     getToolSummary,
 } from './registry.js';
 
-const CORE_TOOL_USE = ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Task', 'TodoWrite', 'AskUserQuestion'];
+const CORE_TOOL_USE = ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Task', 'TodoWrite', 'AskUserQuestion', 'WebFetch', 'WebSearch'];
 
 const CORE_TOOL_RESULT = [
     'bash',
@@ -66,6 +66,12 @@ describe('TOOL_RESULT_RENDERERS', () => {
         expect(html).not.toContain('<img');
         expect(html).toContain('&lt;img');
     });
+
+    it('renderBashResult avoids undefined in summary when exit_code missing', () => {
+        const html = renderToolResult({ result_type: 'bash' });
+        expect(html).toContain('Bash Result (unknown)');
+        expect(html).not.toContain('undefined');
+    });
 });
 
 describe('getToolSummary', () => {
@@ -82,11 +88,31 @@ describe('getToolSummary', () => {
 describe('renderToolUse fallback', () => {
     it('uses JSON fallback for unknown tools', () => {
         const html = renderToolUse({
+            name: 'UnknownToolXYZ',
+            input: { foo: 'bar' },
+        });
+        expect(html).toContain('tool-call');
+        expect(html).toContain('&quot;foo&quot;');
+        expect(TOOL_USE_RENDERERS.UnknownToolXYZ).toBeUndefined();
+    });
+
+    it('renders WebFetch via registry (JSON body, not unknown-tool path)', () => {
+        const html = renderToolUse({
             name: 'WebFetch',
             input: { url: 'https://example.com' },
         });
         expect(html).toContain('tool-call');
         expect(html).toContain('example.com');
+        expect(html).toContain('<pre><code>');
+    });
+
+    it('renders WebSearch via registry', () => {
+        const html = renderToolUse({
+            name: 'WebSearch',
+            input: { query: 'vitest registry' },
+        });
+        expect(html).toContain('tool-call');
+        expect(html).toContain('vitest registry');
     });
 });
 

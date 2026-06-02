@@ -7,6 +7,8 @@ import { renderGrepUse } from './tool_use/grep.js';
 import { renderTaskUse } from './tool_use/task.js';
 import { renderTodoWriteUse } from './tool_use/todo_write.js';
 import { renderAskUserQuestionUse } from './tool_use/ask_user_question.js';
+import { renderWebFetchUse } from './tool_use/web_fetch.js';
+import { renderWebSearchUse } from './tool_use/web_search.js';
 import { renderToolUseFallback } from './tool_use/fallback.js';
 import { getToolSummary } from './tool_use/summary.js';
 
@@ -37,6 +39,8 @@ export const TOOL_USE_RENDERERS = {
     Task: renderTaskUse,
     TodoWrite: renderTodoWriteUse,
     AskUserQuestion: renderAskUserQuestionUse,
+    WebFetch: renderWebFetchUse,
+    WebSearch: renderWebSearchUse,
 };
 
 export const TOOL_RESULT_RENDERERS = {
