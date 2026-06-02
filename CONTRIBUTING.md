@@ -41,7 +41,7 @@ Useful flags:
 - `--base-dir PATH` — point at a different `projects/` tree (for tests or fixtures)
 - `--exclude-rules PATH` — session exclusion rules file
 - `--host 0.0.0.0` — listen on all interfaces (use only on trusted networks; never with `--debug`)
-- `--debug` — Flask/Werkzeug debug mode (loopback hosts only; enforced when starting via `python app.py`, not `flask run` or WSGI)
+- `--debug` — Flask/Werkzeug debug mode (loopback hosts only; enforced when starting via `python app.py`, not `flask run` or WSGI). Extending the guard to `FLASK_DEBUG` / `flask run` is a planned follow-up.
 
 ## API and release policy
 

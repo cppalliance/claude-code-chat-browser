@@ -321,7 +321,9 @@ class TestAppArgparse:
         args = parser.parse_args(["--debug"])
         assert args.debug is True
 
-    @pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1", "127.0.0.2"])
+    @pytest.mark.parametrize(
+        "host", ["127.0.0.1", "localhost", "::1", "[::1]", "127.0.0.2"]
+    )
     def test_is_loopback_host_accepts_loopback(self, host: str) -> None:
         assert is_loopback_host(host)
 
@@ -340,7 +342,7 @@ class TestAppArgparse:
     def test_is_loopback_host_rejects_non_loopback(self, host: str) -> None:
         assert not is_loopback_host(host)
 
-    @pytest.mark.parametrize("host", ["127.0.0.1", "localhost"])
+    @pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "[::1]"])
     def test_validate_startup_cli_allows_loopback_debug(self, host: str) -> None:
         parser = build_cli_parser()
         args = parser.parse_args(["--host", host, "--debug"])

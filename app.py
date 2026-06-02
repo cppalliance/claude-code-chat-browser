@@ -1,6 +1,6 @@
 """Flask app that serves the web GUI for browsing sessions."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.0.dev0"
 
 import argparse
 import os
@@ -15,13 +15,21 @@ from api.export_api import export_bp
 from utils.exclusion_rules import resolve_exclusion_rules_path, load_rules
 
 
+def _normalize_bind_host(host: str) -> str:
+    """Lowercase host for checks; strip optional IPv6 brackets (e.g. ``[::1]`` → ``::1``)."""
+    h = (host or "").strip().lower()
+    if len(h) >= 2 and h.startswith("[") and h.endswith("]"):
+        return h[1:-1]
+    return h
+
+
 def is_loopback_host(host: str) -> bool:
     """True if ``host`` binds only to the local machine (safe with ``--debug``).
 
-    Accepts ``127.0.0.1``, ``localhost``, ``::1``, and other ``127.x.x.x`` addresses.
+    Accepts ``127.0.0.1``, ``localhost``, ``::1``, ``[::1]``, and other ``127.x.x.x`` addresses.
     Rejects all-interfaces forms such as ``0.0.0.0`` and bare ``::`` (not loopback).
     """
-    h = (host or "").strip().lower()
+    h = _normalize_bind_host(host)
     if h in ("127.0.0.1", "localhost", "::1"):
         return True
     if h.startswith("127.") and h.count(".") == 3:
@@ -52,7 +60,7 @@ def validate_startup_cli(args: argparse.Namespace) -> None:
     if args.debug and not is_loopback_host(args.host):
         print(
             "error: --debug is only allowed with a loopback --host "
-            "(127.0.0.1, localhost, ::1, or 127.x.x.x). "
+            "(127.0.0.1, localhost, ::1, [::1], or 127.x.x.x). "
             "Combining --debug with a network-visible --host exposes the "
             "Werkzeug debugger and session data to other machines.",
             file=sys.stderr,

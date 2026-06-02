@@ -6,7 +6,7 @@ HTTP API for **claude-code-chat-browser**. All `/api/*` routes return JSON unles
 
 **Source of truth for error codes:** [`api/error_codes.py`](../api/error_codes.py)
 
-**Field stability:** [`deprecation-policy.md`](deprecation-policy.md)
+**Deprecation and removal:** See [`deprecation-policy.md`](deprecation-policy.md) for how stability labels are applied and fields are removed. Field labels are defined in [API field stability](#api-field-stability) below.
 
 ---
 

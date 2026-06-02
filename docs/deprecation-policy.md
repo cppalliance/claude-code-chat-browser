@@ -25,7 +25,7 @@ A deprecated field may be removed when:
 - The bundled SPA no longer reads the field, and
 - Tests and CHANGELOG document the removal.
 
-For fields actively read by the bundled SPA (which does not track an external API version), the deprecation period will span **at least two releases** so the SPA and policy can be updated in the same release cycle as the final removal.
+For fields actively read by the bundled SPA (which does not track an external API version), removal happens no earlier than **two tagged releases** after the release that documented the deprecation in CHANGELOG (for example, deprecated in `0.1.0`, removable from `0.3.0` at earliest when versions advance `0.1.0` → `0.2.0` → `0.3.0`), and no earlier than **14 calendar days** after that deprecation announcement.
 
 ## Example (in progress)
 
@@ -35,4 +35,12 @@ For fields actively read by the bundled SPA (which does not track an external AP
 
 ## Versioning
 
-Release versions follow `MAJOR.MINOR.PATCH` in `app.__version__` and [CHANGELOG](../CHANGELOG.md). This project is pre-1.0; minor releases may add features; patch releases are fixes and documentation.
+Release versions follow `MAJOR.MINOR.PATCH` in `app.__version__` and [CHANGELOG](../CHANGELOG.md). Until the first git tag ships, `main` may carry a `.dev0` suffix (for example `0.1.0.dev0`); the CHANGELOG `[Unreleased]` section is the source of truth for what is not yet tagged.
+
+| Bump | Pre-1.0 meaning |
+|------|-----------------|
+| **Patch** | Bug fixes and documentation; no intentional API removals |
+| **Minor** | Additive API/features; deprecations may be announced |
+| **Major** | Reserved for the `1.0.0` line and later: signals a stable HTTP JSON contract for external integrators and may include breaking removals that completed their deprecation period |
+
+While the project is pre-1.0, treat **minor** bumps as the usual vehicle for deprecations and **patch** bumps for safe fixes.
