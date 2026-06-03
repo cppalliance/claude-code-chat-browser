@@ -12,6 +12,15 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+
+def _wait_for_file(path: Path, timeout: float = 5.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.is_file():
+            return
+        time.sleep(0.01)
+    raise AssertionError(f"timed out waiting for {path}")
+
 from utils.export_state_store import (
     atomic_write_export_state,
     export_state_lock,
@@ -119,22 +128,33 @@ def test_export_state_lock_blocks_second_process(tmp_path: Path) -> None:
     """While the parent holds ``msvcrt`` lock, a child process cannot acquire it."""
     state_file = tmp_path / "export_state.json"
     state_file.write_text("{}", encoding="utf-8")
-    marker = tmp_path / "child_acquired.lock"
+    started_marker = tmp_path / "child_started.lock"
+    acquired_marker = tmp_path / "child_acquired.lock"
     child = (
         "import sys\n"
         "from pathlib import Path\n"
         f"sys.path.insert(0, {str(REPO_ROOT)!r})\n"
         "from utils.export_state_store import export_state_lock\n"
-        "path, marker = sys.argv[1], sys.argv[2]\n"
+        "path, started, acquired = sys.argv[1], sys.argv[2], sys.argv[3]\n"
+        "Path(started).write_text('ok', encoding='utf-8')\n"
         "with export_state_lock(path):\n"
-        "    Path(marker).write_text('ok', encoding='utf-8')\n"
+        "    Path(acquired).write_text('ok', encoding='utf-8')\n"
     )
     with export_state_lock(str(state_file)):
         proc = subprocess.Popen(
-            [sys.executable, "-c", child, str(state_file), str(marker)],
+            [
+                sys.executable,
+                "-c",
+                child,
+                str(state_file),
+                str(started_marker),
+                str(acquired_marker),
+            ],
             cwd=str(REPO_ROOT),
         )
-        time.sleep(0.5)
-        assert not marker.is_file(), "child acquired lock while parent still holds it"
+        _wait_for_file(started_marker)
+        assert not acquired_marker.is_file(), (
+            "child acquired lock while parent still holds it"
+        )
     assert proc.wait(timeout=10) == 0
-    assert marker.read_text(encoding="utf-8") == "ok"
+    assert acquired_marker.read_text(encoding="utf-8") == "ok"
