@@ -14,11 +14,9 @@ from utils import session_path
 def test_get_claude_projects_dir_uses_userprofile_on_windows(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    profile = tmp_path / "Users" / "chen"
-    profile.mkdir(parents=True)
+    profile = tmp_path / "Users" / "testuser"
     monkeypatch.setattr(session_path.platform, "system", lambda: "Windows")
     monkeypatch.setenv("USERPROFILE", str(profile))
-    monkeypatch.delenv("HOME", raising=False)
 
     got = session_path.get_claude_projects_dir()
     assert got == os.path.join(str(profile), ".claude", "projects")
@@ -29,9 +27,8 @@ def test_get_claude_projects_dir_on_windows_runner(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     profile = tmp_path / "profile"
-    profile.mkdir()
     monkeypatch.setenv("USERPROFILE", str(profile))
 
     got = session_path.get_claude_projects_dir()
-    assert got.startswith(str(profile))
-    assert got.endswith(os.path.join(".claude", "projects"))
+    expected = os.path.join(str(profile), ".claude", "projects")
+    assert got == expected

@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 from utils.export_state_store import (
     atomic_write_export_state,
@@ -96,14 +100,41 @@ def test_export_state_lock_real_msvcrt_roundtrip(tmp_path: Path) -> None:
     state_file = tmp_path / "export_state.json"
     state_file.write_text("{}", encoding="utf-8")
     payload = {
-        "sessions": {},
-        "lastExportTime": "2026-01-01T00:00:00",
-        "exportedCount": 0,
+        "sessions": {"sess-msvcrt-roundtrip": 1740000123.5},
+        "lastExportTime": "2026-06-04T18:30:00Z",
+        "exportedCount": 42,
     }
 
     with export_state_lock(str(state_file)):
         atomic_write_export_state(payload, str(state_file))
 
     loaded = load_export_state_from_disk(str(state_file))
-    assert loaded.get("exportedCount") == 0
-    assert loaded.get("sessions") == {}
+    assert loaded.get("exportedCount") == 42
+    assert loaded.get("sessions") == {"sess-msvcrt-roundtrip": 1740000123.5}
+    assert loaded.get("lastExportTime") == "2026-06-04T18:30:00Z"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="requires Windows msvcrt")
+def test_export_state_lock_blocks_second_process(tmp_path: Path) -> None:
+    """While the parent holds ``msvcrt`` lock, a child process cannot acquire it."""
+    state_file = tmp_path / "export_state.json"
+    state_file.write_text("{}", encoding="utf-8")
+    marker = tmp_path / "child_acquired.lock"
+    child = (
+        "import sys\n"
+        "from pathlib import Path\n"
+        f"sys.path.insert(0, {str(REPO_ROOT)!r})\n"
+        "from utils.export_state_store import export_state_lock\n"
+        "path, marker = sys.argv[1], sys.argv[2]\n"
+        "with export_state_lock(path):\n"
+        "    Path(marker).write_text('ok', encoding='utf-8')\n"
+    )
+    with export_state_lock(str(state_file)):
+        proc = subprocess.Popen(
+            [sys.executable, "-c", child, str(state_file), str(marker)],
+            cwd=str(REPO_ROOT),
+        )
+        time.sleep(0.5)
+        assert not marker.is_file(), "child acquired lock while parent still holds it"
+    assert proc.wait(timeout=10) == 0
+    assert marker.read_text(encoding="utf-8") == "ok"

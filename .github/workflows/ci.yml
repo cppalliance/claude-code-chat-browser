@@ -44,6 +44,7 @@ jobs:
           PY
 
   pytest:
+    name: pytest (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -97,7 +98,7 @@ jobs:
         run: mypy tests --config-file mypy-tests.ini --follow-imports skip
 
   integration-tests:
-    name: API integration tests + coverage
+    name: API integration tests + coverage (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -132,7 +133,7 @@ jobs:
           path: coverage.xml
 
   js-tests:
-    name: Frontend unit tests (vitest)
+    name: Frontend unit tests (vitest) (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
