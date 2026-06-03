@@ -149,7 +149,7 @@ def test_export_state_lock_blocks_second_process(tmp_path: Path) -> None:
         "with export_state_lock(path):\n"
         "    Path(acquired).write_text('ok', encoding='utf-8')\n"
     )
-    proc: subprocess.Popen[str] | None = None
+    proc: subprocess.Popen[bytes] | None = None
     try:
         with export_state_lock(str(state_file)):
             proc = subprocess.Popen(
