@@ -3,9 +3,38 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
+import time
 from pathlib import Path
 
-from utils.export_state_store import load_export_state_from_disk
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _wait_for_file(path: Path, timeout: float = 5.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.is_file():
+            return
+        time.sleep(0.01)
+    raise AssertionError(f"timed out waiting for {path}")
+
+
+def _assert_file_stays_absent(path: Path, timeout: float = 0.5) -> None:
+    """While parent holds the lock, child must not write *path* (still blocked)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.is_file():
+            raise AssertionError(f"{path} appeared while parent still holds the lock")
+        time.sleep(0.01)
+
+from utils.export_state_store import (
+    atomic_write_export_state,
+    export_state_lock,
+    load_export_state_from_disk,
+)
 
 
 def test_load_rejects_non_object_json(tmp_path: Path):
@@ -81,3 +110,70 @@ def test_export_state_lock_windows_branch_uses_msvcrt_when_no_fcntl(
     with mod.export_state_lock(str(state_file)):
         assert (FakeMsvcrt.LK_LOCK, 1) in calls
     assert calls[-1] == (FakeMsvcrt.LK_UNLCK, 1)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="requires Windows msvcrt")
+def test_export_state_lock_real_msvcrt_roundtrip(tmp_path: Path) -> None:
+    """Exercise real ``msvcrt.locking`` on a Windows runner (not FakeMsvcrt)."""
+    state_file = tmp_path / "export_state.json"
+    state_file.write_text("{}", encoding="utf-8")
+    payload = {
+        "sessions": {"sess-msvcrt-roundtrip": 1740000123.5},
+        "lastExportTime": "2026-06-04T18:30:00Z",
+        "exportedCount": 42,
+    }
+
+    with export_state_lock(str(state_file)):
+        atomic_write_export_state(payload, str(state_file))
+
+    loaded = load_export_state_from_disk(str(state_file))
+    assert loaded.get("exportedCount") == 42
+    assert loaded.get("sessions") == {"sess-msvcrt-roundtrip": 1740000123.5}
+    assert loaded.get("lastExportTime") == "2026-06-04T18:30:00Z"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="requires Windows msvcrt")
+def test_export_state_lock_blocks_second_process(tmp_path: Path) -> None:
+    """While the parent holds ``msvcrt`` lock, a child process cannot acquire it."""
+    state_file = tmp_path / "export_state.json"
+    state_file.write_text("{}", encoding="utf-8")
+    attempting_marker = tmp_path / "child_attempting.lock"
+    acquired_marker = tmp_path / "child_acquired.lock"
+    child = (
+        "import sys\n"
+        "from pathlib import Path\n"
+        f"sys.path.insert(0, {str(REPO_ROOT)!r})\n"
+        "from utils.export_state_store import export_state_lock\n"
+        "path, attempting, acquired = sys.argv[1], sys.argv[2], sys.argv[3]\n"
+        "Path(attempting).write_text('ok', encoding='utf-8')\n"
+        "with export_state_lock(path):\n"
+        "    Path(acquired).write_text('ok', encoding='utf-8')\n"
+    )
+    proc: subprocess.Popen[bytes] | None = None
+    try:
+        with export_state_lock(str(state_file)):
+            proc = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-c",
+                    child,
+                    str(state_file),
+                    str(attempting_marker),
+                    str(acquired_marker),
+                ],
+                cwd=str(REPO_ROOT),
+            )
+            _wait_for_file(attempting_marker)
+            _assert_file_stays_absent(acquired_marker)
+        assert proc is not None
+        try:
+            assert proc.wait(timeout=10) == 0
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            raise
+        assert acquired_marker.read_text(encoding="utf-8") == "ok"
+    finally:
+        if proc is not None and proc.poll() is None:
+            proc.kill()
+            proc.wait()

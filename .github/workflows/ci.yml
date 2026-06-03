@@ -44,7 +44,12 @@ jobs:
           PY
 
   pytest:
-    runs-on: ubuntu-latest
+    name: pytest (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     permissions:
       contents: read
     steps:
@@ -63,6 +68,7 @@ jobs:
       - name: Install dev dependencies (Flask + pytest)
         run: pip install -r requirements-dev.txt
 
+      # Full suite gate (pyproject addopts include --cov + 60% fail-under).
       - name: Run tests
         run: pytest --tb=short -q
 
@@ -93,8 +99,12 @@ jobs:
         run: mypy tests --config-file mypy-tests.ini --follow-imports skip
 
   integration-tests:
-    name: API integration tests + coverage
-    runs-on: ubuntu-latest
+    name: API integration tests + coverage (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     permissions:
       contents: read
       actions: write
@@ -114,18 +124,23 @@ jobs:
       - name: Install dev dependencies
         run: pip install -r requirements-dev.txt
 
-      # Subset run: skip fail-under (full suite enforces 60% in pytest job).
+      # Intentional overlap with pytest job: re-runs API/search subset with --cov
+      # and uploads coverage.xml per OS (pytest job is the full-suite gate).
       - name: Run integration tests with coverage
         run: pytest tests/test_api_integration.py tests/test_search.py -v --cov=api --cov=utils --cov-report=xml --cov-fail-under=0
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: coverage-report
+          name: coverage-report-${{ matrix.os }}
           path: coverage.xml
 
   js-tests:
-    name: Frontend unit tests (vitest)
-    runs-on: ubuntu-latest
+    name: Frontend unit tests (vitest) (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     permissions:
       contents: read
     steps:
