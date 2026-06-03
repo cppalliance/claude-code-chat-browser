@@ -105,10 +105,13 @@ The UI is a **hash-routed** SPA with ES modules under `static/js/`:
 
 - `app.js` — routing and boot
 - `projects.js`, `sessions.js`, `search.js`, `export.js` — route handlers
+- `render/registry.js` — **tool dispatch registry** for session UI: `TOOL_USE_RENDERERS` and `TOOL_RESULT_RENDERERS` map tool name / `result_type` → render function (one module per type under `render/tool_use/` and `render/tool_result/`). Parallels backend `utils/tool_dispatch.py` (backend uses ordered predicates; frontend uses direct key lookup + fallback).
 - `shared/markdown.js` — markdown + **DOMPurify** sanitization (do not render raw LLM HTML)
 - `shared/state.js`, `shared/utils.js`, `shared/theme.js` — shared UI state and helpers
 
-No bundler step — modern browsers load modules directly. Frontend unit tests use **vitest** + **jsdom** (`npm test`).
+`sessions.js` keeps workspace/session orchestration and message bubbles; tool cards delegate to `render/registry.js`.
+
+No bundler step — modern browsers load modules directly. Frontend unit tests use **vitest** + **jsdom** (`npm test`), including `static/js/render/registry.test.js` for registry wiring and renderer escaping.
 
 ## Continuous integration
 
