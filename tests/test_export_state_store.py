@@ -149,21 +149,23 @@ def test_export_state_lock_blocks_second_process(tmp_path: Path) -> None:
         "with export_state_lock(path):\n"
         "    Path(acquired).write_text('ok', encoding='utf-8')\n"
     )
-    proc = subprocess.Popen(
-        [
-            sys.executable,
-            "-c",
-            child,
-            str(state_file),
-            str(attempting_marker),
-            str(acquired_marker),
-        ],
-        cwd=str(REPO_ROOT),
-    )
+    proc: subprocess.Popen[str] | None = None
     try:
         with export_state_lock(str(state_file)):
+            proc = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-c",
+                    child,
+                    str(state_file),
+                    str(attempting_marker),
+                    str(acquired_marker),
+                ],
+                cwd=str(REPO_ROOT),
+            )
             _wait_for_file(attempting_marker)
             _assert_file_stays_absent(acquired_marker)
+        assert proc is not None
         try:
             assert proc.wait(timeout=10) == 0
         except subprocess.TimeoutExpired:
@@ -172,6 +174,6 @@ def test_export_state_lock_blocks_second_process(tmp_path: Path) -> None:
             raise
         assert acquired_marker.read_text(encoding="utf-8") == "ok"
     finally:
-        if proc.poll() is None:
+        if proc is not None and proc.poll() is None:
             proc.kill()
             proc.wait()
