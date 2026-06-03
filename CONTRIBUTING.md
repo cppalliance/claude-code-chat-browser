@@ -9,6 +9,8 @@ Thanks for considering a patch. This repo is a small Flask app plus a hash-route
 - **Python 3.12** (matches CI)
 - **Node 20+** (only if you change `static/js/` or run frontend unit tests)
 
+CI runs **`pytest`**, **integration tests**, and **Vitest** on **ubuntu-latest** and **windows-latest** (Python 3.12, Node 20). Type-check (`mypy`) and production install smoke run on Ubuntu only.
+
 ### Bootstrap (Windows PowerShell)
 
 ```powershell
@@ -105,7 +107,7 @@ npm run test:coverage   # optional
 - PR checklist:
   - [ ] `pytest -q` green locally
   - [ ] `npm test` green if JS changed
-  - [ ] CI jobs green (`pytest`, `integration-tests`, `js-tests`, `prod-install-smoke`)
+  - [ ] CI jobs green (`pytest`, `integration-tests`, `js-tests` on Ubuntu + Windows; `mypy`, `prod-install-smoke` on Ubuntu)
   - [ ] PR description includes a **Test plan** section
   - [ ] API changes update [`docs/api-reference.md`](docs/api-reference.md) if behavior or errors change
 
