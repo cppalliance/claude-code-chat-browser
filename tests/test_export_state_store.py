@@ -21,6 +21,15 @@ def _wait_for_file(path: Path, timeout: float = 5.0) -> None:
         time.sleep(0.01)
     raise AssertionError(f"timed out waiting for {path}")
 
+
+def _assert_file_stays_absent(path: Path, timeout: float = 0.5) -> None:
+    """While parent holds the lock, child must not write *path* (still blocked)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.is_file():
+            raise AssertionError(f"{path} appeared while parent still holds the lock")
+        time.sleep(0.01)
+
 from utils.export_state_store import (
     atomic_write_export_state,
     export_state_lock,
@@ -128,33 +137,41 @@ def test_export_state_lock_blocks_second_process(tmp_path: Path) -> None:
     """While the parent holds ``msvcrt`` lock, a child process cannot acquire it."""
     state_file = tmp_path / "export_state.json"
     state_file.write_text("{}", encoding="utf-8")
-    started_marker = tmp_path / "child_started.lock"
+    attempting_marker = tmp_path / "child_attempting.lock"
     acquired_marker = tmp_path / "child_acquired.lock"
     child = (
         "import sys\n"
         "from pathlib import Path\n"
         f"sys.path.insert(0, {str(REPO_ROOT)!r})\n"
         "from utils.export_state_store import export_state_lock\n"
-        "path, started, acquired = sys.argv[1], sys.argv[2], sys.argv[3]\n"
-        "Path(started).write_text('ok', encoding='utf-8')\n"
+        "path, attempting, acquired = sys.argv[1], sys.argv[2], sys.argv[3]\n"
+        "Path(attempting).write_text('ok', encoding='utf-8')\n"
         "with export_state_lock(path):\n"
         "    Path(acquired).write_text('ok', encoding='utf-8')\n"
     )
-    with export_state_lock(str(state_file)):
-        proc = subprocess.Popen(
-            [
-                sys.executable,
-                "-c",
-                child,
-                str(state_file),
-                str(started_marker),
-                str(acquired_marker),
-            ],
-            cwd=str(REPO_ROOT),
-        )
-        _wait_for_file(started_marker)
-        assert not acquired_marker.is_file(), (
-            "child acquired lock while parent still holds it"
-        )
-    assert proc.wait(timeout=10) == 0
-    assert acquired_marker.read_text(encoding="utf-8") == "ok"
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            child,
+            str(state_file),
+            str(attempting_marker),
+            str(acquired_marker),
+        ],
+        cwd=str(REPO_ROOT),
+    )
+    try:
+        with export_state_lock(str(state_file)):
+            _wait_for_file(attempting_marker)
+            _assert_file_stays_absent(acquired_marker)
+        try:
+            assert proc.wait(timeout=10) == 0
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            raise
+        assert acquired_marker.read_text(encoding="utf-8") == "ok"
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()

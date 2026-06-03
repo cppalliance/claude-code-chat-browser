@@ -68,6 +68,7 @@ jobs:
       - name: Install dev dependencies (Flask + pytest)
         run: pip install -r requirements-dev.txt
 
+      # Full suite gate (pyproject addopts include --cov + 60% fail-under).
       - name: Run tests
         run: pytest --tb=short -q
 
@@ -123,7 +124,8 @@ jobs:
       - name: Install dev dependencies
         run: pip install -r requirements-dev.txt
 
-      # Subset run: skip fail-under (full suite enforces 60% in pytest job).
+      # Intentional overlap with pytest job: re-runs API/search subset with --cov
+      # and uploads coverage.xml per OS (pytest job is the full-suite gate).
       - name: Run integration tests with coverage
         run: pytest tests/test_api_integration.py tests/test_search.py -v --cov=api --cov=utils --cov-report=xml --cov-fail-under=0
 
