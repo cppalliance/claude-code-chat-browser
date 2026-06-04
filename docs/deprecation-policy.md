@@ -27,11 +27,17 @@ A deprecated field may be removed when:
 
 For fields actively read by the bundled SPA (which does not track an external API version), removal happens no earlier than **two tagged releases** after the release that documented the deprecation in CHANGELOG (for example, deprecated in `0.1.0`, removable from `0.3.0` at earliest when versions advance `0.1.0` → `0.2.0` → `0.3.0`), and no earlier than **14 calendar days** after that deprecation announcement.
 
-## Example (in progress)
+### Bundled SPA + pre-first-tag (path B)
 
-| Field | Endpoint | Status | Replacement |
-|-------|----------|--------|-------------|
-| `export_count` | `GET /api/export/state` | deprecated | `last_export_session_count` |
+Until the first git tag ships (for example while `app.__version__` is `0.1.0.dev0`), the CHANGELOG `[Unreleased]` section is the source of truth — see [Versioning](#versioning) below. The bundled SPA is deployed from the same repo and commit as the API; it does not consume a separately versioned HTTP contract.
+
+For fields **only read by the bundled SPA** (no external integrators on a tagged API yet), an atomic PR that (1) stops reading the field in `static/js/*.js` and (2) removes it from the JSON response is acceptable **before** the first tag, provided deprecation was announced in CHANGELOG and api-reference (PR #60) and removal is recorded under `[Unreleased]`. External integrators who pin a **tagged** release must follow the two-release + 14-day rule above.
+
+## Example (completed — pre-first-tag)
+
+| Field | Endpoint | Status | Replacement | Notes |
+|-------|----------|--------|-------------|-------|
+| `export_count` | `GET /api/export/state` | removed | `last_export_session_count` | Deprecated in PR #60 (`[Unreleased]`); removed in bundled SPA+API PR before first `v0.1.0` tag |
 
 ## Versioning
 
