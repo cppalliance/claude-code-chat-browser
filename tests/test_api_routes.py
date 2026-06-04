@@ -70,7 +70,8 @@ def test_export_state_defaults(client_empty):
     resp = client_empty.get("/api/export/state")
     assert resp.status_code == 200
     body = resp.get_json()
-    assert "export_count" in body
+    assert "last_export_session_count" in body
+    assert "export_count" not in body
 
 
 def test_bulk_export_empty_projects_returns_422(client_empty):

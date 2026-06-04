@@ -69,7 +69,6 @@ def get_export_state() -> FlaskReturn:
             "last_export_time": state.get("lastExportTime"),
             # Sessions exported in the last completed bulk export (not a lifetime total).
             "last_export_session_count": n,
-            "export_count": n,
         }
     )
 

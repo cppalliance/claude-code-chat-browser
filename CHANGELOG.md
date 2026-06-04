@@ -17,8 +17,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - README notes that the server enforces the debug + host safety rule at startup
 
-### Deprecated
+### Removed
 
-- `export_count` on `GET /api/export/state` (documented only; still returned). Use `last_export_session_count`. Removal planned in a follow-up release per [deprecation policy](docs/deprecation-policy.md).
+- `export_count` on `GET /api/export/state` — use `last_export_session_count` (deprecated in PR #60; removed before first `v0.1.0` tag per [deprecation policy](docs/deprecation-policy.md) bundled SPA path; SPA updated in same `[Unreleased]` cut)
 
 [Unreleased]: https://github.com/cppalliance/claude-code-chat-browser/compare/f70505982d435f8b1f754cb18c0c9f65609f11b4...HEAD
