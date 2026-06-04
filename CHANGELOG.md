@@ -19,6 +19,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Removed
 
-- `export_count` on `GET /api/export/state` — use `last_export_session_count` (deprecated since policy PR; bundled SPA updated in same release)
+- `export_count` on `GET /api/export/state` — use `last_export_session_count` (deprecated in PR #60 / [deprecation policy](docs/deprecation-policy.md); bundled SPA updated in same release)
 
 [Unreleased]: https://github.com/cppalliance/claude-code-chat-browser/compare/f70505982d435f8b1f754cb18c0c9f65609f11b4...HEAD

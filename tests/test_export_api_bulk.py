@@ -86,3 +86,4 @@ def test_export_state_json_fields(isolated_state):
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["last_export_session_count"] == 5
+    assert "export_count" not in body
