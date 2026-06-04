@@ -61,7 +61,7 @@ export async function showProjects() {
                     const d = new Date(exportState.last_export_time);
                     if (!isNaN(d.getTime())) {
                         hasPreviousExport = true;
-                        const sessionCount = Math.max(0, parseInt(exportState.last_export_session_count ?? exportState.export_count ?? 0, 10) || 0);
+                        const sessionCount = Math.max(0, parseInt(exportState.last_export_session_count ?? 0, 10) || 0);
                         lastExportHtml = `<p class="text-muted text-sm">Last export: ${d.toLocaleString()} (${sessionCount} sessions in last export)</p>`;
                     }
                 }

@@ -326,13 +326,11 @@ Read-only snapshot of bulk-export state persisted under `~/.claude-code-chat-bro
 |-------|------|-----------|-------------|
 | `last_export_time` | string \| null | stable | ISO timestamp of last completed bulk export |
 | `last_export_session_count` | integer | stable | Sessions in last bulk export run |
-| `export_count` | integer | deprecated | Legacy alias of `last_export_session_count`; prefer `last_export_session_count` in new code (still returned for SPA compatibility; removal per [deprecation-policy.md](deprecation-policy.md)) |
 
 ```json
 {
   "last_export_time": "2026-05-20T18:42:11.123456",
-  "last_export_session_count": 17,
-  "export_count": 17
+  "last_export_session_count": 17
 }
 ```
 
