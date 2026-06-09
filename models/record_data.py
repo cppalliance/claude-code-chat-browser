@@ -3,7 +3,7 @@
 from typing import Literal, TypedDict, TypeGuard
 
 
-class BashProgressDataDict(TypedDict):
+class BashProgressDataDict(TypedDict, total=False):
     type: Literal["bash_progress"]
     output: str
 
