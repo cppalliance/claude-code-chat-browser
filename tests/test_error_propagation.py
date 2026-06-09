@@ -21,6 +21,7 @@ Run:
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -210,21 +211,29 @@ class TestGetProjectsErrorCard:
 
 
 class TestNoExceptionInterpolationInSource:
-    """Static guard: any future PR that re-introduces the
-    `f"...{type(e).__name__}: {e}..."` pattern in api/ fails this test."""
+    """Static guard: any future PR that re-introduces exception interpolation
+    in api/ response bodies fails this test.
+
+    Patterns caught:
+    - type(e).__name__         — explicit class-name expose
+    - {e}  with any common    — f-string that embeds the exception value directly
+      trailing character       (closing quote, comma, paren, space, closing brace)
+    - {str(e)} / {repr(e)}    — wrapped but still leaks message content
+    """
+
+    _LEAK_RE = re.compile(
+        r"type\(e\)\.__name__"  # explicit class name
+        r"|\{e[\"',)\s}]"  # {e} followed by: quote, comma, paren, space, closing brace
+        r"|\{str\(e\)"  # {str(e)} — still leaks message
+        r"|\{repr\(e\)",  # {repr(e)} — still leaks message
+    )
 
     def test_api_files_dont_interpolate_exception_in_jsonify(self):
         api_dir = REPO_ROOT / "api"
         for py_file in api_dir.glob("*.py"):
             src = py_file.read_text(encoding="utf-8")
-            # Look for the specific footgun: jsonify(...) with f-string that
-            # contains both `type(e)` or `{e}` AND the word "error".
-            offending_patterns = [
-                "type(e).__name__",  # the class-name expose
-                '{e}"',  # bare {e} ending an f-string
-                "{e},",  # bare {e} in a dict-value f-string
-            ]
-            for pat in offending_patterns:
-                assert pat not in src, (
-                    f"{py_file.name} contains forbidden pattern {pat!r} — see issue #25"
-                )
+            m = self._LEAK_RE.search(src)
+            assert m is None, (
+                f"{py_file.name} contains forbidden exception-interpolation pattern "
+                f"{m.group(0)!r} at position {m.start()} — see issue #25"
+            )

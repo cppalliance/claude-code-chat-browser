@@ -13,7 +13,11 @@ This project is pre-release. Security fixes are applied to the **latest `master`
 
 **Please do not open public GitHub issues for security vulnerabilities.**
 
-Report vulnerabilities privately via [GitHub Security Advisories](https://github.com/cppalliance/claude-code-chat-browser/security/advisories/new). Private vulnerability reporting must be enabled on the repository (Settings → Security → Private vulnerability reporting). If you cannot use that form, contact the repository maintainers through an existing private channel.
+**Primary path (always works):** Contact a [repository maintainer](https://github.com/cppalliance/claude-code-chat-browser/graphs/contributors) through a private channel you already use with the project (for example a direct message or private email). Include steps to reproduce, affected version/commit, and impact.
+
+**GitHub Security Advisories (when enabled):** Once **Private vulnerability reporting** is turned on for this repository (Settings → Security → Private vulnerability reporting), external researchers may use the [private advisory form](https://github.com/cppalliance/claude-code-chat-browser/security/advisories/new). If that link returns 404 or the form is unavailable, use the primary path above — the advisory URL only works when the setting is enabled.
+
+**Repository admins:** Enable private vulnerability reporting before merge if you want the advisory form to be the default reporter path; until then, maintainers should treat the primary path as authoritative.
 
 ## Response Timeline
 

@@ -22,7 +22,7 @@ from utils.export_state_store import (
 from utils.json_exporter import session_to_json
 from utils.jsonl_parser import parse_session
 from utils.md_exporter import session_to_markdown
-from utils.session_path import get_claude_projects_dir, list_projects
+from utils.session_path import get_claude_projects_dir, list_projects, safe_join
 from utils.session_stats import compute_stats
 from utils.slugify import slugify
 
@@ -155,8 +155,6 @@ def bulk_export() -> FlaskReturn:
 
 @export_bp.route("/api/export/session/<path:project_name>/<session_id>")
 def export_session(project_name: str, session_id: str) -> FlaskReturn:
-    from utils.session_path import safe_join
-
     base = current_app.config.get("CLAUDE_PROJECTS_DIR") or get_claude_projects_dir()
     try:
         filepath = safe_join(base, project_name, f"{session_id}.jsonl")

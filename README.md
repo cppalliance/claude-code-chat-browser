@@ -157,7 +157,7 @@ npm ci && npm test   # only if you changed static/js/
 
 ## Continuous integration
 
-Every push and pull request runs **`ruff`**, **`pip-audit`**, **`pytest`**, **mypy**, **API integration tests**, and **vitest** on **Ubuntu and Windows** (Python 3.12, Node 20) via [`.github/workflows/ci.yml`](.github/workflows/ci.yml). A separate job verifies that `pip install -r requirements.txt` (production-only) is sufficient to import and boot the app.
+Every push and pull request runs **`ruff check`**, **`ruff format --check`**, **`pip-audit`**, **`pytest`**, **mypy**, **API integration tests**, and **vitest** on **Ubuntu and Windows** (Python 3.12, Node 20) via [`.github/workflows/ci.yml`](.github/workflows/ci.yml). A separate job verifies that `pip install -r requirements.txt` (production-only) is sufficient to import and boot the app.
 
 ## Exported Markdown Format
 

@@ -9,7 +9,7 @@ Thanks for considering a patch. This repo is a small Flask app plus a hash-route
 - **Python 3.12** (matches CI)
 - **Node 20+** (only if you change `static/js/` or run frontend unit tests)
 
-CI runs **`pytest`**, **integration tests**, and **Vitest** on **ubuntu-latest** and **windows-latest** (Python 3.12, Node 20). Type-check (`mypy`) and production install smoke run on Ubuntu only.
+CI runs **`ruff check`**, **`ruff format --check`**, **`pip-audit`**, **`pytest`**, **integration tests**, and **Vitest** on **ubuntu-latest** and **windows-latest** (Python 3.12, Node 20). Type-check (`mypy`) and production install smoke run on Ubuntu only.
 
 ### Bootstrap (Windows PowerShell)
 
@@ -58,6 +58,9 @@ When changing JSON response shapes, update the API reference stability column an
 ### Python
 
 ```bash
+ruff check .                           # lint (E, F, W, I) — same gate as CI
+ruff format --check .                  # formatting gate; run `ruff format .` to fix
+pip-audit -r requirements.txt        # production dependency audit (CI gate)
 pytest -q                              # full suite + coverage (see pyproject.toml)
 pytest tests/test_api_integration.py -v
 pytest tests/test_search.py -v
@@ -85,7 +88,8 @@ npm run test:coverage   # optional
 | **Exception leakage** | `5xx` bodies are generic messages only. Log full tracebacks with `current_app.logger.exception(...)`. Never put `str(e)` or class names in HTTP JSON (issue #25). |
 | **Path safety** | Use `safe_join()` from `utils/session_path.py` for any path built from URL segments. |
 | **Imports** | stdlib → third-party → local, blank line between groups. |
-| **Line length** | ~100 characters; no enforced formatter yet. |
+| **Lint / format** | `ruff check .` and `ruff format --check .` (CI gates). Config in `pyproject.toml`; run `ruff format .` to apply formatting locally. |
+| **Line length** | 100 characters (`line-length` in `pyproject.toml`). |
 
 ## Tests required for common changes
 
@@ -105,9 +109,10 @@ npm run test:coverage   # optional
 - Branch names: `feat/<topic>`, `fix/<topic>`, `test/<topic>`, `chore/<topic>`, `docs/<topic>`.
 - One logical change per PR when possible.
 - PR checklist:
+  - [ ] `ruff check .` and `ruff format --check .` green locally
   - [ ] `pytest -q` green locally
   - [ ] `npm test` green if JS changed
-  - [ ] CI jobs green (`pytest`, `integration-tests`, `js-tests` on Ubuntu + Windows; `mypy`, `prod-install-smoke` on Ubuntu)
+  - [ ] CI jobs green (`lint-and-audit`, `pytest`, `integration-tests`, `js-tests` on Ubuntu + Windows; `mypy`, `prod-install-smoke` on Ubuntu)
   - [ ] PR description includes a **Test plan** section
   - [ ] API changes update [`docs/api-reference.md`](docs/api-reference.md) if behavior or errors change
 
