@@ -62,6 +62,7 @@ Extra fields may appear for specific codes (for example `since` on invalid bulk-
 | `INVALID_SINCE_MODE` | 400 | `POST /api/export` | `since` is not `all`, `last`, or `incremental` |
 | `PARSE_ERROR` | 500 | Session, stats, export session | JSONL file could not be parsed |
 | `EXPORT_NOTHING_TO_EXPORT` | 422 | `POST /api/export` | No sessions matched the requested slice |
+| `EXPORT_ALL_FAILED` | 422 | `POST /api/export` | At least one session was attempted but every candidate failed |
 | `INTERNAL_ERROR` | 500 | `GET .../stats`, export session | Unexpected failure after parse (e.g. stats computation) |
 
 ---
@@ -372,13 +373,22 @@ Filename pattern:
 
 Zip contains Markdown per session and optional `manifest.jsonl` metadata.
 
+When some sessions fail but at least one succeeds, the response is still **`200`** with the ZIP body (successful sessions only). Skipped sessions are listed in the response header:
+
+| Header | When | Value |
+|--------|------|--------|
+| `X-Export-Warnings` | Partial export (≥1 success, ≥1 failure) | JSON array of `{ "session_id", "code", "message" }` |
+
+`code` uses the same strings as the error catalog (`PARSE_ERROR`, `INTERNAL_ERROR`, etc.).
+
 #### Errors
 
 | Status | `code` | When | Extra fields |
 |--------|--------|------|--------------|
 | 400 | `INVALID_REQUEST_BODY` | Body is not a JSON object | — |
 | 400 | `INVALID_SINCE_MODE` | Invalid `since` value | `since` echoes rejected value |
-| 422 | `EXPORT_NOTHING_TO_EXPORT` | Zero sessions matched | `since` echoes request mode |
+| 422 | `EXPORT_NOTHING_TO_EXPORT` | Zero sessions matched (none attempted) | `since` echoes request mode |
+| 422 | `EXPORT_ALL_FAILED` | Candidates existed but every attempted session failed | `since`, `failures` (same shape as `X-Export-Warnings` entries) |
 
 ```bash
 curl -X POST -H "Content-Type: application/json" \

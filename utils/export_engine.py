@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from typing import Any, Callable, Literal, Protocol
 
+from api.error_codes import ErrorCode
 from models.project import ProjectDict, SessionListItemDict
 from models.session import SessionDict, SessionMetadataDict
 from models.stats import SessionStatsDict
@@ -60,6 +61,26 @@ def serialize_manifest_jsonl(manifest: list[dict[str, Any]]) -> str:
 
 
 @dataclass
+class ExportFailure:
+    """One per-session bulk export failure for API warning/error payloads."""
+
+    session_id: str
+    message: str
+    code: ErrorCode
+
+
+def failure_code_for_exception(exc: Exception, *, phase: str = "parse") -> ErrorCode:
+    """Map an export exception to a stable :class:`ErrorCode`."""
+    if phase == "export":
+        return ErrorCode.INTERNAL_ERROR
+    if isinstance(exc, json.JSONDecodeError):
+        return ErrorCode.PARSE_ERROR
+    if isinstance(exc, EXPORT_ERRORS):
+        return ErrorCode.PARSE_ERROR
+    return ErrorCode.INTERNAL_ERROR
+
+
+@dataclass
 class BulkExportResult:
     """Outcome of a bulk export run."""
 
@@ -69,6 +90,7 @@ class BulkExportResult:
     new_sessions_map: dict[str, float] = field(default_factory=dict)
     exported_session_count: int = 0
     failure_count: int = 0
+    failures: list[ExportFailure] = field(default_factory=list)
     skipped_count: int = 0
     skipped_mtime_unchanged_count: int = 0
     total_candidates: int = 0
@@ -262,8 +284,15 @@ def run_bulk_export(
     result = BulkExportResult()
     manifest: list[dict[str, Any]] = []
 
-    def _record_failure(sid: str, exc: Exception) -> None:
+    def _record_failure(sid: str, exc: Exception, *, phase: str = "parse") -> None:
         result.failure_count += 1
+        result.failures.append(
+            ExportFailure(
+                session_id=sid,
+                message=str(exc),
+                code=failure_code_for_exception(exc, phase=phase),
+            )
+        )
         if on_export_error is not None:
             on_export_error(sid, exc)
 
@@ -283,7 +312,7 @@ def run_bulk_export(
             result.new_sessions_map[sid] = float(sess_info.get("modified", 0))
             result.exported_session_count += 1
         except Exception as exc:
-            _record_failure(sid, exc)
+            _record_failure(sid, exc, phase="export")
 
     if since == "last":
         latest_day, rows, scan_total = collect_sessions_for_latest_activity_day(

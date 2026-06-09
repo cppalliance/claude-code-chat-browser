@@ -1,6 +1,7 @@
 """Export endpoints -- bulk zip download and single-session md/json."""
 
 import io
+import json
 import os
 import zipfile
 from datetime import datetime
@@ -12,7 +13,12 @@ from api._flask_types import FlaskReturn, json_response
 from api.error_codes import ErrorCode, error_response
 from models.export import ExportStateDict
 from utils.exclusion_rules import is_session_excluded
-from utils.export_engine import EXPORT_ERRORS as _EXPORT_ERRORS, ZipSink, run_bulk_export
+from utils.export_engine import (
+    EXPORT_ERRORS as _EXPORT_ERRORS,
+    ExportFailure,
+    ZipSink,
+    run_bulk_export,
+)
 from utils.export_state_store import (
     EXPORT_STATE_FILE,
     atomic_write_export_state,
@@ -47,6 +53,17 @@ def _atomic_write_state(state: ExportStateDict) -> None:
 def _read_state() -> ExportStateDict:
     with _state_lock():
         return _load_state_from_disk()
+
+
+def _serialize_export_failures(failures: list[ExportFailure]) -> list[dict[str, str]]:
+    return [
+        {
+            "session_id": item.session_id,
+            "code": str(item.code),
+            "message": item.message,
+        }
+        for item in failures
+    ]
 
 
 def _write_state(sessions_map: dict[str, float], count: int) -> None:
@@ -123,8 +140,17 @@ def bulk_export() -> FlaskReturn:
     count = result.exported_session_count
     new_sessions_map = result.new_sessions_map
     latest_day = result.latest_day
+    failure_payload = _serialize_export_failures(result.failures)
 
     if count == 0:
+        if result.failures:
+            return error_response(
+                ErrorCode.EXPORT_ALL_FAILED,
+                "All export candidates failed",
+                422,
+                since=since,
+                failures=failure_payload,
+            )
         return error_response(
             ErrorCode.EXPORT_NOTHING_TO_EXPORT,
             "Nothing to export",
@@ -145,12 +171,15 @@ def bulk_export() -> FlaskReturn:
         suffix = "-incremental"
     else:
         suffix = ""
-    return send_file(
+    resp = send_file(
         buf,
         mimetype="application/zip",
         as_attachment=True,
         download_name=f"claude-code-export{suffix}-{date_tag}.zip",  # type: ignore[call-arg]
     )
+    if result.failures:
+        resp.headers["X-Export-Warnings"] = json.dumps(failure_payload)
+    return resp
 
 
 @export_bp.route("/api/export/session/<path:project_name>/<session_id>")

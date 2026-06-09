@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import io
 import json
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -14,6 +16,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from flask import Flask
 
 from api.export_api import export_bp
+from utils.jsonl_parser import parse_session
 
 
 @pytest.fixture
@@ -67,6 +70,70 @@ def test_bulk_export_empty_returns_422_json(isolated_state, tmp_path):
     assert body["error"] == "Nothing to export"
     assert body["code"] == "EXPORT_NOTHING_TO_EXPORT"
     assert body["since"] == "all"
+
+
+def test_bulk_export_all_succeed_no_warnings_header(client):
+    resp = client.post("/api/export", json={"since": "all"})
+    assert resp.status_code == 200
+    assert resp.content_type.startswith("application/zip")
+    assert "X-Export-Warnings" not in resp.headers
+    zf = zipfile.ZipFile(io.BytesIO(resp.data))
+    md_files = [name for name in zf.namelist() if name.endswith(".md")]
+    assert len(md_files) == 2
+
+
+def test_bulk_export_partial_fail_returns_warning_header(client, monkeypatch):
+    real_parse = parse_session
+
+    def flaky_parse(path: str):
+        if path.endswith("session_def456.jsonl"):
+            raise json.JSONDecodeError("bad", "doc", 0)
+        return real_parse(path)
+
+    monkeypatch.setattr("utils.export_engine.parse_session", flaky_parse)
+    resp = client.post("/api/export", json={"since": "all"})
+    assert resp.status_code == 200
+    assert "X-Export-Warnings" in resp.headers
+    warnings = json.loads(resp.headers["X-Export-Warnings"])
+    assert len(warnings) == 1
+    assert warnings[0]["session_id"] == "session_def456"
+    assert warnings[0]["code"] == "PARSE_ERROR"
+    zf = zipfile.ZipFile(io.BytesIO(resp.data))
+    assert len([name for name in zf.namelist() if name.endswith(".md")]) == 1
+
+
+def test_bulk_export_all_fail_returns_422(client, monkeypatch):
+    def always_fail(path: str):
+        raise json.JSONDecodeError("bad", "doc", 0)
+
+    monkeypatch.setattr("utils.export_engine.parse_session", always_fail)
+    resp = client.post("/api/export", json={"since": "all"})
+    assert resp.status_code == 422
+    body = resp.get_json()
+    assert body["code"] == "EXPORT_ALL_FAILED"
+    assert body["since"] == "all"
+    assert len(body["failures"]) == 2
+    assert {item["code"] for item in body["failures"]} == {"PARSE_ERROR"}
+
+
+def test_bulk_export_partial_fail_excludes_failed_from_state(
+    client, monkeypatch, export_state_file
+):
+    real_parse = parse_session
+
+    def flaky_parse(path: str):
+        if path.endswith("session_def456.jsonl"):
+            raise json.JSONDecodeError("bad", "doc", 0)
+        return real_parse(path)
+
+    monkeypatch.setattr("utils.export_engine.parse_session", flaky_parse)
+    resp = client.post("/api/export", json={"since": "all"})
+    assert resp.status_code == 200
+
+    state = json.loads(export_state_file.read_text(encoding="utf-8"))
+    sessions = state.get("sessions", {})
+    assert "session_abc123" in sessions
+    assert "session_def456" not in sessions
 
 
 def test_export_state_json_fields(isolated_state):
