@@ -22,7 +22,6 @@ from utils.jsonl_parser import (  # noqa: E402
     quick_session_info,
 )
 
-
 # ---------------------------------------------------------------------------
 # Metadata helpers (match parse_session initialisation)
 # ---------------------------------------------------------------------------
@@ -289,7 +288,8 @@ class TestNormalizeContent:
 
 class TestExtractText:
     def test_text_blocks_joined(self):
-        assert _extract_text([{"type": "text", "text": "a"}, {"type": "text", "text": "b"}]) == "a\nb"
+        blocks = [{"type": "text", "text": "a"}, {"type": "text", "text": "b"}]
+        assert _extract_text(blocks) == "a\nb"
 
     def test_tool_use_blocks_ignored(self):
         assert _extract_text([{"type": "tool_use", "name": "Read"}]) == ""
@@ -679,10 +679,17 @@ class TestParseSession:
             os.unlink(path)
 
     def test_entry_counts_accumulated(self):
-        path = _write_jsonl([
-            {"type": "assistant", "timestamp": "2026-01-01T00:00:00Z", "message": {"model": "m", "content": [], "usage": {}}},
-            {"type": "user", "timestamp": "2026-01-01T00:01:00Z", "message": {"content": []}},
-        ])
+        assistant_entry = {
+            "type": "assistant",
+            "timestamp": "2026-01-01T00:00:00Z",
+            "message": {"model": "m", "content": [], "usage": {}},
+        }
+        user_entry = {
+            "type": "user",
+            "timestamp": "2026-01-01T00:01:00Z",
+            "message": {"content": []},
+        }
+        path = _write_jsonl([assistant_entry, user_entry])
         try:
             s = parse_session(path)
             assert s["metadata"]["entry_counts"]["assistant"] == 1
@@ -821,7 +828,11 @@ class TestQuickSessionInfo:
             lines.append({
                 "type": "assistant",
                 "timestamp": "2026-01-01T00:00:00Z",
-                "message": {"model": "m", "content": [{"type": "text", "text": "x" * 80}], "usage": {}},
+                "message": {
+                    "model": "m",
+                    "content": [{"type": "text", "text": "x" * 80}],
+                    "usage": {},
+                },
             })
         lines.append({
             "type": "assistant",
@@ -837,9 +848,12 @@ class TestQuickSessionInfo:
             os.unlink(path)
 
     def test_no_user_entries_returns_untitled(self):
-        path = _write_jsonl([
-            {"type": "assistant", "timestamp": "2026-01-01T00:00:00Z", "message": {"model": "m", "content": [], "usage": {}}},
-        ])
+        assistant_only = {
+            "type": "assistant",
+            "timestamp": "2026-01-01T00:00:00Z",
+            "message": {"model": "m", "content": [], "usage": {}},
+        }
+        path = _write_jsonl([assistant_only])
         try:
             info = quick_session_info(path)
             assert info["title"] == "Untitled Session"

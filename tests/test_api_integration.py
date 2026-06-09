@@ -9,9 +9,7 @@ Fixtures (`client`, `client_empty`, `client_thinking`) live in tests/conftest.py
 
 from __future__ import annotations
 
-
 from tests.conftest import assert_error_response as _assert_error_shape
-
 
 # --- /api/projects ---
 

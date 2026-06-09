@@ -7,10 +7,10 @@ from flask import Blueprint, current_app
 
 from api._flask_types import FlaskReturn, json_response
 from api.error_codes import ErrorCode, error_response
-from utils.session_path import get_claude_projects_dir, safe_join
-from utils.jsonl_parser import parse_session
-from utils.session_stats import compute_stats
 from utils.exclusion_rules import is_session_excluded
+from utils.jsonl_parser import parse_session
+from utils.session_path import get_claude_projects_dir, safe_join
+from utils.session_stats import compute_stats
 
 sessions_bp = Blueprint("sessions", __name__)
 

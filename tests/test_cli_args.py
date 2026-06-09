@@ -9,12 +9,11 @@ Run:
     pytest tests/test_cli_args.py -v
 """
 
-import ast
-import sys
-import os
-import importlib
 import argparse
-import types
+import ast
+import os
+import sys
+
 import pytest
 
 # Ensure the repo root is on sys.path when tests are run from any directory.
@@ -92,7 +91,11 @@ def _is_sys_platform_ne_win32(node: ast.AST) -> bool:
 
 def _is_debug_and_platform_guard(node: ast.AST) -> bool:
     """True for ``args.debug and (sys.platform != "win32")`` in either operand order."""
-    if not isinstance(node, ast.BoolOp) or not isinstance(node.op, ast.And) or len(node.values) != 2:
+    if (
+        not isinstance(node, ast.BoolOp)
+        or not isinstance(node.op, ast.And)
+        or len(node.values) != 2
+    ):
         return False
     a, b = node.values
     return (_is_args_debug(a) and _is_sys_platform_ne_win32(b)) or (
@@ -428,10 +431,6 @@ class TestAppArgparse:
 
     def test_app_py_actual_argparse_has_exclude_rules(self):
         """Smoke-test: import app module and verify argparse accepts -e."""
-        result = os.popen(
-            f'{sys.executable} -c "'
-            'import sys, os; sys.path.insert(0, os.path.abspath(\\\".\\\"));"'
-        )
         # Lightweight check: parse the app.py source for the flag definition
         app_path = os.path.join(REPO_ROOT, "app.py")
         with open(app_path, "r", encoding="utf-8") as f:

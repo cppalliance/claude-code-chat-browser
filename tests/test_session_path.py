@@ -14,9 +14,10 @@ from utils import session_path
 def test_get_claude_projects_dir_uses_userprofile_on_windows(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Linux/Windows CI smoke: patch ``session_path.platform.system`` (needs ``import platform`` in module).
+    """Linux/Windows CI smoke: patch ``session_path.platform.system``.
 
-    If ``session_path`` ever switches to ``from platform import system``, this patch
+    Requires ``import platform`` in the module under test. If ``session_path`` ever
+    switches to ``from platform import system``, this patch
     no-ops but may still pass on Linux via ``expanduser("~")``. Real Windows behavior
     is covered by ``test_get_claude_projects_dir_on_windows_runner`` (win32-only).
     """

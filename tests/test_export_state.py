@@ -13,17 +13,13 @@ Run:
 import json
 import os
 import sys
-import tempfile
 from datetime import datetime
-
-import pytest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
 
 # Patch STATE_FILE before importing the module so we don't touch the real one.
 import scripts.export as _export_mod
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -1,15 +1,14 @@
 """Search endpoint. Brute-force substring match across all sessions."""
 
-import os
 
 from flask import Blueprint, current_app, request
 
 from api._flask_types import FlaskReturn, json_response
 from api.error_codes import ErrorCode, error_response
 from models.search import SearchHitDict
-from utils.session_path import get_claude_projects_dir, list_projects, list_sessions
-from utils.jsonl_parser import parse_session
 from utils.exclusion_rules import is_session_excluded
+from utils.jsonl_parser import parse_session
+from utils.session_path import get_claude_projects_dir, list_projects, list_sessions
 
 search_bp = Blueprint("search", __name__)
 

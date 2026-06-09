@@ -2,7 +2,6 @@
 (cost, files touched, commands run), and the full conversation."""
 
 from datetime import datetime
-
 from typing import Any
 
 from models.session import MessageDict, SessionDict
@@ -399,7 +398,8 @@ def _render_tool_result(parsed: dict[str, Any]) -> str:
         dur = parsed.get("total_duration_ms")
         dur_str = f" ({dur / 1000:.1f}s)" if dur else ""
         tok_str = f", {parsed['total_tokens']:,} tokens" if parsed.get("total_tokens") else ""
-        tool_str = f", {parsed['total_tool_use_count']} tool calls" if parsed.get("total_tool_use_count") else ""
+        tool_count = parsed.get("total_tool_use_count")
+        tool_str = f", {tool_count} tool calls" if tool_count else ""
         if parsed.get("retrieval_status"):
             lines.append(f"\n**Task retrieval:** {parsed['retrieval_status']}")
         elif parsed.get("description"):
@@ -436,7 +436,7 @@ def _render_system(msg: MessageDict) -> str:
     content = msg.get("content", "")
 
     if subtype == "compact_boundary":
-        lines.append(f"\n*--- Context compacted ---*\n")
+        lines.append("\n*--- Context compacted ---*\n")
     elif content:
         lines.append(f"\n*[System: {content}]*\n")
 

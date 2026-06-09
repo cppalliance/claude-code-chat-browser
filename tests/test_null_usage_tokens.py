@@ -18,9 +18,8 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from utils.jsonl_parser import parse_session, _process_assistant
+from utils.jsonl_parser import _process_assistant, parse_session
 from utils.session_stats import _estimate_cost
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -2,12 +2,12 @@
 
 from flask import Blueprint, current_app
 
-from api._flask_types import FlaskReturn, json_error, json_response
+from api._flask_types import FlaskReturn, json_response
 from api.error_codes import ErrorCode, error_response
 from models.project import ProjectSessionRowDict, SessionListItemDict
 from models.session import SessionDict
-from utils.session_path import get_claude_projects_dir, list_projects, list_sessions, safe_join
 from utils.exclusion_rules import is_session_excluded
+from utils.session_path import get_claude_projects_dir, list_projects, list_sessions, safe_join
 
 projects_bp = Blueprint("projects", __name__)
 

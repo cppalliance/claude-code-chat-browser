@@ -25,7 +25,9 @@ MARKDOWN_JS = REPO_ROOT / "static" / "js" / "shared" / "markdown.js"
 STATIC_JS_DIR = REPO_ROOT / "static" / "js"
 
 DOMPURIFY_CDN_URL = "https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.7/purify.min.js"
-DOMPURIFY_SRI = "sha512-78KH17QLT5e55GJqP76vutp1D2iAoy06WcYBXB6iBCsmO6wWzx0Qdg8EDpm8mKXv68BcvHOyeeP4wxAL0twJGQ=="
+DOMPURIFY_SRI = (
+    "sha512-78KH17QLT5e55GJqP76vutp1D2iAoy06WcYBXB6iBCsmO6wWzx0Qdg8EDpm8mKXv68BcvHOyeeP4wxAL0twJGQ=="
+)
 
 
 def _all_js_files():

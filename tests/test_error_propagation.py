@@ -34,7 +34,6 @@ from flask import Flask  # noqa: E402
 from api.projects import projects_bp  # noqa: E402
 from api.sessions import sessions_bp  # noqa: E402
 
-
 # Defensive blocklist — any of these substrings appearing in a response body
 # would mean the leak regressed. Includes common Python builtin exception
 # class names plus internal-looking shapes.
@@ -193,7 +192,9 @@ class TestGetProjectsErrorCard:
         )
         _assert_no_class_name_leak(json.dumps(body))
         error_rows = [r for r in body if isinstance(r, dict) and r.get("error")]
-        assert error_rows, "Expected at least one per-session error card from the forced parse failure"
+        assert error_rows, (
+            "Expected at least one per-session error card from the forced parse failure"
+        )
         for row in error_rows:
             assert "error_detail" not in row, (
                 "Per-session error card still includes error_detail (issue #25)"

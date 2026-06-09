@@ -1,6 +1,6 @@
 """Export state file shapes."""
 
-from typing import NotRequired, TypedDict
+from typing import TypedDict
 
 
 class ExportStateDict(TypedDict, total=False):

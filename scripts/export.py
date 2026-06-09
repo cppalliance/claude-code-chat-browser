@@ -31,13 +31,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 sys.path.insert(0, REPO_ROOT)
 
-from utils.session_path import get_claude_projects_dir, list_projects, list_sessions
-from utils.jsonl_parser import parse_session
-from utils.session_stats import compute_stats, format_duration
-from utils.md_exporter import session_to_markdown
-from utils.json_exporter import session_to_json
-from utils.exclusion_rules import resolve_exclusion_rules_path, load_rules
-from utils.slugify import slugify
+from utils.exclusion_rules import load_rules, resolve_exclusion_rules_path
 from utils.export_engine import (
     BulkExportResult,
     ExportFormat,
@@ -52,6 +46,12 @@ from utils.export_state_store import (
     export_state_lock,
     load_export_state_from_disk,
 )
+from utils.json_exporter import session_to_json
+from utils.jsonl_parser import parse_session
+from utils.md_exporter import session_to_markdown
+from utils.session_path import get_claude_projects_dir, list_projects, list_sessions
+from utils.session_stats import compute_stats, format_duration
+from utils.slugify import slugify
 
 STATE_DIR = os.path.join(os.path.expanduser("~"), ".claude-code-chat-browser")
 STATE_FILE = os.path.join(STATE_DIR, "export_state.json")
@@ -364,7 +364,11 @@ def _aggregate_stats(base_dir: str, project_filter: str, fmt: str):
                     totals["total_cost"] += cost
                     totals["has_cost"] = True
             except Exception as e:
-                print(f"  Warning: failed to parse {s['id'][:10]} in {project['name']}: {e}", file=sys.stderr)
+                print(
+                    f"  Warning: failed to parse {s['id'][:10]} "
+                    f"in {project['name']}: {e}",
+                    file=sys.stderr,
+                )
                 continue
 
     if fmt == "json":
@@ -379,9 +383,15 @@ def _aggregate_stats(base_dir: str, project_filter: str, fmt: str):
     print(f"  Projects:     {totals['projects']}")
     print(f"  Sessions:     {totals['sessions']}")
     print(f"  Models:       {', '.join(sorted(totals['models'])) or 'none'}")
-    print(f"  Total tokens: {total_tokens:,} (input: {totals['input_tokens']:,} / output: {totals['output_tokens']:,})")
+    print(
+        f"  Total tokens: {total_tokens:,} "
+        f"(input: {totals['input_tokens']:,} / output: {totals['output_tokens']:,})"
+    )
     if totals["cache_read_tokens"]:
-        print(f"  Cache:        read: {totals['cache_read_tokens']:,} / creation: {totals['cache_creation_tokens']:,}")
+        print(
+            f"  Cache:        read: {totals['cache_read_tokens']:,} / "
+            f"creation: {totals['cache_creation_tokens']:,}"
+        )
     print(f"  Tool calls:   {totals['tool_calls']:,}")
     if totals["tool_counts"]:
         breakdown = ", ".join(
@@ -598,8 +608,15 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Override Claude Code projects directory")
     parser.add_argument("--project", default=None,
                         help="Filter by project (substring on list display name or dir name)")
-    parser.add_argument("--since", choices=["all", "last", "incremental"], default=None,
-                        help="'last' = latest UTC calendar day; 'incremental' = new since last export (mtime)")
+    parser.add_argument(
+        "--since",
+        choices=["all", "last", "incremental"],
+        default=None,
+        help=(
+            "'last' = latest UTC calendar day; "
+            "'incremental' = new since last export (mtime)"
+        ),
+    )
     parser.add_argument("--out", default=None,
                         help="Output directory (default: current dir)")
     parser.add_argument("--no-zip", action="store_true", default=False,
@@ -732,4 +749,3 @@ def _die(msg: str):
 
 if __name__ == "__main__":
     main()
- 
