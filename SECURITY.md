@@ -6,7 +6,7 @@ This project is pre-release. Security fixes are applied to the **latest `master`
 
 | Version        | Supported |
 | -------------- | --------- |
-| latest `master`| Yes       |
+| latest `master` | Yes       |
 | older commits  | No        |
 
 ## Reporting a Vulnerability

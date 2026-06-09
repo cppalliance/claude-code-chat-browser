@@ -32,6 +32,7 @@ from utils.exclusion_rules import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _write_rules(tmp_path, *lines: str) -> str:
     """Write rules file and return its path. Tokenized by load_rules."""
     p = tmp_path / "exclusion-rules.txt"
@@ -39,8 +40,9 @@ def _write_rules(tmp_path, *lines: str) -> str:
     return str(p)
 
 
-def _session(*, title: str = "session", models: list[str] | None = None,
-             messages: list[dict] | None = None) -> dict:
+def _session(
+    *, title: str = "session", models: list[str] | None = None, messages: list[dict] | None = None
+) -> dict:
     return {
         "title": title,
         "metadata": {"models_used": models or []},
@@ -52,8 +54,8 @@ def _session(*, title: str = "session", models: list[str] | None = None,
 # session_text_for_exclusion
 # ---------------------------------------------------------------------------
 
-class TestSessionTextForExclusion:
 
+class TestSessionTextForExclusion:
     def test_empty_session(self):
         assert session_text_for_exclusion({}) == ""
 
@@ -72,12 +74,14 @@ class TestSessionTextForExclusion:
         # Regression: this is the inconsistency the consolidation fixed —
         # the helper rejects whitespace-only strings, the previous inline
         # variants didn't. The helper version is now canonical.
-        s = _session(messages=[
-            {"text": "alpha"},
-            {"text": "   "},          # whitespace-only — should be skipped
-            {"text": "\n\t\n"},       # whitespace-only — should be skipped
-            {"text": "beta"},
-        ])
+        s = _session(
+            messages=[
+                {"text": "alpha"},
+                {"text": "   "},  # whitespace-only — should be skipped
+                {"text": "\n\t\n"},  # whitespace-only — should be skipped
+                {"text": "beta"},
+            ]
+        )
         assert session_text_for_exclusion(s) == "alpha\n\nbeta"
 
     def test_skips_non_string_text(self):
@@ -89,8 +93,8 @@ class TestSessionTextForExclusion:
 # is_session_excluded
 # ---------------------------------------------------------------------------
 
-class TestIsSessionExcluded:
 
+class TestIsSessionExcluded:
     def test_returns_false_when_rules_empty(self, tmp_path):
         s = _session(title="anything", messages=[{"text": "anything"}])
         assert is_session_excluded([], s, "any project") is False

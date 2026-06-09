@@ -6,6 +6,7 @@ from typing import Any
 
 from models.session import MessageDict, SessionDict
 from models.stats import SessionStatsDict
+from utils.session_stats import format_duration
 
 
 def session_to_markdown(session: SessionDict, stats: SessionStatsDict | None = None) -> str:
@@ -25,7 +26,7 @@ def session_to_markdown(session: SessionDict, stats: SessionStatsDict | None = N
 def _build_frontmatter(session: SessionDict) -> str:
     meta = session["metadata"]
     lines = ["---"]
-    lines.append(f"title: \"{_escape_yaml(session['title'])}\"")
+    lines.append(f'title: "{_escape_yaml(session["title"])}"')
     if meta["first_timestamp"]:
         lines.append(f"created: {meta['first_timestamp']}")
     if meta["last_timestamp"]:
@@ -41,18 +42,14 @@ def _build_frontmatter(session: SessionDict) -> str:
     lines.append(f"total_tool_calls: {meta['total_tool_calls']}")
     if meta["tool_call_counts"]:
         lines.append("tool_call_breakdown:")
-        for tool, count in sorted(
-            meta["tool_call_counts"].items(), key=lambda x: -x[1]
-        ):
+        for tool, count in sorted(meta["tool_call_counts"].items(), key=lambda x: -x[1]):
             lines.append(f"  {tool}: {count}")
     if meta.get("stop_reasons"):
         lines.append("stop_reasons:")
-        for reason, count in sorted(
-            meta["stop_reasons"].items(), key=lambda x: -x[1]
-        ):
+        for reason, count in sorted(meta["stop_reasons"].items(), key=lambda x: -x[1]):
             lines.append(f"  {reason}: {count}")
     if meta["cwd"]:
-        lines.append(f"working_directory: \"{_escape_yaml(meta['cwd'])}\"")
+        lines.append(f'working_directory: "{_escape_yaml(meta["cwd"])}"')
     if meta["git_branch"]:
         lines.append(f"git_branch: {meta['git_branch']}")
     if meta["version"]:
@@ -104,8 +101,7 @@ def _build_header(session: SessionDict) -> str:
         parts.append(f"Tool calls: {meta['total_tool_calls']}")
     wall = meta.get("session_wall_time_seconds")
     if wall is not None:
-        from utils.session_stats import _format_duration
-        dur = _format_duration(wall)
+        dur = format_duration(wall)
         if dur:
             parts.append(f"Duration: {dur}")
 
@@ -213,6 +209,7 @@ def _render_user(msg: MessageDict) -> str:
 
     if msg.get("text"):
         from utils.jsonl_parser import _strip_system_tags
+
         lines.append(_strip_system_tags(msg["text"]))
 
     # Render structured tool result instead of raw dump
@@ -259,10 +256,11 @@ def _render_assistant(msg: MessageDict) -> str:
 
     if msg.get("text"):
         from utils.jsonl_parser import _strip_system_tags
+
         lines.append(_strip_system_tags(msg["text"]))
 
     for tool in msg.get("tool_uses") or []:
-            lines.append(_render_tool_use(tool))
+        lines.append(_render_tool_use(tool))
 
     lines.append("\n---\n")
     return "\n".join(lines)
@@ -312,9 +310,7 @@ def _render_tool_use(tool: dict[str, Any]) -> str:
         todos = inp.get("todos", [])
         for t in todos:
             status = t.get("status", "")
-            icon = {"completed": "[x]", "in_progress": "[~]", "pending": "[ ]"}.get(
-                status, "[ ]"
-            )
+            icon = {"completed": "[x]", "in_progress": "[~]", "pending": "[ ]"}.get(status, "[ ]")
             lines.append(f"> - {icon} {t.get('content', '')}")
     elif name == "AskUserQuestion":
         questions = inp.get("questions", [])

@@ -106,11 +106,12 @@ def build_cli_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--base-dir", default=None, help="Override Claude projects dir")
     parser.add_argument(
-        "--exclude-rules", "-e",
+        "--exclude-rules",
+        "-e",
         default=None,
         metavar="PATH",
         help="Path to exclusion rules file (sensitive sessions are omitted). "
-             "If omitted, uses ~/.claude-code-chat-browser/exclusion-rules.txt if present.",
+        "If omitted, uses ~/.claude-code-chat-browser/exclusion-rules.txt if present.",
     )
     return parser
 

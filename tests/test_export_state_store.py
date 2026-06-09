@@ -30,6 +30,7 @@ def _assert_file_stays_absent(path: Path, timeout: float = 0.5) -> None:
             raise AssertionError(f"{path} appeared while parent still holds the lock")
         time.sleep(0.01)
 
+
 from utils.export_state_store import (
     atomic_write_export_state,
     export_state_lock,
@@ -86,9 +87,7 @@ def test_load_legacy_flat_dict_unchanged_shape(tmp_path: Path):
     assert out == {"sessions": legacy}
 
 
-def test_export_state_lock_windows_branch_uses_msvcrt_when_no_fcntl(
-    monkeypatch, tmp_path: Path
-):
+def test_export_state_lock_windows_branch_uses_msvcrt_when_no_fcntl(monkeypatch, tmp_path: Path):
     """When ``fcntl`` is absent, use ``msvcrt.locking`` (cross-process on Windows)."""
     import utils.export_state_store as mod
 

@@ -26,25 +26,21 @@ STATIC_JS_DIR = REPO_ROOT / "static" / "js"
 
 DOMPURIFY_CDN_URL = "https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.7/purify.min.js"
 DOMPURIFY_SRI = (
-    "sha512-78KH17QLT5e55GJqP76vutp1D2iAoy06WcYBXB6iBCsmO6wWzx0Qdg8EDpm8mKXv68BcvHOyeeP4wxAL0twJGQ=="
+    "sha512-78KH17QLT5e55GJqP76vutp1D2iAoy06WcYBXB6iBCsmO6wWzx0Qdg8EDpm8mKXv68BcvHOyee"
+    "P4wxAL0twJGQ=="
 )
 
 
 def _all_js_files():
     """Return all .js files under static/js/, excluding node_modules."""
-    return [
-        p for p in STATIC_JS_DIR.rglob("*.js")
-        if "node_modules" not in p.parts
-    ]
+    return [p for p in STATIC_JS_DIR.rglob("*.js") if "node_modules" not in p.parts]
 
 
 class TestDomPurifyInHTML:
-
     def test_dompurify_cdn_url_present(self):
         html = INDEX_HTML.read_text(encoding="utf-8")
         assert DOMPURIFY_CDN_URL in html, (
-            f"DOMPurify CDN URL not found in index.html. "
-            f"Expected: {DOMPURIFY_CDN_URL}"
+            f"DOMPurify CDN URL not found in index.html. Expected: {DOMPURIFY_CDN_URL}"
         )
 
     def test_dompurify_sri_hash_present(self):
@@ -58,19 +54,18 @@ class TestDomPurifyInHTML:
         html = INDEX_HTML.read_text(encoding="utf-8")
         # Find the script tag that loads DOMPurify and check crossorigin attribute
         script_re = re.compile(
-            r'<script\b[^>]*' + re.escape("dompurify") + r'[^>]*>',
+            r"<script\b[^>]*" + re.escape("dompurify") + r"[^>]*>",
             re.DOTALL | re.IGNORECASE,
         )
         m = script_re.search(html)
         assert m, "No <script> tag referencing dompurify found in index.html"
         tag = m.group(0)
         assert 'crossorigin="anonymous"' in tag, (
-            f"DOMPurify <script> tag missing crossorigin=\"anonymous\": {tag!r}"
+            f'DOMPurify <script> tag missing crossorigin="anonymous": {tag!r}'
         )
 
 
 class TestRenderMarkdownSanitizes:
-
     def test_render_markdown_calls_dompurify_sanitize(self):
         """renderMarkdown must pass marked.parse output through DOMPurify.sanitize."""
         src = MARKDOWN_JS.read_text(encoding="utf-8")
@@ -103,7 +98,6 @@ class TestRenderMarkdownSanitizes:
 
 
 class TestNoDirectMarkedParseOutsideWrapper:
-
     def test_only_shared_markdown_calls_marked_parse(self):
         """No JS file other than shared/markdown.js may call marked.parse() directly."""
         violations = []
@@ -122,7 +116,7 @@ class TestNoDirectMarkedParseOutsideWrapper:
     def test_no_raw_marked_parse_to_inner_html(self):
         """No JS file may assign a marked.parse() result directly to innerHTML."""
         # Pattern: innerHTML = ... marked.parse(...) without DOMPurify wrapping
-        raw_assign_re = re.compile(r'innerHTML\s*[+]?=.*marked\.parse\s*\(', re.DOTALL)
+        raw_assign_re = re.compile(r"innerHTML\s*[+]?=.*marked\.parse\s*\(", re.DOTALL)
         violations = []
         for js_file in _all_js_files():
             src = js_file.read_text(encoding="utf-8")

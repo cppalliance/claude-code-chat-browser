@@ -49,6 +49,7 @@ def get_projects() -> FlaskReturn:
     # so the landing page matches what the workspace page shows.
     # Uses quick_session_info() which peeks at files without full parsing.
     from utils.jsonl_parser import quick_session_info
+
     for project in projects:
         sessions = list_sessions(project["path"])
         titled_count = 0
@@ -81,6 +82,7 @@ def get_project_sessions(project_name: str) -> FlaskReturn:
     sessions = list_sessions(project_dir)
     # Add summary preview for each session
     from utils.jsonl_parser import parse_session
+
     rules = current_app.config.get("EXCLUSION_RULES") or []
     result: list[ProjectSessionRowDict] = []
     for s in sessions:

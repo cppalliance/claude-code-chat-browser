@@ -29,10 +29,10 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from flask import Flask  # noqa: E402
+from flask import Flask
 
-from api.projects import projects_bp  # noqa: E402
-from api.sessions import sessions_bp  # noqa: E402
+from api.projects import projects_bp
+from api.sessions import sessions_bp
 
 # Defensive blocklist — any of these substrings appearing in a response body
 # would mean the leak regressed. Includes common Python builtin exception
@@ -96,8 +96,8 @@ def _write_session(tmp_path, project: str, session_id: str, content: str):
 # /api/sessions/<project>/<id>
 # ---------------------------------------------------------------------------
 
-class TestGetSessionErrorBody:
 
+class TestGetSessionErrorBody:
     def test_500_on_parse_failure_does_not_leak_class_name(self, tmp_path, client, monkeypatch):
         # Force the parser to raise an exception with a class-name + message
         # that WOULD leak through the old f-string interpolation if the fix
@@ -142,8 +142,8 @@ class TestGetSessionErrorBody:
 # /api/sessions/<project>/<id>/stats
 # ---------------------------------------------------------------------------
 
-class TestGetSessionStatsErrorBody:
 
+class TestGetSessionStatsErrorBody:
     def test_500_on_parse_failure_does_not_leak_class_name(self, tmp_path, client, monkeypatch):
         _write_session(tmp_path, "proj", "abc", "{}")
 
@@ -166,8 +166,8 @@ class TestGetSessionStatsErrorBody:
 # /api/projects (per-session card)
 # ---------------------------------------------------------------------------
 
-class TestGetProjectsErrorCard:
 
+class TestGetProjectsErrorCard:
     def test_per_session_error_card_omits_error_detail(self, tmp_path, client, monkeypatch):
         # parse_session is tolerant of malformed lines, so to exercise the
         # except branch deterministically (the one that builds the error
@@ -208,6 +208,7 @@ class TestGetProjectsErrorCard:
 # Source-level guard
 # ---------------------------------------------------------------------------
 
+
 class TestNoExceptionInterpolationInSource:
     """Static guard: any future PR that re-introduces the
     `f"...{type(e).__name__}: {e}..."` pattern in api/ fails this test."""
@@ -220,11 +221,10 @@ class TestNoExceptionInterpolationInSource:
             # contains both `type(e)` or `{e}` AND the word "error".
             offending_patterns = [
                 "type(e).__name__",  # the class-name expose
-                "{e}\"",             # bare {e} ending an f-string
-                "{e},",              # bare {e} in a dict-value f-string
+                '{e}"',  # bare {e} ending an f-string
+                "{e},",  # bare {e} in a dict-value f-string
             ]
             for pat in offending_patterns:
                 assert pat not in src, (
-                    f"{py_file.name} contains forbidden pattern {pat!r} "
-                    f"— see issue #25"
+                    f"{py_file.name} contains forbidden pattern {pat!r} — see issue #25"
                 )

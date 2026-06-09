@@ -31,9 +31,7 @@ def _require_value(
     if val is None:
         raise SessionValidationError(path, "must not be null")
     if not isinstance(val, expected_type):
-        raise SessionValidationError(
-            path, f"expected {type_label}, got {type(val).__name__}"
-        )
+        raise SessionValidationError(path, f"expected {type_label}, got {type(val).__name__}")
     return val
 
 

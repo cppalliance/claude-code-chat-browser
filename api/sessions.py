@@ -89,14 +89,6 @@ def get_session_stats(project_name: str, session_id: str) -> FlaskReturn:
             500,
         )
 
-    rules = current_app.config.get("EXCLUSION_RULES") or []
-    if is_session_excluded(rules, session, project_name):
-        return error_response(
-            ErrorCode.SESSION_NOT_FOUND,
-            "Session not found",
-            404,
-        )
-
     try:
         stats = compute_stats(session)
         return json_response(stats)

@@ -1,6 +1,5 @@
 """Search endpoint. Brute-force substring match across all sessions."""
 
-
 from flask import Blueprint, current_app, request
 
 from api._flask_types import FlaskReturn, json_response
@@ -70,14 +69,16 @@ def search() -> FlaskReturn:
                     end = min(len(text), idx + len(query) + 80)
                     snippet = text[start:end]
 
-                    results.append({
-                        "project": project["name"],
-                        "session_id": session["session_id"],
-                        "title": session["title"],
-                        "role": msg["role"],
-                        "timestamp": msg.get("timestamp"),
-                        "snippet": snippet,
-                    })
+                    results.append(
+                        {
+                            "project": project["name"],
+                            "session_id": session["session_id"],
+                            "title": session["title"],
+                            "role": msg["role"],
+                            "timestamp": msg.get("timestamp"),
+                            "snippet": snippet,
+                        }
+                    )
                     if len(results) >= max_results:
                         break
 

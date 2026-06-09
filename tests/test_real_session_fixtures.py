@@ -124,9 +124,7 @@ def test_real_session_nested_tools_has_sidechain_and_tool_use() -> None:
 def test_real_session_unknown_fields_tolerated() -> None:
     session = parse_session(_fixture_path("real_session_unknown_fields.jsonl"))
     _assert_session_shape(session)
-    assert len(session["messages"]) == _FIXTURE_MESSAGE_COUNTS[
-        "real_session_unknown_fields.jsonl"
-    ]
+    assert len(session["messages"]) == _FIXTURE_MESSAGE_COUNTS["real_session_unknown_fields.jsonl"]
 
 
 def test_real_session_malformed_lines_skips_bad_lines() -> None:
@@ -135,9 +133,7 @@ def test_real_session_malformed_lines_skips_bad_lines() -> None:
     texts = [m.get("text") or "" for m in session["messages"] if m["role"] == "user"]
     assert any("before malformed" in t for t in texts)
     assert any("after malformed" in t for t in texts)
-    assert len(session["messages"]) == _FIXTURE_MESSAGE_COUNTS[
-        "real_session_malformed_lines.jsonl"
-    ]
+    assert len(session["messages"]) == _FIXTURE_MESSAGE_COUNTS["real_session_malformed_lines.jsonl"]
 
 
 def test_task_retrieval_not_misclassified_as_task_message() -> None:

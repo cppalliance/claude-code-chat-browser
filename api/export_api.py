@@ -12,8 +12,7 @@ from api._flask_types import FlaskReturn, json_response
 from api.error_codes import ErrorCode, error_response
 from models.export import ExportStateDict
 from utils.exclusion_rules import is_session_excluded
-from utils.export_engine import EXPORT_ERRORS as _EXPORT_ERRORS
-from utils.export_engine import ZipSink, run_bulk_export
+from utils.export_engine import EXPORT_ERRORS as _EXPORT_ERRORS, ZipSink, run_bulk_export
 from utils.export_state_store import (
     EXPORT_STATE_FILE,
     atomic_write_export_state,
@@ -94,10 +93,7 @@ def bulk_export() -> FlaskReturn:
             since=since,
         )
 
-    base = (
-        current_app.config.get("CLAUDE_PROJECTS_DIR")
-        or get_claude_projects_dir()
-    )
+    base = current_app.config.get("CLAUDE_PROJECTS_DIR") or get_claude_projects_dir()
     projects = list_projects(base)
     rules = current_app.config.get("EXCLUSION_RULES") or []
 
@@ -109,9 +105,7 @@ def bulk_export() -> FlaskReturn:
     buf = io.BytesIO()
 
     def _on_export_error(sid: str, exc: Exception) -> None:
-        current_app.logger.warning(
-            "Failed to export %s: %s", sid[:10], exc
-        )
+        current_app.logger.warning("Failed to export %s: %s", sid[:10], exc)
 
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         result = run_bulk_export(
@@ -163,10 +157,7 @@ def bulk_export() -> FlaskReturn:
 def export_session(project_name: str, session_id: str) -> FlaskReturn:
     from utils.session_path import safe_join
 
-    base = (
-        current_app.config.get("CLAUDE_PROJECTS_DIR")
-        or get_claude_projects_dir()
-    )
+    base = current_app.config.get("CLAUDE_PROJECTS_DIR") or get_claude_projects_dir()
     try:
         filepath = safe_join(base, project_name, f"{session_id}.jsonl")
     except ValueError:
@@ -183,9 +174,7 @@ def export_session(project_name: str, session_id: str) -> FlaskReturn:
     try:
         session = parse_session(filepath)
     except _EXPORT_ERRORS:
-        current_app.logger.exception(
-            "Failed to parse session %s for export", session_id
-        )
+        current_app.logger.exception("Failed to parse session %s for export", session_id)
         return error_response(
             ErrorCode.PARSE_ERROR,
             "Failed to parse session",
@@ -203,9 +192,7 @@ def export_session(project_name: str, session_id: str) -> FlaskReturn:
     try:
         stats = compute_stats(session)
     except _EXPORT_ERRORS:
-        current_app.logger.exception(
-            "Failed to compute stats for export %s", session_id
-        )
+        current_app.logger.exception("Failed to compute stats for export %s", session_id)
         return error_response(
             ErrorCode.INTERNAL_ERROR,
             "Failed to compute session stats",

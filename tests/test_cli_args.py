@@ -114,6 +114,7 @@ def _use_reloader_kwarg_tied_to_debug(call: ast.Call) -> bool:
 # export.py argument tests
 # ---------------------------------------------------------------------------
 
+
 class TestExportParserFlags:
     """Every flag that cursor's export.py exposes must also exist here."""
 
@@ -300,6 +301,7 @@ class TestExportParserFlags:
 # app.py argument tests
 # ---------------------------------------------------------------------------
 
+
 class TestAppArgparse:
     """app.py CLI must expose the same flags as cursor's app.py."""
 
@@ -324,9 +326,7 @@ class TestAppArgparse:
         args = parser.parse_args(["--debug"])
         assert args.debug is True
 
-    @pytest.mark.parametrize(
-        "host", ["127.0.0.1", "localhost", "::1", "[::1]", "127.0.0.2"]
-    )
+    @pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1", "[::1]", "127.0.0.2"])
     def test_is_loopback_host_accepts_loopback(self, host: str) -> None:
         assert is_loopback_host(host)
 

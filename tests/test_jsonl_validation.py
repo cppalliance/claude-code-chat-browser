@@ -8,9 +8,9 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from models.errors import SessionValidationError  # noqa: E402
-from utils.jsonl_parser import parse_session  # noqa: E402
-from utils.validation import validate_session_dict  # noqa: E402
+from models.errors import SessionValidationError
+from utils.jsonl_parser import parse_session
+from utils.validation import validate_session_dict
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -47,16 +47,12 @@ class TestValidateSessionDict:
 
     def test_null_role_in_message(self):
         with pytest.raises(SessionValidationError) as exc_info:
-            validate_session_dict(
-                _valid_payload(messages=[{"role": None, "text": "x"}])
-            )
+            validate_session_dict(_valid_payload(messages=[{"role": None, "text": "x"}]))
         assert exc_info.value.path == "messages[0].role"
 
     def test_missing_role_in_message(self):
         with pytest.raises(SessionValidationError) as exc_info:
-            validate_session_dict(
-                _valid_payload(messages=[{"text": "no role key"}])
-            )
+            validate_session_dict(_valid_payload(messages=[{"text": "no role key"}]))
         assert exc_info.value.path == "messages[0].role"
 
     def test_metadata_not_dict(self):

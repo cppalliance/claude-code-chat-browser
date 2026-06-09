@@ -73,6 +73,4 @@ def client_empty(tmp_path, export_state_file):
 @pytest.fixture
 def client_thinking(tmp_path, export_state_file):
     """Flask test client with a session containing thinking content blocks."""
-    return _make_test_client(
-        tmp_path, {"session_think001.jsonl": "session_with_thinking.jsonl"}
-    )
+    return _make_test_client(tmp_path, {"session_think001.jsonl": "session_with_thinking.jsonl"})

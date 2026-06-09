@@ -7,14 +7,16 @@ from __future__ import annotations
 
 from tests.conftest import assert_error_response
 
-_SEARCH_HIT_KEYS = frozenset({
-    "project",
-    "session_id",
-    "title",
-    "role",
-    "timestamp",
-    "snippet",
-})
+_SEARCH_HIT_KEYS = frozenset(
+    {
+        "project",
+        "session_id",
+        "title",
+        "role",
+        "timestamp",
+        "snippet",
+    }
+)
 
 
 def _assert_search_hits(results: list, *, max_items: int) -> None:

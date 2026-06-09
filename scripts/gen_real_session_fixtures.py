@@ -4,6 +4,7 @@
 Each entry includes top-level ``sessionId`` (real Claude Code JSONL shape). The parser
 currently ignores it and uses the filename for ``session_id``.
 """
+
 from __future__ import annotations
 
 import json
