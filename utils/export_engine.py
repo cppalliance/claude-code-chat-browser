@@ -69,12 +69,14 @@ class ExportFailure:
     code: ErrorCode
 
 
-def failure_code_for_exception(exc: Exception, *, phase: str = "parse") -> ErrorCode:
+def failure_code_for_exception(
+    exc: Exception,
+    *,
+    phase: Literal["parse", "export"] = "parse",
+) -> ErrorCode:
     """Map an export exception to a stable :class:`ErrorCode`."""
     if phase == "export":
         return ErrorCode.INTERNAL_ERROR
-    if isinstance(exc, json.JSONDecodeError):
-        return ErrorCode.PARSE_ERROR
     if isinstance(exc, EXPORT_ERRORS):
         return ErrorCode.PARSE_ERROR
     return ErrorCode.INTERNAL_ERROR
@@ -293,7 +295,12 @@ def run_bulk_export(
     result = BulkExportResult()
     manifest: list[dict[str, Any]] = []
 
-    def _record_failure(sid: str, exc: Exception, *, phase: str = "parse") -> None:
+    def _record_failure(
+        sid: str,
+        exc: Exception,
+        *,
+        phase: Literal["parse", "export"] = "parse",
+    ) -> None:
         result.failure_count += 1
         code = failure_code_for_exception(exc, phase=phase)
         result.failures.append(

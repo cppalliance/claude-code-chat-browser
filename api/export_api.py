@@ -59,7 +59,7 @@ def _read_state() -> ExportStateDict:
         return _load_state_from_disk()
 
 
-def _serialize_export_failures(failures: list[ExportFailure]) -> list[dict[str, str]]:
+def _serialize_export_failures(failures: list[ExportFailure]) -> list[dict[str, object]]:
     return [
         {
             "session_id": item.session_id,
@@ -90,6 +90,8 @@ def _export_warnings_header_payload(
         sample = sample[:-1]
         truncated = True
         payload = {"total_failures": total, "truncated": truncated, "failures": sample}
+    if len(json.dumps(payload, separators=(",", ":"))) > _EXPORT_WARNINGS_HEADER_MAX_BYTES:
+        payload = {"total_failures": total, "truncated": True, "failures": []}
     return payload
 
 

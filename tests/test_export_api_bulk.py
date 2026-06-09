@@ -15,7 +15,9 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from flask import Flask
 
-from api.export_api import export_bp
+from api.error_codes import ErrorCode
+from api.export_api import _export_warnings_header_payload, export_bp
+from utils.export_engine import ExportFailure
 from utils.jsonl_parser import parse_session
 
 
@@ -122,6 +124,60 @@ def test_bulk_export_all_fail_returns_422(client, monkeypatch):
     assert len(body["failures"]) == 2
     assert {item["code"] for item in body["failures"]} == {"PARSE_ERROR"}
     assert all(item["message"] == "Failed to parse session" for item in body["failures"])
+
+
+def test_export_warnings_header_payload_truncates_at_entry_limit():
+    failures = [
+        ExportFailure(
+            session_id=f"sess_{i:04d}",
+            message="Failed to parse session",
+            code=ErrorCode.PARSE_ERROR,
+        )
+        for i in range(25)
+    ]
+    payload = _export_warnings_header_payload(failures)
+    assert payload["total_failures"] == 25
+    assert payload["truncated"] is True
+    assert len(payload["failures"]) <= 20
+
+
+def test_export_warnings_header_payload_byte_overflow_fallback(monkeypatch):
+    monkeypatch.setattr("api.export_api._EXPORT_WARNINGS_HEADER_MAX_BYTES", 80)
+    failures = [
+        ExportFailure(
+            session_id="x" * 200,
+            message="Failed to parse session",
+            code=ErrorCode.PARSE_ERROR,
+        )
+    ]
+    payload = _export_warnings_header_payload(failures)
+    assert payload["truncated"] is True
+    assert payload["failures"] == []
+    assert len(json.dumps(payload, separators=(",", ":"))) <= 80
+
+
+def test_bulk_export_partial_fail_incremental_excludes_failed_from_state(
+    client, monkeypatch, export_state_file
+):
+    export_state_file.write_text(
+        json.dumps({"sessions": {}, "exportedCount": 0}),
+        encoding="utf-8",
+    )
+    real_parse = parse_session
+
+    def flaky_parse(path: str):
+        if path.endswith("session_def456.jsonl"):
+            raise json.JSONDecodeError("bad", "doc", 0)
+        return real_parse(path)
+
+    monkeypatch.setattr("utils.export_engine.parse_session", flaky_parse)
+    resp = client.post("/api/export", json={"since": "incremental"})
+    assert resp.status_code == 200
+
+    state = json.loads(export_state_file.read_text(encoding="utf-8"))
+    sessions = state.get("sessions", {})
+    assert "session_abc123" in sessions
+    assert "session_def456" not in sessions
 
 
 def test_bulk_export_partial_fail_excludes_failed_from_state(

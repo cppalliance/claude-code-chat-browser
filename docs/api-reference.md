@@ -389,7 +389,7 @@ When some sessions fail but at least one succeeds, the response is still **`200`
 | 400 | `INVALID_REQUEST_BODY` | Body is not a JSON object | — |
 | 400 | `INVALID_SINCE_MODE` | Invalid `since` value | `since` echoes rejected value |
 | 422 | `EXPORT_NOTHING_TO_EXPORT` | Zero sessions matched (none attempted) | `since` echoes request mode |
-| 422 | `EXPORT_ALL_FAILED` | Candidates existed but every attempted session failed | `since`, `failures` (same shape as `X-Export-Warnings` entries) |
+| 422 | `EXPORT_ALL_FAILED` | Candidates existed but every attempted session failed | `since`, `failures` — flat array of `{"session_id", "code", "message"}` objects (same item shape as the `failures` array inside the `X-Export-Warnings` header) |
 
 ```bash
 curl -X POST -H "Content-Type: application/json" \
