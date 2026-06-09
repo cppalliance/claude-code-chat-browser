@@ -31,9 +31,7 @@ def _tool_result_build_bash(tr: ToolResultDict, base: dict[str, object]) -> dict
 
 
 def _tool_result_pred_file_edit(tr: ToolResultDict) -> bool:
-    return "structuredPatch" in tr or (
-        "filePath" in tr and "newString" in tr
-    )
+    return "structuredPatch" in tr or ("filePath" in tr and "newString" in tr)
 
 
 def _tool_result_build_file_edit(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:

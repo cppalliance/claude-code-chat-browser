@@ -175,9 +175,7 @@ def _process_user(
     images = _extract_images(content)
 
     raw_tool_result = entry.get("toolUseResult")
-    tool_result: ToolResultUnion | None = (
-        raw_tool_result if raw_tool_result is not None else None
-    )
+    tool_result: ToolResultUnion | None = raw_tool_result if raw_tool_result is not None else None
     tool_result_parsed = _parse_tool_result(tool_result, entry.get("slug"))
 
     # Also extract images from toolUseResult content (e.g., Read tool on image files)
