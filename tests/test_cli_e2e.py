@@ -75,13 +75,15 @@ def test_cli_stats_exits_zero(tmp_path):
 
 def test_cli_invalid_since_exits_nonzero(tmp_path):
     base = _seed_base_dir(tmp_path)
-    proc = _run_cli([
-        "export",
-        "--since",
-        "yesterday",
-        "--base-dir",
-        str(base),
-    ])
+    proc = _run_cli(
+        [
+            "export",
+            "--since",
+            "yesterday",
+            "--base-dir",
+            str(base),
+        ]
+    )
     assert proc.returncode != 0
     assert "--since" in proc.stderr
     assert "invalid choice" in proc.stderr.lower()
@@ -91,16 +93,18 @@ def test_cli_invalid_since_exits_nonzero(tmp_path):
 def test_cli_export_creates_output(tmp_path):
     base = _seed_base_dir(tmp_path)
     out_dir = tmp_path / "out"
-    proc = _run_cli([
-        "export",
-        "--base-dir",
-        str(base),
-        "--since",
-        "all",
-        "--no-zip",
-        "--out",
-        str(out_dir),
-    ])
+    proc = _run_cli(
+        [
+            "export",
+            "--base-dir",
+            str(base),
+            "--since",
+            "all",
+            "--no-zip",
+            "--out",
+            str(out_dir),
+        ]
+    )
     assert proc.returncode == 0, proc.stderr
     md_files = list(out_dir.rglob("*.md"))
     assert len(md_files) >= 1

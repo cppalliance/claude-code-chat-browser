@@ -133,15 +133,13 @@ class ZipSink:
             self._zf.writestr("manifest.jsonl", body)
 
 
-def _resolve_first_timestamp(
-    meta: SessionMetadataDict, sess_info: SessionListItemDict
-) -> str:
+def _resolve_first_timestamp(meta: SessionMetadataDict, sess_info: SessionListItemDict) -> str:
     """Return first_timestamp from metadata, or synthesise from mtime without mutating *meta*."""
     ts = (meta.get("first_timestamp") or "").strip()
     if not ts:
-        ts = datetime.fromtimestamp(
-            sess_info["modified"], tz=timezone.utc
-        ).strftime("%Y-%m-%dT%H:%M:%S")
+        ts = datetime.fromtimestamp(sess_info["modified"], tz=timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%S"
+        )
     return ts
 
 
@@ -221,9 +219,7 @@ def _session_files(
         md = session_to_markdown(session, stats)
         files.append(
             (
-                build_export_rel_path(
-                    project, session, sess_info, "md", layout=layout
-                ),
+                build_export_rel_path(project, session, sess_info, "md", layout=layout),
                 md,
             )
         )
@@ -231,9 +227,7 @@ def _session_files(
         js = session_to_json(session, stats)
         files.append(
             (
-                build_export_rel_path(
-                    project, session, sess_info, "json", layout=layout
-                ),
+                build_export_rel_path(project, session, sess_info, "json", layout=layout),
                 js,
             )
         )
@@ -281,12 +275,8 @@ def run_bulk_export(
         sid = sess_info["id"]
         try:
             stats = compute_stats(session)
-            files = _session_files(
-                session, stats, project, sess_info, fmt, path_layout
-            )
-            entry = build_manifest_entry(
-                project, sess_info, session, stats, style=manifest_style
-            )
+            files = _session_files(session, stats, project, sess_info, fmt, path_layout)
+            entry = build_manifest_entry(project, sess_info, session, stats, style=manifest_style)
             sink.add_session(files, entry)
             manifest.append(entry)
             result.exports.extend(files)

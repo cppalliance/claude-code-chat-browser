@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import shutil
+from pathlib import Path
+
+from app import create_app
 from tests.conftest import assert_error_response
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def test_index_returns_html(client):
     resp = client.get("/")
     assert resp.status_code == 200
-    assert b"html" in resp.data.lower() or (
-        resp.content_type and "html" in resp.content_type
-    )
+    assert b"html" in resp.data.lower() or (resp.content_type and "html" in resp.content_type)
 
 
 def test_session_stats_happy_path(client):
@@ -23,6 +27,23 @@ def test_session_stats_happy_path(client):
 
 def test_session_stats_not_found(client):
     resp = client.get("/api/sessions/test-project/nonexistent/stats")
+    assert resp.status_code == 404
+    assert_error_response(resp, expected_code="SESSION_NOT_FOUND")
+
+
+def test_session_stats_excluded_session_returns_404(tmp_path, export_state_file):
+    project_dir = tmp_path / "test-project"
+    project_dir.mkdir(parents=True)
+    shutil.copy(FIXTURES / "session_minimal.jsonl", project_dir / "session_abc123.jsonl")
+
+    rules_path = tmp_path / "exclusion-rules.txt"
+    rules_path.write_text("integration fixture\n", encoding="utf-8")
+
+    app = create_app(base_dir=str(tmp_path), exclusion_rules_path=str(rules_path))
+    app.config["TESTING"] = True
+    excluded_client = app.test_client()
+
+    resp = excluded_client.get("/api/sessions/test-project/session_abc123/stats")
     assert resp.status_code == 404
     assert_error_response(resp, expected_code="SESSION_NOT_FOUND")
 
@@ -41,6 +62,7 @@ def test_session_detail_invalid_path(client):
 
 def test_session_detail_parse_failure_returns_500_without_leak(client, monkeypatch):
     """Parser failures must return generic PARSE_ERROR, not exception internals (#25)."""
+
     def _boom(*_args, **_kwargs):
         raise KeyError("internal_secret_field_id")
 
@@ -106,9 +128,7 @@ def test_export_session_markdown_attachment(client):
 
 
 def test_export_session_json_format(client):
-    resp = client.get(
-        "/api/export/session/test-project/session_abc123?format=json"
-    )
+    resp = client.get("/api/export/session/test-project/session_abc123?format=json")
     assert resp.status_code == 200
     assert resp.mimetype == "application/json"
 

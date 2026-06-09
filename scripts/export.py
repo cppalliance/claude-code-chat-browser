@@ -31,13 +31,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 sys.path.insert(0, REPO_ROOT)
 
-from utils.session_path import get_claude_projects_dir, list_projects, list_sessions
-from utils.jsonl_parser import parse_session
-from utils.session_stats import compute_stats, format_duration
-from utils.md_exporter import session_to_markdown
-from utils.json_exporter import session_to_json
-from utils.exclusion_rules import resolve_exclusion_rules_path, load_rules
-from utils.slugify import slugify
+from utils.exclusion_rules import load_rules, resolve_exclusion_rules_path
 from utils.export_engine import (
     BulkExportResult,
     ExportFormat,
@@ -52,6 +46,12 @@ from utils.export_state_store import (
     export_state_lock,
     load_export_state_from_disk,
 )
+from utils.json_exporter import session_to_json
+from utils.jsonl_parser import parse_session
+from utils.md_exporter import session_to_markdown
+from utils.session_path import get_claude_projects_dir, list_projects, list_sessions
+from utils.session_stats import compute_stats, format_duration
+from utils.slugify import slugify
 
 STATE_DIR = os.path.join(os.path.expanduser("~"), ".claude-code-chat-browser")
 STATE_FILE = os.path.join(STATE_DIR, "export_state.json")
@@ -83,16 +83,10 @@ def _zip_export_basename(
     if project_filter:
         if len(projects) == 1:
             p0 = projects[0]
-            parts.append(
-                slugify(p0.get("display_name") or p0["name"], default="project")
-            )
+            parts.append(slugify(p0.get("display_name") or p0["name"], default="project"))
         else:
-            parts.append(
-                f"{slugify(project_filter, default='project')}-n{len(projects)}"
-            )
-    if since == "last" and latest_day is not None and isinstance(
-        latest_day, date
-    ):
+            parts.append(f"{slugify(project_filter, default='project')}-n{len(projects)}")
+    if since == "last" and latest_day is not None and isinstance(latest_day, date):
         parts.append(f"last-{latest_day.strftime('%m-%d')}")
     if parts:
         return f"claude-code-export-{'-'.join(parts)}-{date_tag}.zip"
@@ -114,10 +108,15 @@ def _prefixed_export_option_overrides(argv: list[str]) -> dict[str, object]:
     i = 0
     while i < len(pre):
         a = pre[i]
-        if a == "--since" and i + 1 < len(pre) and pre[i + 1] in (
-            "all",
-            "last",
-            "incremental",
+        if (
+            a == "--since"
+            and i + 1 < len(pre)
+            and pre[i + 1]
+            in (
+                "all",
+                "last",
+                "incremental",
+            )
         ):
             opts["since"] = pre[i + 1]
             i += 2
@@ -170,6 +169,7 @@ def main():
         cmd_stats(args)
     else:
         cmd_export(args)
+
 
 def cmd_list(args):
     """Print a table of projects, or drill into one project's sessions."""
@@ -276,9 +276,7 @@ def _session_stats(session_id: str, base_dir: str, fmt: str):
     print(f"  Tool calls: {meta['total_tool_calls']}")
     if meta["tool_call_counts"]:
         breakdown = ", ".join(
-            f"{t}: {c}" for t, c in sorted(
-                meta["tool_call_counts"].items(), key=lambda x: -x[1]
-            )
+            f"{t}: {c}" for t, c in sorted(meta["tool_call_counts"].items(), key=lambda x: -x[1])
         )
         print(f"              {breakdown}")
     if meta.get("stop_reasons"):
@@ -364,7 +362,10 @@ def _aggregate_stats(base_dir: str, project_filter: str, fmt: str):
                     totals["total_cost"] += cost
                     totals["has_cost"] = True
             except Exception as e:
-                print(f"  Warning: failed to parse {s['id'][:10]} in {project['name']}: {e}", file=sys.stderr)
+                print(
+                    f"  Warning: failed to parse {s['id'][:10]} in {project['name']}: {e}",
+                    file=sys.stderr,
+                )
                 continue
 
     if fmt == "json":
@@ -379,15 +380,19 @@ def _aggregate_stats(base_dir: str, project_filter: str, fmt: str):
     print(f"  Projects:     {totals['projects']}")
     print(f"  Sessions:     {totals['sessions']}")
     print(f"  Models:       {', '.join(sorted(totals['models'])) or 'none'}")
-    print(f"  Total tokens: {total_tokens:,} (input: {totals['input_tokens']:,} / output: {totals['output_tokens']:,})")
+    print(
+        f"  Total tokens: {total_tokens:,} "
+        f"(input: {totals['input_tokens']:,} / output: {totals['output_tokens']:,})"
+    )
     if totals["cache_read_tokens"]:
-        print(f"  Cache:        read: {totals['cache_read_tokens']:,} / creation: {totals['cache_creation_tokens']:,}")
+        print(
+            f"  Cache:        read: {totals['cache_read_tokens']:,} / "
+            f"creation: {totals['cache_creation_tokens']:,}"
+        )
     print(f"  Tool calls:   {totals['tool_calls']:,}")
     if totals["tool_counts"]:
         breakdown = ", ".join(
-            f"{t}: {c}" for t, c in sorted(
-                totals["tool_counts"].items(), key=lambda x: -x[1]
-            )[:10]
+            f"{t}: {c}" for t, c in sorted(totals["tool_counts"].items(), key=lambda x: -x[1])[:10]
         )
         print(f"                {breakdown}")
     print(f"  Files:        {len(totals['files_unique']):,} unique")
@@ -413,9 +418,9 @@ def _exit_bulk_export(result: BulkExportResult) -> None:
     if n > 0 or k > 0:
         dest = sys.stderr if k > 0 else sys.stdout
         print(f"Exported {n} of {m} sessions ({k} failed)", file=dest)
-    if n == 0 and k > 0:   # total failure
+    if n == 0 and k > 0:  # total failure
         sys.exit(1)
-    elif k > 0:             # partial failure
+    elif k > 0:  # partial failure
         sys.exit(2)
 
 
@@ -493,20 +498,14 @@ def cmd_export(args):
             "exporting sessions that overlap that calendar day."
         )
         if export_result.latest_day_match_count == 0:
-            print(
-                f"No sessions overlap {latest_day.isoformat()} (UTC); "
-                "nothing to export."
-            )
+            print(f"No sessions overlap {latest_day.isoformat()} (UTC); nothing to export.")
             _exit_bulk_export(export_result)
             return
     elif since == "incremental":
         skipped_mtime_unchanged = export_result.skipped_mtime_unchanged_count
 
     exported = len(all_exports)
-    print(
-        f"Exporting {exported} file(s) "
-        f"({skipped} skipped, {total_sessions} total)"
-    )
+    print(f"Exporting {exported} file(s) ({skipped} skipped, {total_sessions} total)")
 
     if not all_exports:
         print("Nothing to export.")
@@ -594,72 +593,88 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=__doc__,
     )
     # Global options (for backward compatibility when no subcommand)
-    parser.add_argument("--base-dir", default=None,
-                        help="Override Claude Code projects directory")
-    parser.add_argument("--project", default=None,
-                        help="Filter by project (substring on list display name or dir name)")
-    parser.add_argument("--since", choices=["all", "last", "incremental"], default=None,
-                        help="'last' = latest UTC calendar day; 'incremental' = new since last export (mtime)")
-    parser.add_argument("--out", default=None,
-                        help="Output directory (default: current dir)")
-    parser.add_argument("--no-zip", action="store_true", default=False,
-                        help="Write individual files instead of zip")
-    parser.add_argument("--format", choices=["md", "json", "both"],
-                        default=None, help="Export format (default: md)")
-    parser.add_argument("--session", default=None,
-                        help="Export/stats for single session (UUID prefix)")
+    parser.add_argument("--base-dir", default=None, help="Override Claude Code projects directory")
     parser.add_argument(
-        "--exclude-rules", "-e",
+        "--project",
+        default=None,
+        help="Filter by project (substring on list display name or dir name)",
+    )
+    parser.add_argument(
+        "--since",
+        choices=["all", "last", "incremental"],
+        default=None,
+        help=("'last' = latest UTC calendar day; 'incremental' = new since last export (mtime)"),
+    )
+    parser.add_argument("--out", default=None, help="Output directory (default: current dir)")
+    parser.add_argument(
+        "--no-zip", action="store_true", default=False, help="Write individual files instead of zip"
+    )
+    parser.add_argument(
+        "--format", choices=["md", "json", "both"], default=None, help="Export format (default: md)"
+    )
+    parser.add_argument(
+        "--session", default=None, help="Export/stats for single session (UUID prefix)"
+    )
+    parser.add_argument(
+        "--exclude-rules",
+        "-e",
         default=None,
         metavar="PATH",
         dest="exclude_rules",
         help="Path to exclusion rules file (sensitive sessions are omitted). "
-             "If omitted, uses ~/.claude-code-chat-browser/exclusion-rules.txt if present.",
+        "If omitted, uses ~/.claude-code-chat-browser/exclusion-rules.txt if present.",
     )
 
     subparsers = parser.add_subparsers(dest="command")
 
     # List subcommand
     list_p = subparsers.add_parser("list", help="List projects and sessions")
-    list_p.add_argument("--project", default=None,
-                        help="Filter/select project (display name or dir name substring)")
-    list_p.add_argument("--base-dir", default=None,
-                        help="Override Claude Code projects directory")
+    list_p.add_argument(
+        "--project", default=None, help="Filter/select project (display name or dir name substring)"
+    )
+    list_p.add_argument("--base-dir", default=None, help="Override Claude Code projects directory")
 
     # Stats subcommand
     stats_p = subparsers.add_parser("stats", help="Show statistics")
-    stats_p.add_argument("--session", default=None,
-                         help="Stats for specific session (UUID prefix)")
-    stats_p.add_argument("--format", choices=["text", "json"], default="text",
-                         help="Output format (default: text)")
-    stats_p.add_argument("--project", default=None,
-                         help="Filter by project (display name or dir name substring)")
-    stats_p.add_argument("--base-dir", default=None,
-                         help="Override Claude Code projects directory")
+    stats_p.add_argument("--session", default=None, help="Stats for specific session (UUID prefix)")
+    stats_p.add_argument(
+        "--format", choices=["text", "json"], default="text", help="Output format (default: text)"
+    )
+    stats_p.add_argument(
+        "--project", default=None, help="Filter by project (display name or dir name substring)"
+    )
+    stats_p.add_argument("--base-dir", default=None, help="Override Claude Code projects directory")
 
     # Export subcommand (explicit)
     export_p = subparsers.add_parser("export", help="Export sessions")
-    export_p.add_argument("--since", choices=["all", "last", "incremental"], default="all",
-                          help="'last' = latest UTC day; 'incremental' = new since last export")
-    export_p.add_argument("--out", default=None,
-                          help="Output directory (default: current dir)")
-    export_p.add_argument("--no-zip", action="store_true",
-                          help="Write individual files instead of zip")
-    export_p.add_argument("--format", choices=["md", "json", "both"],
-                          default="md", help="Export format (default: md)")
-    export_p.add_argument("--session", default=None,
-                          help="Export single session by UUID prefix")
-    export_p.add_argument("--project", default=None,
-                          help="Filter by project (display name or dir name substring)")
-    export_p.add_argument("--base-dir", default=None,
-                          help="Override Claude Code projects directory")
     export_p.add_argument(
-        "--exclude-rules", "-e",
+        "--since",
+        choices=["all", "last", "incremental"],
+        default="all",
+        help="'last' = latest UTC day; 'incremental' = new since last export",
+    )
+    export_p.add_argument("--out", default=None, help="Output directory (default: current dir)")
+    export_p.add_argument(
+        "--no-zip", action="store_true", help="Write individual files instead of zip"
+    )
+    export_p.add_argument(
+        "--format", choices=["md", "json", "both"], default="md", help="Export format (default: md)"
+    )
+    export_p.add_argument("--session", default=None, help="Export single session by UUID prefix")
+    export_p.add_argument(
+        "--project", default=None, help="Filter by project (display name or dir name substring)"
+    )
+    export_p.add_argument(
+        "--base-dir", default=None, help="Override Claude Code projects directory"
+    )
+    export_p.add_argument(
+        "--exclude-rules",
+        "-e",
         default=None,
         metavar="PATH",
         dest="exclude_rules",
         help="Path to exclusion rules file (sensitive sessions are omitted). "
-             "If omitted, uses ~/.claude-code-chat-browser/exclusion-rules.txt if present.",
+        "If omitted, uses ~/.claude-code-chat-browser/exclusion-rules.txt if present.",
     )
 
     return parser
@@ -732,4 +747,3 @@ def _die(msg: str):
 
 if __name__ == "__main__":
     main()
- 

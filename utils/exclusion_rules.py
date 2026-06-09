@@ -57,9 +57,7 @@ def resolve_exclusion_rules_path(cli_path: str | None) -> str | None:
     if cli_path:
         p = os.path.abspath(os.path.expanduser(cli_path))
         if not os.path.isfile(p):
-            _logger.warning(
-                "Exclusion rules file not found: %s — no filtering will be applied.", p
-            )
+            _logger.warning("Exclusion rules file not found: %s — no filtering will be applied.", p)
         return p
     default = get_default_exclusion_rules_path()
     if os.path.isfile(default):
@@ -79,7 +77,7 @@ def _tokenize_rule(line: str) -> list[Any]:
     while rest:
         m = re.match(r"\s+", rest)
         if m:
-            rest = rest[m.end():]
+            rest = rest[m.end() :]
             continue
         if re.match(r"\bAND\b", rest, re.IGNORECASE):
             tokens.append("AND")
@@ -95,12 +93,12 @@ def _tokenize_rule(line: str) -> list[Any]:
                 tokens.append(("word", rest[1:].strip()))
                 break
             tokens.append(("phrase", rest[1:end]))
-            rest = rest[end + 1:].lstrip()
+            rest = rest[end + 1 :].lstrip()
             continue
         m = re.match(r"\S+", rest)
         if m:
             tokens.append(("word", m.group(0)))
-            rest = rest[m.end():].lstrip()
+            rest = rest[m.end() :].lstrip()
             continue
         break
     return tokens

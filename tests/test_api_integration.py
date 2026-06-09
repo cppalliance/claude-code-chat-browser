@@ -9,9 +9,7 @@ Fixtures (`client`, `client_empty`, `client_thinking`) live in tests/conftest.py
 
 from __future__ import annotations
 
-
 from tests.conftest import assert_error_response as _assert_error_shape
-
 
 # --- /api/projects ---
 
@@ -77,9 +75,7 @@ def test_session_detail_includes_thinking_blocks(client_thinking):
     session = resp.get_json()
     assert "messages" in session
     assistant_msgs = [m for m in session["messages"] if m.get("role") == "assistant"]
-    assert any(
-        m.get("thinking") == "Considering options carefully." for m in assistant_msgs
-    )
+    assert any(m.get("thinking") == "Considering options carefully." for m in assistant_msgs)
 
 
 # --- /api/search ---

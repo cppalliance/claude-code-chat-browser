@@ -15,6 +15,7 @@ from models.export import ExportStateDict
 fcntl: Any
 try:
     import fcntl as _fcntl_mod
+
     fcntl = _fcntl_mod
 except ImportError:
     fcntl = None
@@ -22,6 +23,7 @@ except ImportError:
 msvcrt: Any
 try:
     import msvcrt as _msvcrt_mod
+
     msvcrt = _msvcrt_mod
 except ImportError:
     msvcrt = None
@@ -115,9 +117,7 @@ def load_export_state_from_disk(state_path: str | None = None) -> ExportStateDic
     return cast(ExportStateDict, data)
 
 
-def atomic_write_export_state(
-    state: ExportStateDict, state_path: str | None = None
-) -> None:
+def atomic_write_export_state(state: ExportStateDict, state_path: str | None = None) -> None:
     """Write *state* atomically (serialize, temp file + fsync + replace).
 
     Call under :func:`export_state_lock` matching *state_path*.

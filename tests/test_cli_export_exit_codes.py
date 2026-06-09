@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 import sys
 import types
@@ -13,10 +12,10 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-import scripts.export as export  # noqa: E402
-from tests.test_cli_e2e import _run_cli, _seed_base_dir  # noqa: E402
-from utils.export_engine import BulkExportResult  # noqa: E402
-from utils.jsonl_parser import parse_session  # noqa: E402
+import scripts.export as export
+from tests.test_cli_e2e import _run_cli, _seed_base_dir
+from utils.export_engine import BulkExportResult
+from utils.jsonl_parser import parse_session
 
 _SUMMARY_RE = re.compile(
     r"Exported \d+ of \d+ sessions \(\d+ failed\)",
@@ -45,16 +44,18 @@ def _export_args(tmp_path: Path, base: Path, out_dir: Path) -> types.SimpleNames
 def test_cli_export_clean_exits_zero(tmp_path):
     base = _seed_base_dir(tmp_path)
     out_dir = tmp_path / "out"
-    proc = _run_cli([
-        "export",
-        "--base-dir",
-        str(base),
-        "--since",
-        "all",
-        "--no-zip",
-        "--out",
-        str(out_dir),
-    ])
+    proc = _run_cli(
+        [
+            "export",
+            "--base-dir",
+            str(base),
+            "--since",
+            "all",
+            "--no-zip",
+            "--out",
+            str(out_dir),
+        ]
+    )
     assert proc.returncode == 0, proc.stderr
     assert list(out_dir.rglob("*.md"))
     # Success summary must go to stdout, not stderr
@@ -62,9 +63,7 @@ def test_cli_export_clean_exits_zero(tmp_path):
     assert "Exported 1 of 1 sessions (0 failed)" in proc.stdout
 
 
-def test_cli_export_partial_failure_exits_two(
-    tmp_path, monkeypatch, capsys
-):
+def test_cli_export_partial_failure_exits_two(tmp_path, monkeypatch, capsys):
     """One session exports; a second fails parse (simulated corrupt file)."""
     base = _seed_base_dir(tmp_path)
     project_dir = base / "test-project"
@@ -96,9 +95,7 @@ def test_cli_export_partial_failure_exits_two(
     assert len(list(out_dir.rglob("*.md"))) == 1
 
 
-def test_since_last_early_return_invokes_exit_bulk_export(
-    tmp_path, monkeypatch, capsys
-):
+def test_since_last_early_return_invokes_exit_bulk_export(tmp_path, monkeypatch, capsys):
     """cmd_export --since last must call _exit_bulk_export on early-return paths."""
     exit_calls: list[BulkExportResult] = []
 
@@ -135,9 +132,7 @@ def test_since_last_early_return_invokes_exit_bulk_export(
     assert "Exported" not in captured.err
 
 
-def test_since_last_early_return_exits_one_on_failure(
-    tmp_path, monkeypatch, capsys
-):
+def test_since_last_early_return_exits_one_on_failure(tmp_path, monkeypatch, capsys):
     """Since-last early-return with failure_count>0 must produce real exit code 1."""
     fake_result = BulkExportResult(latest_day=None, failure_count=1)
 

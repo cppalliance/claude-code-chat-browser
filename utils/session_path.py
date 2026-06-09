@@ -43,34 +43,31 @@ def list_projects(base_dir: str | None = None) -> list[ProjectDict]:
         if not os.path.isdir(project_dir):
             continue
         jsonl_files = [
-            f for f in os.listdir(project_dir)
-            if f.endswith(".jsonl") and not f.startswith(".")
+            f for f in os.listdir(project_dir) if f.endswith(".jsonl") and not f.startswith(".")
         ]
         if jsonl_files:
             latest_mtime = max(
-                os.path.getmtime(os.path.join(project_dir, jf))
-                for jf in jsonl_files
+                os.path.getmtime(os.path.join(project_dir, jf)) for jf in jsonl_files
             )
             from datetime import datetime, timezone
-            last_modified = datetime.fromtimestamp(
-                latest_mtime, tz=timezone.utc
-            ).isoformat()
+
+            last_modified = datetime.fromtimestamp(latest_mtime, tz=timezone.utc).isoformat()
             # Read cwd from sessions to get the real project path
             display_name = name
             for jf in jsonl_files:
-                candidate = _get_display_name(
-                    os.path.join(project_dir, jf), None
-                )
+                candidate = _get_display_name(os.path.join(project_dir, jf), None)
                 if candidate is not None:
                     display_name = candidate
                     break
-            projects.append({
-                "name": name,
-                "path": project_dir,
-                "display_name": display_name,
-                "session_count": len(jsonl_files),
-                "last_modified": last_modified,
-            })
+            projects.append(
+                {
+                    "name": name,
+                    "path": project_dir,
+                    "display_name": display_name,
+                    "session_count": len(jsonl_files),
+                    "last_modified": last_modified,
+                }
+            )
     return projects
 
 
@@ -93,9 +90,7 @@ def _get_display_name(jsonl_path: str, fallback: str | None) -> str | None:
                     out = folder[:1].upper() + folder[1:] if folder else cwd
                     return str(out)
     except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-        _logger.warning(
-            "Failed to extract display name from %s: %s", jsonl_path, exc
-        )
+        _logger.warning("Failed to extract display name from %s: %s", jsonl_path, exc)
     return fallback
 
 
@@ -111,10 +106,12 @@ def list_sessions(project_dir: str) -> list[SessionListItemDict]:
         fpath = os.path.join(project_dir, fname)
         session_id = fname.replace(".jsonl", "")
         stat = os.stat(fpath)
-        sessions.append({
-            "id": session_id,
-            "path": fpath,
-            "size_bytes": stat.st_size,
-            "modified": stat.st_mtime,
-        })
+        sessions.append(
+            {
+                "id": session_id,
+                "path": fpath,
+                "size_bytes": stat.st_size,
+                "modified": stat.st_mtime,
+            }
+        )
     return sessions

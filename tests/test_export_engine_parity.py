@@ -8,22 +8,20 @@ import sys
 import zipfile
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from flask import Flask  # noqa: E402
+from flask import Flask
 
-from api.export_api import export_bp  # noqa: E402
-from tests.test_cli_e2e import _run_cli, _seed_base_dir  # noqa: E402
-from utils.export_engine import (  # noqa: E402
+from api.export_api import export_bp
+from tests.test_cli_e2e import _run_cli, _seed_base_dir
+from utils.export_engine import (
     MANIFEST_SHARED_KEYS,
     NoopSink,
     manifest_shared_subset,
     run_bulk_export,
 )
-from utils.session_path import list_projects  # noqa: E402
+from utils.session_path import list_projects
 
 
 def _markdown_from_exports(exports: list[tuple[str, str]]) -> str:
@@ -62,9 +60,7 @@ def test_engine_api_vs_cli_layout_same_markdown_and_manifest(tmp_path: Path) -> 
 
     assert api_result.exported_session_count == 1
     assert cli_result.exported_session_count == 1
-    assert _markdown_from_exports(api_result.exports) == _markdown_from_exports(
-        cli_result.exports
-    )
+    assert _markdown_from_exports(api_result.exports) == _markdown_from_exports(cli_result.exports)
 
     api_core = manifest_shared_subset(api_result.manifest[0])
     cli_core = manifest_shared_subset(cli_result.manifest[0])
@@ -96,16 +92,18 @@ def test_http_post_export_matches_cli_no_zip(tmp_path: Path, monkeypatch) -> Non
     assert len(http_manifest) == 1, f"expected one manifest row, got {len(http_manifest)}"
 
     out_dir = tmp_path / "cli_out"
-    proc = _run_cli([
-        "export",
-        "--base-dir",
-        str(base),
-        "--since",
-        "all",
-        "--no-zip",
-        "--out",
-        str(out_dir),
-    ])
+    proc = _run_cli(
+        [
+            "export",
+            "--base-dir",
+            str(base),
+            "--since",
+            "all",
+            "--no-zip",
+            "--out",
+            str(out_dir),
+        ]
+    )
     assert proc.returncode == 0, proc.stderr
 
     cli_md_files = list(out_dir.rglob("*.md"))

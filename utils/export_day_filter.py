@@ -13,7 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 def iso_timestamp_to_date(ts: str | None) -> date | None:
-    """Calendar date in UTC for an ISO-8601 *ts* (offset-aware → convert; naive → that instant's date)."""
+    """Calendar date in UTC for ISO-8601 *ts*.
+
+    Offset-aware values are converted to UTC; naive values use that instant's date.
+    """
     if not ts or not isinstance(ts, str):
         return None
     s = ts.strip()

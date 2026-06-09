@@ -46,10 +46,12 @@ def extract_images(content_parts: Any) -> list[dict[str, Any]]:
         if part.get("type") == "image":
             source = part.get("source", {})
             if source.get("type") == "base64" and source.get("data"):
-                images.append({
-                    "media_type": source.get("media_type", "image/png"),
-                    "data": source["data"],
-                })
+                images.append(
+                    {
+                        "media_type": source.get("media_type", "image/png"),
+                        "data": source["data"],
+                    }
+                )
         elif part.get("type") == "tool_result":
             # Nested content is usually a block list; string content is not normalized here.
             nested = part.get("content", [])
@@ -58,10 +60,12 @@ def extract_images(content_parts: Any) -> list[dict[str, Any]]:
                     if isinstance(sub, dict) and sub.get("type") == "image":
                         source = sub.get("source", {})
                         if source.get("type") == "base64" and source.get("data"):
-                            images.append({
-                                "media_type": source.get("media_type", "image/png"),
-                                "data": source["data"],
-                            })
+                            images.append(
+                                {
+                                    "media_type": source.get("media_type", "image/png"),
+                                    "data": source["data"],
+                                }
+                            )
     return images
 
 
@@ -85,8 +89,12 @@ def strip_system_tags(text: str) -> str:
     ide_opened_file, etc.) so exported text is clean."""
     # Remove block tags and their content
     for tag in (
-        "system-reminder", "ide_opened_file", "user-prompt-submit-hook",
-        "claude_background_info", "fast_mode_info", "env",
+        "system-reminder",
+        "ide_opened_file",
+        "user-prompt-submit-hook",
+        "claude_background_info",
+        "fast_mode_info",
+        "env",
     ):
         text = re.sub(rf"<{tag}>[\s\S]*?</{tag}>", "", text)
     # Strip remaining known opening/closing tags

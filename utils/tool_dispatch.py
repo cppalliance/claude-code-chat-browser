@@ -31,9 +31,7 @@ def _tool_result_build_bash(tr: dict[str, Any], base: dict[str, Any]) -> dict[st
 
 
 def _tool_result_pred_file_edit(tr: dict[str, Any]) -> bool:
-    return "structuredPatch" in tr or (
-        "filePath" in tr and "newString" in tr
-    )
+    return "structuredPatch" in tr or ("filePath" in tr and "newString" in tr)
 
 
 def _tool_result_build_file_edit(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
@@ -250,9 +248,7 @@ _TOOL_RESULT_DISPATCH = (
 )
 
 
-def _parse_tool_result(
-    tool_result: Any, slug: str | None = None
-) -> dict[str, Any] | None:
+def _parse_tool_result(tool_result: Any, slug: str | None = None) -> dict[str, Any] | None:
     """Figure out what kind of tool result this is (bash, file edit, glob, etc.)
     by looking at which keys are present, since the JSONL doesn't always tag them.
 

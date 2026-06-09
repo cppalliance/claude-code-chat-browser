@@ -13,10 +13,7 @@ Run:
 import json
 import os
 import sys
-import tempfile
 from datetime import datetime
-
-import pytest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
@@ -24,10 +21,10 @@ sys.path.insert(0, REPO_ROOT)
 # Patch STATE_FILE before importing the module so we don't touch the real one.
 import scripts.export as _export_mod
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _tmp_state_file(tmp_path):
     """Return a temporary state file path and patch the module to use it."""
@@ -40,6 +37,7 @@ def _tmp_state_file(tmp_path):
 # ---------------------------------------------------------------------------
 # _save_state tests
 # ---------------------------------------------------------------------------
+
 
 class TestSaveState:
     def test_writes_last_export_time(self, tmp_path):
@@ -101,6 +99,7 @@ class TestSaveState:
 # ---------------------------------------------------------------------------
 # _load_state tests
 # ---------------------------------------------------------------------------
+
 
 class TestLoadState:
     def test_returns_empty_dict_when_no_file(self, tmp_path):
@@ -169,15 +168,14 @@ class TestLoadState:
 # _save_state → _load_state → since-last filtering integration
 # ---------------------------------------------------------------------------
 
+
 class TestSinceLastFiltering:
     """Verify the since-last flow: save state, reload, new session skipped."""
 
     def test_session_skipped_after_save(self, tmp_path):
         _tmp_state_file(tmp_path)
         mtime = 1740000000.0
-        _export_mod._save_state(
-            sessions={"sess-known": mtime}, count=1, out_dir="/tmp"
-        )
+        _export_mod._save_state(sessions={"sess-known": mtime}, count=1, out_dir="/tmp")
 
         state = _export_mod._load_state()
         last_export = state.get("sessions", {})

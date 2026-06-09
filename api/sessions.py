@@ -7,10 +7,10 @@ from flask import Blueprint, current_app
 
 from api._flask_types import FlaskReturn, json_response
 from api.error_codes import ErrorCode, error_response
-from utils.session_path import get_claude_projects_dir, safe_join
-from utils.jsonl_parser import parse_session
-from utils.session_stats import compute_stats
 from utils.exclusion_rules import is_session_excluded
+from utils.jsonl_parser import parse_session
+from utils.session_path import get_claude_projects_dir, safe_join
+from utils.session_stats import compute_stats
 
 sessions_bp = Blueprint("sessions", __name__)
 
@@ -87,14 +87,6 @@ def get_session_stats(project_name: str, session_id: str) -> FlaskReturn:
             ErrorCode.PARSE_ERROR,
             "Failed to parse session",
             500,
-        )
-
-    rules = current_app.config.get("EXCLUSION_RULES") or []
-    if is_session_excluded(rules, session, project_name):
-        return error_response(
-            ErrorCode.SESSION_NOT_FOUND,
-            "Session not found",
-            404,
         )
 
     try:

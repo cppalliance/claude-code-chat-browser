@@ -135,15 +135,9 @@ def parse_session(filepath: str) -> SessionDict:
     # Compute wall clock time
     if metadata["first_timestamp"] and metadata["last_timestamp"]:
         try:
-            t0 = datetime.fromisoformat(
-                metadata["first_timestamp"].replace("Z", "+00:00")
-            )
-            t1 = datetime.fromisoformat(
-                metadata["last_timestamp"].replace("Z", "+00:00")
-            )
-            metadata["session_wall_time_seconds"] = max(
-                0, (t1 - t0).total_seconds()
-            )
+            t0 = datetime.fromisoformat(metadata["first_timestamp"].replace("Z", "+00:00"))
+            t1 = datetime.fromisoformat(metadata["last_timestamp"].replace("Z", "+00:00"))
+            metadata["session_wall_time_seconds"] = max(0, (t1 - t0).total_seconds())
         except (ValueError, AttributeError):
             pass
 
@@ -189,18 +183,20 @@ def _process_user(
             if tr_images:
                 images = (images or []) + tr_images
 
-    messages.append({
-        "role": "user",
-        "uuid": entry.get("uuid"),
-        "parent_uuid": entry.get("parentUuid"),
-        "timestamp": entry.get("timestamp"),
-        "text": text,
-        "images": images if images else None,
-        "is_sidechain": entry.get("isSidechain", False),
-        "tool_result": tool_result,
-        "tool_result_parsed": tool_result_parsed,
-        "slug": entry.get("slug"),
-    })
+    messages.append(
+        {
+            "role": "user",
+            "uuid": entry.get("uuid"),
+            "parent_uuid": entry.get("parentUuid"),
+            "timestamp": entry.get("timestamp"),
+            "text": text,
+            "images": images if images else None,
+            "is_sidechain": entry.get("isSidechain", False),
+            "tool_result": tool_result,
+            "tool_result_parsed": tool_result_parsed,
+            "slug": entry.get("slug"),
+        }
+    )
 
 
 def _process_assistant(
@@ -223,9 +219,7 @@ def _process_assistant(
     metadata["total_input_tokens"] += usage.get("input_tokens") or 0
     metadata["total_output_tokens"] += usage.get("output_tokens") or 0
     metadata["total_cache_read_tokens"] += usage.get("cache_read_input_tokens") or 0
-    metadata["total_cache_creation_tokens"] += (
-        usage.get("cache_creation_input_tokens") or 0
-    )
+    metadata["total_cache_creation_tokens"] += usage.get("cache_creation_input_tokens") or 0
 
     # Extended cache metrics
     cache_creation = usage.get("cache_creation", {})
@@ -245,9 +239,7 @@ def _process_assistant(
     # Stop reason tracking
     stop_reason = msg.get("stop_reason", "")
     if stop_reason:
-        metadata["stop_reasons"][stop_reason] = (
-            metadata["stop_reasons"].get(stop_reason, 0) + 1
-        )
+        metadata["stop_reasons"][stop_reason] = metadata["stop_reasons"].get(stop_reason, 0) + 1
 
     content_parts = _normalize_content(msg.get("content", []))
     text_parts = []
@@ -267,35 +259,39 @@ def _process_assistant(
             metadata["tool_call_counts"][tool_name] = (
                 metadata["tool_call_counts"].get(tool_name, 0) + 1
             )
-            tool_uses.append({
-                "id": part.get("id"),
-                "name": tool_name,
-                "input": tool_input,
-            })
+            tool_uses.append(
+                {
+                    "id": part.get("id"),
+                    "name": tool_name,
+                    "input": tool_input,
+                }
+            )
             # Track file activity from tool inputs
             safe_input = tool_input if isinstance(tool_input, dict) else {}
             _track_file_activity(tool_name, safe_input, metadata)
 
-    messages.append({
-        "role": "assistant",
-        "uuid": entry.get("uuid"),
-        "parent_uuid": entry.get("parentUuid"),
-        "timestamp": entry.get("timestamp"),
-        "model": model,
-        "stop_reason": stop_reason,
-        "text": "\n".join(text_parts),
-        "thinking": "\n\n".join(thinking_parts) if thinking_parts else None,
-        "tool_uses": tool_uses if tool_uses else None,
-        "is_sidechain": entry.get("isSidechain", False),
-        "is_api_error": entry.get("isApiErrorMessage", False),
-        "usage": {
-            "input_tokens": usage.get("input_tokens") or 0,
-            "output_tokens": usage.get("output_tokens") or 0,
-            "cache_read": usage.get("cache_read_input_tokens") or 0,
-            "cache_creation": usage.get("cache_creation_input_tokens") or 0,
-            "service_tier": usage.get("service_tier"),
-        },
-    })
+    messages.append(
+        {
+            "role": "assistant",
+            "uuid": entry.get("uuid"),
+            "parent_uuid": entry.get("parentUuid"),
+            "timestamp": entry.get("timestamp"),
+            "model": model,
+            "stop_reason": stop_reason,
+            "text": "\n".join(text_parts),
+            "thinking": "\n\n".join(thinking_parts) if thinking_parts else None,
+            "tool_uses": tool_uses if tool_uses else None,
+            "is_sidechain": entry.get("isSidechain", False),
+            "is_api_error": entry.get("isApiErrorMessage", False),
+            "usage": {
+                "input_tokens": usage.get("input_tokens") or 0,
+                "output_tokens": usage.get("output_tokens") or 0,
+                "cache_read": usage.get("cache_read_input_tokens") or 0,
+                "cache_creation": usage.get("cache_creation_input_tokens") or 0,
+                "service_tier": usage.get("service_tier"),
+            },
+        }
+    )
 
 
 def _process_system(
@@ -308,21 +304,25 @@ def _process_system(
         metadata["compactions"] += 1
         compact_meta = entry.get("compactMetadata")
         if isinstance(compact_meta, dict):
-            metadata["compact_boundaries"].append({
-                "timestamp": entry.get("timestamp"),
-                "trigger": compact_meta.get("trigger"),
-                "pre_tokens": compact_meta.get("preTokens"),
-            })
+            metadata["compact_boundaries"].append(
+                {
+                    "timestamp": entry.get("timestamp"),
+                    "trigger": compact_meta.get("trigger"),
+                    "pre_tokens": compact_meta.get("preTokens"),
+                }
+            )
 
-    messages.append({
-        "role": "system",
-        "uuid": entry.get("uuid"),
-        "parent_uuid": entry.get("parentUuid"),
-        "timestamp": entry.get("timestamp"),
-        "subtype": subtype,
-        "content": entry.get("content", ""),
-        "is_sidechain": entry.get("isSidechain", False),
-    })
+    messages.append(
+        {
+            "role": "system",
+            "uuid": entry.get("uuid"),
+            "parent_uuid": entry.get("parentUuid"),
+            "timestamp": entry.get("timestamp"),
+            "subtype": subtype,
+            "content": entry.get("content", ""),
+            "is_sidechain": entry.get("isSidechain", False),
+        }
+    )
 
 
 def _process_progress(entry: dict[str, Any], messages: list[MessageDict]) -> None:
@@ -331,17 +331,19 @@ def _process_progress(entry: dict[str, Any], messages: list[MessageDict]) -> Non
     data = entry.get("data", {})
     progress_type = data.get("type", "")
 
-    messages.append({
-        "role": "progress",
-        "uuid": entry.get("uuid"),
-        "parent_uuid": entry.get("parentUuid"),
-        "timestamp": entry.get("timestamp"),
-        "progress_type": progress_type,
-        "data": data,
-        "tool_use_id": entry.get("toolUseID"),
-        "parent_tool_use_id": entry.get("parentToolUseID"),
-        "is_sidechain": entry.get("isSidechain", False),
-    })
+    messages.append(
+        {
+            "role": "progress",
+            "uuid": entry.get("uuid"),
+            "parent_uuid": entry.get("parentUuid"),
+            "timestamp": entry.get("timestamp"),
+            "progress_type": progress_type,
+            "data": data,
+            "tool_use_id": entry.get("toolUseID"),
+            "parent_tool_use_id": entry.get("parentToolUseID"),
+            "is_sidechain": entry.get("isSidechain", False),
+        }
+    )
 
 
 def _track_file_activity(

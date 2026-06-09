@@ -10,13 +10,9 @@ Run:
 """
 
 import json
-import os
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
-
-import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXPORT_SCRIPT = REPO_ROOT / "scripts" / "export.py"
@@ -25,6 +21,7 @@ EXPORT_SCRIPT = REPO_ROOT / "scripts" / "export.py"
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write_session(project_dir: Path, session_id: str, messages: list[dict]) -> Path:
     """Write a minimal JSONL session file and return its path."""
@@ -78,10 +75,13 @@ def _run_export(
     cmd = [
         sys.executable,
         str(EXPORT_SCRIPT),
-        "--base-dir", str(base_dir),
-        "--since", "all",
+        "--base-dir",
+        str(base_dir),
+        "--since",
+        "all",
         "--no-zip",
-        "--out", str(out_dir),
+        "--out",
+        str(out_dir),
     ]
     if rules_path:
         cmd += ["--exclude-rules", str(rules_path)]
@@ -102,6 +102,7 @@ def _collect_md(out_dir: Path) -> list[Path]:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestExclusionRulesFiltering:
     def test_matched_session_is_excluded(self, tmp_path):
@@ -156,11 +157,15 @@ class TestExclusionRulesFiltering:
         cmd = [
             sys.executable,
             str(EXPORT_SCRIPT),
-            "--base-dir", str(tmp_path / "projects"),
-            "--since", "all",
+            "--base-dir",
+            str(tmp_path / "projects"),
+            "--since",
+            "all",
             "--no-zip",
-            "--out", str(out_dir),
-            "-e", str(rules_file),
+            "--out",
+            str(out_dir),
+            "-e",
+            str(rules_file),
         ]
         proc = subprocess.run(cmd, cwd=str(REPO_ROOT), capture_output=True, text=True)
         assert proc.returncode == 0, proc.stderr
@@ -243,11 +248,15 @@ class TestExclusionRulesFiltering:
             sys.executable,
             str(EXPORT_SCRIPT),
             "export",
-            "--base-dir", str(tmp_path / "projects"),
-            "--since", "all",
+            "--base-dir",
+            str(tmp_path / "projects"),
+            "--since",
+            "all",
             "--no-zip",
-            "--out", str(out_dir),
-            "--exclude-rules", str(rules_file),
+            "--out",
+            str(out_dir),
+            "--exclude-rules",
+            str(rules_file),
         ]
         proc = subprocess.run(cmd, cwd=str(REPO_ROOT), capture_output=True, text=True)
         assert proc.returncode == 0, proc.stderr
@@ -271,14 +280,13 @@ class TestExclusionRulesFiltering:
         # by running with a custom STATE_DIR via monkeypatching in the same
         # process — we test the _save_state API directly.
         import scripts.export as exp
+
         original_state_file = exp.STATE_FILE
         original_state_dir = exp.STATE_DIR
         exp.STATE_FILE = str(state_dir / "export_state.json")
         exp.STATE_DIR = str(state_dir)
         try:
-            exp._save_state(
-                sessions={sid: 1740000000.0}, count=1, out_dir=str(out_dir)
-            )
+            exp._save_state(sessions={sid: 1740000000.0}, count=1, out_dir=str(out_dir))
             with open(exp.STATE_FILE) as f:
                 state = json.load(f)
             for key in ("lastExportTime", "exportedCount", "exportDir", "sessions"):

@@ -11,9 +11,9 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from flask import Flask  # noqa: E402
+from flask import Flask
 
-from api.export_api import export_bp  # noqa: E402
+from api.export_api import export_bp
 
 
 @pytest.fixture
@@ -71,11 +71,13 @@ def test_bulk_export_empty_returns_422_json(isolated_state, tmp_path):
 
 def test_export_state_json_fields(isolated_state):
     isolated_state.write_text(
-        json.dumps({
-            "lastExportTime": "2026-01-01T12:00:00",
-            "exportedCount": 5,
-            "sessions": {},
-        }),
+        json.dumps(
+            {
+                "lastExportTime": "2026-01-01T12:00:00",
+                "exportedCount": 5,
+                "sessions": {},
+            }
+        ),
         encoding="utf-8",
     )
     app = Flask(__name__)

@@ -2,12 +2,12 @@
 
 from flask import Blueprint, current_app
 
-from api._flask_types import FlaskReturn, json_error, json_response
+from api._flask_types import FlaskReturn, json_response
 from api.error_codes import ErrorCode, error_response
 from models.project import ProjectSessionRowDict, SessionListItemDict
 from models.session import SessionDict
-from utils.session_path import get_claude_projects_dir, list_projects, list_sessions, safe_join
 from utils.exclusion_rules import is_session_excluded
+from utils.session_path import get_claude_projects_dir, list_projects, list_sessions, safe_join
 
 projects_bp = Blueprint("projects", __name__)
 
@@ -49,6 +49,7 @@ def get_projects() -> FlaskReturn:
     # so the landing page matches what the workspace page shows.
     # Uses quick_session_info() which peeks at files without full parsing.
     from utils.jsonl_parser import quick_session_info
+
     for project in projects:
         sessions = list_sessions(project["path"])
         titled_count = 0
@@ -81,6 +82,7 @@ def get_project_sessions(project_name: str) -> FlaskReturn:
     sessions = list_sessions(project_dir)
     # Add summary preview for each session
     from utils.jsonl_parser import parse_session
+
     rules = current_app.config.get("EXCLUSION_RULES") or []
     result: list[ProjectSessionRowDict] = []
     for s in sessions:

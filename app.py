@@ -3,16 +3,15 @@
 __version__ = "0.1.0.dev0"
 
 import argparse
-import os
 import sys
 
 from flask import Flask
 
-from api.projects import projects_bp
-from api.sessions import sessions_bp
-from api.search import search_bp
 from api.export_api import export_bp
-from utils.exclusion_rules import resolve_exclusion_rules_path, load_rules
+from api.projects import projects_bp
+from api.search import search_bp
+from api.sessions import sessions_bp
+from utils.exclusion_rules import load_rules, resolve_exclusion_rules_path
 
 
 def _normalize_bind_host(host: str) -> str:
@@ -100,15 +99,19 @@ def build_cli_parser() -> argparse.ArgumentParser:
         "--debug",
         action="store_true",
         default=False,
-        help="Enable Flask/Werkzeug debug mode (never use with --host 0.0.0.0 on untrusted networks).",
+        help=(
+            "Enable Flask/Werkzeug debug mode "
+            "(never use with --host 0.0.0.0 on untrusted networks)."
+        ),
     )
     parser.add_argument("--base-dir", default=None, help="Override Claude projects dir")
     parser.add_argument(
-        "--exclude-rules", "-e",
+        "--exclude-rules",
+        "-e",
         default=None,
         metavar="PATH",
         help="Path to exclusion rules file (sensitive sessions are omitted). "
-             "If omitted, uses ~/.claude-code-chat-browser/exclusion-rules.txt if present.",
+        "If omitted, uses ~/.claude-code-chat-browser/exclusion-rules.txt if present.",
     )
     return parser
 

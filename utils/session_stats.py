@@ -29,9 +29,7 @@ def compute_stats(session: SessionDict) -> SessionStatsDict:
         "urls_accessed": list(meta.get("web_fetches", [])),
         "conversation_turns": _count_turns(messages),
         "wall_clock_seconds": meta.get("session_wall_time_seconds"),
-        "wall_clock_display": _format_duration(
-            meta.get("session_wall_time_seconds")
-        ),
+        "wall_clock_display": _format_duration(meta.get("session_wall_time_seconds")),
         "cost_estimate_usd": _estimate_cost(messages, meta),
         "tool_result_summary": _summarize_tool_results(messages),
         "stop_reason_summary": dict(meta.get("stop_reasons", {})),
@@ -79,17 +77,15 @@ def _compute_commands_run(messages: list[MessageDict]) -> list[dict[str, Any]]:
         # Match tool results back to commands
         trp = msg.get("tool_result_parsed")
         if msg["role"] == "user" and trp and trp.get("result_type") == "bash":
-                # Try to find matching command by sequential order
-                if pending_commands:
-                    first_id = next(iter(pending_commands))
-                    entry = pending_commands.pop(first_id)
-                    entry["exit_code"] = trp.get("exit_code")
-                    entry["is_error"] = trp.get("is_error", False)
-                    entry["interrupted"] = trp.get("interrupted", False)
-                    entry["return_code_interpretation"] = trp.get(
-                        "return_code_interpretation"
-                    )
-                    commands.append(entry)
+            # Try to find matching command by sequential order
+            if pending_commands:
+                first_id = next(iter(pending_commands))
+                entry = pending_commands.pop(first_id)
+                entry["exit_code"] = trp.get("exit_code")
+                entry["is_error"] = trp.get("is_error", False)
+                entry["interrupted"] = trp.get("interrupted", False)
+                entry["return_code_interpretation"] = trp.get("return_code_interpretation")
+                commands.append(entry)
 
     # Add any unmatched commands (no result captured)
     for entry in pending_commands.values():

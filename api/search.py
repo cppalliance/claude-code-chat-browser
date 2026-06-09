@@ -1,15 +1,13 @@
 """Search endpoint. Brute-force substring match across all sessions."""
 
-import os
-
 from flask import Blueprint, current_app, request
 
 from api._flask_types import FlaskReturn, json_response
 from api.error_codes import ErrorCode, error_response
 from models.search import SearchHitDict
-from utils.session_path import get_claude_projects_dir, list_projects, list_sessions
-from utils.jsonl_parser import parse_session
 from utils.exclusion_rules import is_session_excluded
+from utils.jsonl_parser import parse_session
+from utils.session_path import get_claude_projects_dir, list_projects, list_sessions
 
 search_bp = Blueprint("search", __name__)
 
@@ -71,14 +69,16 @@ def search() -> FlaskReturn:
                     end = min(len(text), idx + len(query) + 80)
                     snippet = text[start:end]
 
-                    results.append({
-                        "project": project["name"],
-                        "session_id": session["session_id"],
-                        "title": session["title"],
-                        "role": msg["role"],
-                        "timestamp": msg.get("timestamp"),
-                        "snippet": snippet,
-                    })
+                    results.append(
+                        {
+                            "project": project["name"],
+                            "session_id": session["session_id"],
+                            "title": session["title"],
+                            "role": msg["role"],
+                            "timestamp": msg.get("timestamp"),
+                            "snippet": snippet,
+                        }
+                    )
                     if len(results) >= max_results:
                         break
 

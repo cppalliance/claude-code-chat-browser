@@ -27,6 +27,8 @@ REST endpoints for projects, sessions, search, and export are documented in **[`
 
 JSON error responses include a machine-readable `"code"` (stable `UPPER_SNAKE_CASE`) and a human-readable `"error"` message. See the [error code catalog](docs/api-reference.md#error-code-catalog) for the full table.
 
+- **Security policy** — see [`SECURITY.md`](SECURITY.md) for supported versions and how to report vulnerabilities privately
+
 ### CLI Export
 - Standalone script to export all sessions to Markdown with YAML frontmatter
 - Rich Markdown: token usage, tool calls, thinking blocks, model info, timestamps
@@ -155,7 +157,7 @@ npm ci && npm test   # only if you changed static/js/
 
 ## Continuous integration
 
-Every push and pull request runs **`pytest`**, **API integration tests**, and **vitest** on **Ubuntu** (Python 3.12, Node 20) via [`.github/workflows/ci.yml`](.github/workflows/ci.yml). A separate job verifies that `pip install -r requirements.txt` (production-only) is sufficient to import and boot the app.
+Every push and pull request runs **`ruff check`**, **`ruff format --check`**, **`pip-audit`**, **`pytest`**, **mypy**, **API integration tests**, and **vitest** on **Ubuntu and Windows** (Python 3.12, Node 20) via [`.github/workflows/ci.yml`](.github/workflows/ci.yml). A separate job verifies that `pip install -r requirements.txt` (production-only) is sufficient to import and boot the app.
 
 ## Exported Markdown Format
 
