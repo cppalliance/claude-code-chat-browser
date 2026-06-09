@@ -6,7 +6,9 @@ import os
 from datetime import datetime
 from typing import Any
 
-from models.session import MessageDict, SessionDict
+from models.record_data import RecordDataUnion
+from models.session import MessageDict, SessionDict, ToolUseDict
+from models.tool_results import ToolResultUnion, is_tool_result_dict
 from utils.jsonl_helpers import (
     entry_message as _entry_message,
     extract_images as _extract_images,
@@ -172,11 +174,14 @@ def _process_user(
     text = _extract_text(content)
     images = _extract_images(content)
 
-    tool_result = entry.get("toolUseResult")
+    raw_tool_result = entry.get("toolUseResult")
+    tool_result: ToolResultUnion | None = (
+        raw_tool_result if raw_tool_result is not None else None
+    )
     tool_result_parsed = _parse_tool_result(tool_result, entry.get("slug"))
 
     # Also extract images from toolUseResult content (e.g., Read tool on image files)
-    if isinstance(tool_result, dict) and "content" in tool_result:
+    if is_tool_result_dict(tool_result) and "content" in tool_result:
         tr_content = tool_result["content"]
         if isinstance(tr_content, list):
             tr_images = _extract_images(tr_content)
@@ -244,7 +249,7 @@ def _process_assistant(
     content_parts = _normalize_content(msg.get("content", []))
     text_parts = []
     thinking_parts = []
-    tool_uses = []
+    tool_uses: list[ToolUseDict] = []
 
     for part in content_parts:
         ptype = part.get("type")
@@ -254,20 +259,20 @@ def _process_assistant(
             thinking_parts.append(part.get("thinking", ""))
         elif ptype == "tool_use":
             tool_name = part.get("name", "unknown")
-            tool_input = part.get("input", {})
+            raw_input = part.get("input", {})
+            safe_input = raw_input if isinstance(raw_input, dict) else {}
             metadata["total_tool_calls"] += 1
             metadata["tool_call_counts"][tool_name] = (
                 metadata["tool_call_counts"].get(tool_name, 0) + 1
             )
-            tool_uses.append(
-                {
-                    "id": part.get("id"),
-                    "name": tool_name,
-                    "input": tool_input,
-                }
-            )
-            # Track file activity from tool inputs
-            safe_input = tool_input if isinstance(tool_input, dict) else {}
+            tool_use: ToolUseDict = {
+                "name": tool_name,
+                "input": safe_input,
+            }
+            tool_id = part.get("id")
+            if isinstance(tool_id, str):
+                tool_use["id"] = tool_id
+            tool_uses.append(tool_use)
             _track_file_activity(tool_name, safe_input, metadata)
 
     messages.append(
@@ -328,8 +333,9 @@ def _process_system(
 def _process_progress(entry: dict[str, Any], messages: list[MessageDict]) -> None:
     """Capture progress entries -- streaming bash output, hook results, etc.
     These are noisy so we mostly just store them for the JSON export."""
-    data = entry.get("data", {})
-    progress_type = data.get("type", "")
+    raw_data = entry.get("data", {})
+    data: RecordDataUnion = raw_data if isinstance(raw_data, dict) else {}
+    progress_type = str(data.get("type", ""))
 
     messages.append(
         {

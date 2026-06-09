@@ -11,14 +11,14 @@ To add a shape: append ``(pred, build)`` at the end, or insert only after
 verifying predicates above would not steal intended matches.
 """
 
-from typing import Any
+from models.tool_results import ToolResultDict, ToolResultUnion, is_tool_result_dict
 
 
-def _tool_result_pred_bash(tr: dict[str, Any]) -> bool:
+def _tool_result_pred_bash(tr: ToolResultDict) -> bool:
     return "stdout" in tr or "stderr" in tr
 
 
-def _tool_result_build_bash(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+def _tool_result_build_bash(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
     result["result_type"] = "bash"
     result["stdout"] = tr.get("stdout", "")
@@ -30,11 +30,13 @@ def _tool_result_build_bash(tr: dict[str, Any], base: dict[str, Any]) -> dict[st
     return result
 
 
-def _tool_result_pred_file_edit(tr: dict[str, Any]) -> bool:
-    return "structuredPatch" in tr or ("filePath" in tr and "newString" in tr)
+def _tool_result_pred_file_edit(tr: ToolResultDict) -> bool:
+    return "structuredPatch" in tr or (
+        "filePath" in tr and "newString" in tr
+    )
 
 
-def _tool_result_build_file_edit(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+def _tool_result_build_file_edit(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     # Summary fields only; full blob (e.g. structuredPatch) stays on message tool_result.
     result = dict(base)
     result["result_type"] = "file_edit"
@@ -43,48 +45,50 @@ def _tool_result_build_file_edit(tr: dict[str, Any], base: dict[str, Any]) -> di
     return result
 
 
-def _tool_result_pred_plan(tr: dict[str, Any]) -> bool:
+def _tool_result_pred_plan(tr: ToolResultDict) -> bool:
     return "plan" in tr and "filePath" in tr
 
 
-def _tool_result_build_plan(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+def _tool_result_build_plan(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
     result["result_type"] = "plan"
     result["file_path"] = tr.get("filePath", "")
     return result
 
 
-def _tool_result_pred_file_write(tr: dict[str, Any]) -> bool:
+def _tool_result_pred_file_write(tr: ToolResultDict) -> bool:
     return "filePath" in tr and "content" in tr
 
 
-def _tool_result_build_file_write(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+def _tool_result_build_file_write(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
     result["result_type"] = "file_write"
     result["file_path"] = tr.get("filePath", "")
     return result
 
 
-def _tool_result_pred_glob(tr: dict[str, Any]) -> bool:
+def _tool_result_pred_glob(tr: ToolResultDict) -> bool:
     return "filenames" in tr and isinstance(tr.get("filenames"), list)
 
 
-def _tool_result_build_glob(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+def _tool_result_build_glob(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
-    filenames = tr["filenames"]
+    raw_filenames = tr.get("filenames")
+    filenames = raw_filenames if isinstance(raw_filenames, list) else []
     result["result_type"] = "glob"
-    result["num_files"] = tr.get("numFiles", len(filenames))
+    num_files = tr.get("numFiles")
+    result["num_files"] = num_files if isinstance(num_files, int) else len(filenames)
     result["truncated"] = tr.get("truncated", False)
     result["duration_ms"] = tr.get("durationMs")
     result["filenames"] = filenames
     return result
 
 
-def _tool_result_pred_grep(tr: dict[str, Any]) -> bool:
+def _tool_result_pred_grep(tr: ToolResultDict) -> bool:
     return "mode" in tr and "numFiles" in tr
 
 
-def _tool_result_build_grep(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+def _tool_result_build_grep(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
     result["result_type"] = "grep"
     result["mode"] = tr.get("mode")
@@ -97,13 +101,14 @@ def _tool_result_build_grep(tr: dict[str, Any], base: dict[str, Any]) -> dict[st
     return result
 
 
-def _tool_result_pred_file_read(tr: dict[str, Any]) -> bool:
+def _tool_result_pred_file_read(tr: ToolResultDict) -> bool:
     return "file" in tr and isinstance(tr["file"], dict)
 
 
-def _tool_result_build_file_read(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+def _tool_result_build_file_read(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
-    file_obj = tr["file"]
+    raw_file = tr.get("file")
+    file_obj = raw_file if isinstance(raw_file, dict) else {}
     result["result_type"] = "file_read"
     result["file_path"] = file_obj.get("filePath", "")
     result["num_lines"] = file_obj.get("numLines")
@@ -113,11 +118,11 @@ def _tool_result_build_file_read(tr: dict[str, Any], base: dict[str, Any]) -> di
     return result
 
 
-def _tool_result_pred_web_search(tr: dict[str, Any]) -> bool:
+def _tool_result_pred_web_search(tr: ToolResultDict) -> bool:
     return "query" in tr and "results" in tr
 
 
-def _tool_result_build_web_search(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+def _tool_result_build_web_search(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
     result["result_type"] = "web_search"
     result["query"] = tr.get("query", "")
@@ -132,11 +137,11 @@ def _tool_result_build_web_search(tr: dict[str, Any], base: dict[str, Any]) -> d
     return result
 
 
-def _tool_result_pred_web_fetch(tr: dict[str, Any]) -> bool:
+def _tool_result_pred_web_fetch(tr: ToolResultDict) -> bool:
     return "url" in tr and "code" in tr
 
 
-def _tool_result_build_web_fetch(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+def _tool_result_build_web_fetch(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
     result["result_type"] = "web_fetch"
     result["url"] = tr.get("url", "")
@@ -145,7 +150,7 @@ def _tool_result_build_web_fetch(tr: dict[str, Any], base: dict[str, Any]) -> di
     return result
 
 
-def _tool_result_pred_task_message(tr: dict[str, Any]) -> bool:
+def _tool_result_pred_task_message(tr: ToolResultDict) -> bool:
     # Broad: matches ``task_id`` OR ``message``. Runs before retrieval/completed/async
     # arms below — same short-circuit order as the original if/elif chain. Payloads
     # that also carry e.g. ``agentId`` still classify here if they have ``message``.
@@ -153,7 +158,9 @@ def _tool_result_pred_task_message(tr: dict[str, Any]) -> bool:
     return "task_id" in tr or "message" in tr
 
 
-def _tool_result_build_task_message(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+def _tool_result_build_task_message(
+    tr: ToolResultDict, base: dict[str, object]
+) -> dict[str, object]:
     result = dict(base)
     result["result_type"] = "task"
     result["task_id"] = tr.get("task_id")
@@ -161,11 +168,13 @@ def _tool_result_build_task_message(tr: dict[str, Any], base: dict[str, Any]) ->
     return result
 
 
-def _tool_result_pred_task_retrieval(tr: dict[str, Any]) -> bool:
+def _tool_result_pred_task_retrieval(tr: ToolResultDict) -> bool:
     return "retrieval_status" in tr and "task" in tr
 
 
-def _tool_result_build_task_retrieval(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+def _tool_result_build_task_retrieval(
+    tr: ToolResultDict, base: dict[str, object]
+) -> dict[str, object]:
     result = dict(base)
     task_obj = tr["task"] if isinstance(tr["task"], dict) else {}
     result["result_type"] = "task"
@@ -174,11 +183,13 @@ def _tool_result_build_task_retrieval(tr: dict[str, Any], base: dict[str, Any]) 
     return result
 
 
-def _tool_result_pred_task_completed(tr: dict[str, Any]) -> bool:
+def _tool_result_pred_task_completed(tr: ToolResultDict) -> bool:
     return "agentId" in tr and "totalDurationMs" in tr
 
 
-def _tool_result_build_task_completed(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+def _tool_result_build_task_completed(
+    tr: ToolResultDict, base: dict[str, object]
+) -> dict[str, object]:
     result = dict(base)
     result["result_type"] = "task"
     result["agent_id"] = tr.get("agentId")
@@ -189,11 +200,11 @@ def _tool_result_build_task_completed(tr: dict[str, Any], base: dict[str, Any]) 
     return result
 
 
-def _tool_result_pred_task_async(tr: dict[str, Any]) -> bool:
+def _tool_result_pred_task_async(tr: ToolResultDict) -> bool:
     return "agentId" in tr and "isAsync" in tr
 
 
-def _tool_result_build_task_async(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+def _tool_result_build_task_async(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
     result["result_type"] = "task"
     result["agent_id"] = tr.get("agentId")
@@ -202,11 +213,11 @@ def _tool_result_build_task_async(tr: dict[str, Any], base: dict[str, Any]) -> d
     return result
 
 
-def _tool_result_pred_todo_write(tr: dict[str, Any]) -> bool:
+def _tool_result_pred_todo_write(tr: ToolResultDict) -> bool:
     return "newTodos" in tr or "oldTodos" in tr
 
 
-def _tool_result_build_todo_write(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+def _tool_result_build_todo_write(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
     new_todos = tr.get("newTodos", [])
     result["result_type"] = "todo_write"
@@ -215,11 +226,11 @@ def _tool_result_build_todo_write(tr: dict[str, Any], base: dict[str, Any]) -> d
     return result
 
 
-def _tool_result_pred_user_input(tr: dict[str, Any]) -> bool:
+def _tool_result_pred_user_input(tr: ToolResultDict) -> bool:
     return "questions" in tr and "answers" in tr
 
 
-def _tool_result_build_user_input(tr: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+def _tool_result_build_user_input(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
     result["result_type"] = "user_input"
     result["questions"] = tr.get("questions", [])
@@ -248,7 +259,9 @@ _TOOL_RESULT_DISPATCH = (
 )
 
 
-def _parse_tool_result(tool_result: Any, slug: str | None = None) -> dict[str, Any] | None:
+def _parse_tool_result(
+    tool_result: ToolResultUnion | None, slug: str | None = None
+) -> dict[str, object] | None:
     """Figure out what kind of tool result this is (bash, file edit, glob, etc.)
     by looking at which keys are present, since the JSONL doesn't always tag them.
 
@@ -259,10 +272,10 @@ def _parse_tool_result(tool_result: Any, slug: str | None = None) -> dict[str, A
     Append a new pair at the end to register a shape, or insert mid-table only
     after checking interactions with broader predicates above (see notes on the
     tuple)."""
-    if not isinstance(tool_result, dict):
+    if not is_tool_result_dict(tool_result):
         return None
 
-    base = {"slug": slug}
+    base: dict[str, object] = {"slug": slug}
     for pred, build in _TOOL_RESULT_DISPATCH:
         if pred(tool_result):
             return build(tool_result, base)
