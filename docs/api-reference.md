@@ -373,13 +373,14 @@ Filename pattern:
 
 Zip contains Markdown per session and optional `manifest.jsonl` metadata.
 
-When some sessions fail but at least one succeeds, the response is still **`200`** with the ZIP body (successful sessions only). Skipped sessions are listed in the response header:
+When some sessions fail but at least one succeeds, the response is still **`200`** with the ZIP body (successful sessions only). Skipped sessions are surfaced two ways:
 
-| Header | When | Value |
-|--------|------|--------|
-| `X-Export-Warnings` | Partial export (≥1 success, ≥1 failure) | JSON array of `{ "session_id", "code", "message" }` |
+| Channel | When | Value |
+|---------|------|--------|
+| `X-Export-Warnings` header | Partial export (≥1 success, ≥1 failure) | JSON object: `{ "total_failures", "truncated", "failures" }` where `failures` is a capped sample |
+| `export-warnings.json` in the ZIP | Same | Full array of `{ "session_id", "code", "message" }` |
 
-`code` uses the same strings as the error catalog (`PARSE_ERROR`, `INTERNAL_ERROR`, etc.).
+`message` is a stable generic string per `code` (no exception text or paths). `code` uses the same strings as the error catalog (`PARSE_ERROR`, `INTERNAL_ERROR`, etc.).
 
 #### Errors
 

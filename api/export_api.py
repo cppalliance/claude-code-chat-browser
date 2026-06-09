@@ -37,6 +37,10 @@ export_bp = Blueprint("export", __name__)
 # Tests monkeypatch this path; keep in sync with utils.export_state_store.
 _STATE_FILE = EXPORT_STATE_FILE
 
+_EXPORT_WARNINGS_ZIP_NAME = "export-warnings.json"
+_EXPORT_WARNINGS_HEADER_MAX_ENTRIES = 20
+_EXPORT_WARNINGS_HEADER_MAX_BYTES = 8192
+
 
 def _state_lock() -> Any:
     return export_state_lock(_STATE_FILE)
@@ -64,6 +68,29 @@ def _serialize_export_failures(failures: list[ExportFailure]) -> list[dict[str, 
         }
         for item in failures
     ]
+
+
+def _export_warnings_header_payload(
+    failures: list[ExportFailure],
+) -> dict[str, object]:
+    """Bounded summary for X-Export-Warnings; full list lives in export-warnings.json."""
+    entries = _serialize_export_failures(failures)
+    total = len(entries)
+    sample = entries[:_EXPORT_WARNINGS_HEADER_MAX_ENTRIES]
+    truncated = total > len(sample)
+    payload: dict[str, object] = {
+        "total_failures": total,
+        "truncated": truncated,
+        "failures": sample,
+    }
+    while (
+        len(json.dumps(payload, separators=(",", ":"))) > _EXPORT_WARNINGS_HEADER_MAX_BYTES
+        and len(sample) > 1
+    ):
+        sample = sample[:-1]
+        truncated = True
+        payload = {"total_failures": total, "truncated": truncated, "failures": sample}
+    return payload
 
 
 def _write_state(sessions_map: dict[str, float], count: int) -> None:
@@ -136,6 +163,12 @@ def bulk_export() -> FlaskReturn:
             manifest_style="api",
             on_export_error=_on_export_error,
         )
+        if result.failures and result.exported_session_count > 0:
+            full_warnings = _serialize_export_failures(result.failures)
+            zf.writestr(
+                _EXPORT_WARNINGS_ZIP_NAME,
+                json.dumps(full_warnings, separators=(",", ":")) + "\n",
+            )
 
     count = result.exported_session_count
     new_sessions_map = result.new_sessions_map
@@ -178,7 +211,10 @@ def bulk_export() -> FlaskReturn:
         download_name=f"claude-code-export{suffix}-{date_tag}.zip",  # type: ignore[call-arg]
     )
     if result.failures:
-        resp.headers["X-Export-Warnings"] = json.dumps(failure_payload)
+        resp.headers["X-Export-Warnings"] = json.dumps(
+            _export_warnings_header_payload(result.failures),
+            separators=(",", ":"),
+        )
     return resp
 
 

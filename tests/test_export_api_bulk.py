@@ -94,12 +94,19 @@ def test_bulk_export_partial_fail_returns_warning_header(client, monkeypatch):
     resp = client.post("/api/export", json={"since": "all"})
     assert resp.status_code == 200
     assert "X-Export-Warnings" in resp.headers
-    warnings = json.loads(resp.headers["X-Export-Warnings"])
-    assert len(warnings) == 1
-    assert warnings[0]["session_id"] == "session_def456"
-    assert warnings[0]["code"] == "PARSE_ERROR"
+    header = json.loads(resp.headers["X-Export-Warnings"])
+    assert header["total_failures"] == 1
+    assert header["truncated"] is False
+    assert len(header["failures"]) == 1
+    assert header["failures"][0]["session_id"] == "session_def456"
+    assert header["failures"][0]["code"] == "PARSE_ERROR"
+    assert header["failures"][0]["message"] == "Failed to parse session"
     zf = zipfile.ZipFile(io.BytesIO(resp.data))
     assert len([name for name in zf.namelist() if name.endswith(".md")]) == 1
+    zip_warnings = json.loads(zf.read("export-warnings.json").decode("utf-8"))
+    assert len(zip_warnings) == 1
+    assert zip_warnings[0]["session_id"] == "session_def456"
+    assert "bad" not in zip_warnings[0]["message"]
 
 
 def test_bulk_export_all_fail_returns_422(client, monkeypatch):
@@ -114,6 +121,7 @@ def test_bulk_export_all_fail_returns_422(client, monkeypatch):
     assert body["since"] == "all"
     assert len(body["failures"]) == 2
     assert {item["code"] for item in body["failures"]} == {"PARSE_ERROR"}
+    assert all(item["message"] == "Failed to parse session" for item in body["failures"])
 
 
 def test_bulk_export_partial_fail_excludes_failed_from_state(

@@ -80,6 +80,15 @@ def failure_code_for_exception(exc: Exception, *, phase: str = "parse") -> Error
     return ErrorCode.INTERNAL_ERROR
 
 
+def failure_message_for_code(code: ErrorCode) -> str:
+    """Stable client-facing message; never embed ``str(exc)`` (issue #25)."""
+    if code == ErrorCode.PARSE_ERROR:
+        return "Failed to parse session"
+    if code == ErrorCode.INTERNAL_ERROR:
+        return "Failed to export session"
+    return "Export failed"
+
+
 @dataclass
 class BulkExportResult:
     """Outcome of a bulk export run."""
@@ -286,11 +295,12 @@ def run_bulk_export(
 
     def _record_failure(sid: str, exc: Exception, *, phase: str = "parse") -> None:
         result.failure_count += 1
+        code = failure_code_for_exception(exc, phase=phase)
         result.failures.append(
             ExportFailure(
                 session_id=sid,
-                message=str(exc),
-                code=failure_code_for_exception(exc, phase=phase),
+                message=failure_message_for_code(code),
+                code=code,
             )
         )
         if on_export_error is not None:
