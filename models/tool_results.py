@@ -4,7 +4,7 @@ Ground truth: tests/test_jsonl_parser.py, tests/test_real_session_fixtures.py,
 and utils/tool_dispatch.py predicate order (first match wins).
 """
 
-from typing import Literal, TypeGuard, TypedDict
+from typing import Literal, TypedDict, TypeGuard
 
 
 class BashToolResultDict(TypedDict, total=False):

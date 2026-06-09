@@ -1,6 +1,6 @@
 """TypedDict shapes for record-level ``data`` payloads on progress messages."""
 
-from typing import Literal, TypeGuard, TypedDict
+from typing import Literal, TypedDict, TypeGuard
 
 
 class BashProgressDataDict(TypedDict):
