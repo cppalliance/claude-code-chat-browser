@@ -1,21 +1,12 @@
-"""Stable machine-readable error codes for API JSON error responses."""
+"""HTTP error envelope helpers; :class:`ErrorCode` lives in :mod:`models.error_codes`."""
 
 from __future__ import annotations
 
-from enum import StrEnum
-
 from flask import Response, jsonify
 
+from models.error_codes import ErrorCode
 
-class ErrorCode(StrEnum):
-    SEARCH_INVALID_LIMIT = "SEARCH_INVALID_LIMIT"
-    INVALID_PATH = "INVALID_PATH"
-    SESSION_NOT_FOUND = "SESSION_NOT_FOUND"
-    INVALID_REQUEST_BODY = "INVALID_REQUEST_BODY"
-    INVALID_SINCE_MODE = "INVALID_SINCE_MODE"
-    PARSE_ERROR = "PARSE_ERROR"
-    EXPORT_NOTHING_TO_EXPORT = "EXPORT_NOTHING_TO_EXPORT"
-    INTERNAL_ERROR = "INTERNAL_ERROR"
+__all__ = ["ErrorCode", "error_response"]
 
 
 def error_response(

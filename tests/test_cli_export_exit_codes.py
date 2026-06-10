@@ -13,8 +13,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 import scripts.export as export
+from models.error_codes import ErrorCode
 from tests.test_cli_e2e import _run_cli, _seed_base_dir
-from utils.export_engine import BulkExportResult
+from utils.export_engine import BulkExportResult, ExportFailure
 from utils.jsonl_parser import parse_session
 
 _SUMMARY_RE = re.compile(
@@ -133,8 +134,17 @@ def test_since_last_early_return_invokes_exit_bulk_export(tmp_path, monkeypatch,
 
 
 def test_since_last_early_return_exits_one_on_failure(tmp_path, monkeypatch, capsys):
-    """Since-last early-return with failure_count>0 must produce real exit code 1."""
-    fake_result = BulkExportResult(latest_day=None, failure_count=1)
+    """Since-last early-return with failures must produce real exit code 1."""
+    fake_result = BulkExportResult(
+        latest_day=None,
+        failures=[
+            ExportFailure(
+                session_id="session_fail",
+                message="Failed to parse session",
+                code=ErrorCode.PARSE_ERROR,
+            )
+        ],
+    )
 
     monkeypatch.setattr(export, "run_bulk_export", lambda **kwargs: fake_result)
     monkeypatch.setattr(export, "list_projects", lambda base: [{"name": "p", "path": "/p"}])
