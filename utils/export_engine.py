@@ -104,7 +104,6 @@ class BulkExportResult:
     manifest: list[dict[str, Any]] = field(default_factory=list)
     new_sessions_map: dict[str, float] = field(default_factory=dict)
     exported_session_count: int = 0
-    failure_count: int = 0
     failures: list[ExportFailure] = field(default_factory=list)
     skipped_count: int = 0
     skipped_mtime_unchanged_count: int = 0
@@ -112,6 +111,11 @@ class BulkExportResult:
     latest_day: date | None = None
     latest_day_scan_total: int = 0
     latest_day_match_count: int = 0
+
+    @property
+    def failure_count(self) -> int:
+        """Number of per-session failures (derived from :attr:`failures`)."""
+        return len(self.failures)
 
 
 class ExportSink(Protocol):
@@ -305,7 +309,6 @@ def run_bulk_export(
         *,
         phase: Literal["parse", "export"] = "parse",
     ) -> None:
-        result.failure_count += 1
         code = failure_code_for_exception(exc, phase=phase)
         result.failures.append(
             ExportFailure(
