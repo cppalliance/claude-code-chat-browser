@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from typing import Any, Callable, Literal, Protocol
 
-from api.error_codes import ErrorCode
+from models.error_codes import ErrorCode
 from models.project import ProjectDict, SessionListItemDict
 from models.session import SessionDict, SessionMetadataDict
 from models.stats import SessionStatsDict
@@ -74,7 +74,11 @@ def failure_code_for_exception(
     *,
     phase: Literal["parse", "export"] = "parse",
 ) -> ErrorCode:
-    """Map an export exception to a stable :class:`ErrorCode`."""
+    """Map an export exception to a stable :class:`ErrorCode`.
+
+    Export-phase failures always map to ``INTERNAL_ERROR``; ``exc`` is not
+    inspected on that path (no per-type export codes yet).
+    """
     if phase == "export":
         return ErrorCode.INTERNAL_ERROR
     if isinstance(exc, EXPORT_ERRORS):
