@@ -1,6 +1,6 @@
 """TypedDict shapes for record-level ``data`` payloads on progress messages."""
 
-from typing import Literal, TypedDict, TypeGuard
+from typing import Literal, TypedDict
 
 
 class BashProgressDataDict(TypedDict, total=False):
@@ -41,7 +41,3 @@ RecordDataUnion = (
     | CompactBoundaryDataDict
     | dict[str, object]
 )
-
-
-def is_bash_progress_data(data: RecordDataUnion) -> TypeGuard[BashProgressDataDict]:
-    return isinstance(data, dict) and data.get("type") == "bash_progress"

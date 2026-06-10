@@ -192,6 +192,32 @@ def is_web_fetch_tool_result(tr: ToolResultDict) -> TypeGuard[WebFetchToolResult
     return "url" in tr and "code" in tr
 
 
+def is_task_message_tool_result(tr: ToolResultDict) -> TypeGuard[TaskMessageToolResultDict]:
+    # Broad: matches ``task_id`` OR ``message``. Runs before retrieval/completed/async
+    # arms in tool_dispatch — same short-circuit order as the historical if/elif chain.
+    return "task_id" in tr or "message" in tr
+
+
+def is_task_retrieval_tool_result(tr: ToolResultDict) -> TypeGuard[TaskRetrievalToolResultDict]:
+    return "retrieval_status" in tr and "task" in tr
+
+
+def is_task_completed_tool_result(tr: ToolResultDict) -> TypeGuard[TaskCompletedToolResultDict]:
+    return "agentId" in tr and "totalDurationMs" in tr
+
+
+def is_task_async_tool_result(tr: ToolResultDict) -> TypeGuard[TaskAsyncToolResultDict]:
+    return "agentId" in tr and "isAsync" in tr
+
+
+def is_todo_write_tool_result(tr: ToolResultDict) -> TypeGuard[TodoWriteToolResultDict]:
+    return "newTodos" in tr or "oldTodos" in tr
+
+
+def is_user_input_tool_result(tr: ToolResultDict) -> TypeGuard[UserInputToolResultDict]:
+    return "questions" in tr and "answers" in tr
+
+
 # Tool names on assistant tool_use blocks — pairs with slug on user tool_result rows.
 ToolNameLiteral = Literal[
     "Bash",

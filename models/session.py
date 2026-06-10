@@ -8,6 +8,7 @@ from models.tool_results import ToolNameLiteral, ToolResultUnion
 
 class ToolUseDict(TypedDict, total=False):
     id: str
+    # Literal | str is just str for mypy — documents known tool names, not exhaustiveness.
     name: ToolNameLiteral | str
     input: dict[str, object]
 

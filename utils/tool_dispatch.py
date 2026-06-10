@@ -9,13 +9,32 @@ Notably ``task_message`` is broad (``task_id`` or ``message``) and sits before
 
 To add a shape: append ``(pred, build)`` at the end, or insert only after
 verifying predicates above would not steal intended matches.
+
+Predicates live in ``models.tool_results`` (single source of truth for narrowing).
 """
 
-from models.tool_results import ToolResultDict, ToolResultUnion, is_tool_result_dict
+from typing import cast
 
-
-def _tool_result_pred_bash(tr: ToolResultDict) -> bool:
-    return "stdout" in tr or "stderr" in tr
+from models.tool_results import (
+    ToolResultDict,
+    ToolResultUnion,
+    is_bash_tool_result,
+    is_file_edit_tool_result,
+    is_file_write_tool_result,
+    is_glob_tool_result,
+    is_grep_tool_result,
+    is_plan_tool_result,
+    is_read_tool_result,
+    is_task_async_tool_result,
+    is_task_completed_tool_result,
+    is_task_message_tool_result,
+    is_task_retrieval_tool_result,
+    is_todo_write_tool_result,
+    is_tool_result_dict,
+    is_user_input_tool_result,
+    is_web_fetch_tool_result,
+    is_web_search_tool_result,
+)
 
 
 def _tool_result_build_bash(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
@@ -30,10 +49,6 @@ def _tool_result_build_bash(tr: ToolResultDict, base: dict[str, object]) -> dict
     return result
 
 
-def _tool_result_pred_file_edit(tr: ToolResultDict) -> bool:
-    return "structuredPatch" in tr or ("filePath" in tr and "newString" in tr)
-
-
 def _tool_result_build_file_edit(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     # Summary fields only; full blob (e.g. structuredPatch) stays on message tool_result.
     result = dict(base)
@@ -43,10 +58,6 @@ def _tool_result_build_file_edit(tr: ToolResultDict, base: dict[str, object]) ->
     return result
 
 
-def _tool_result_pred_plan(tr: ToolResultDict) -> bool:
-    return "plan" in tr and "filePath" in tr
-
-
 def _tool_result_build_plan(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
     result["result_type"] = "plan"
@@ -54,19 +65,11 @@ def _tool_result_build_plan(tr: ToolResultDict, base: dict[str, object]) -> dict
     return result
 
 
-def _tool_result_pred_file_write(tr: ToolResultDict) -> bool:
-    return "filePath" in tr and "content" in tr
-
-
 def _tool_result_build_file_write(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
     result["result_type"] = "file_write"
     result["file_path"] = tr.get("filePath", "")
     return result
-
-
-def _tool_result_pred_glob(tr: ToolResultDict) -> bool:
-    return "filenames" in tr and isinstance(tr.get("filenames"), list)
 
 
 def _tool_result_build_glob(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
@@ -82,10 +85,6 @@ def _tool_result_build_glob(tr: ToolResultDict, base: dict[str, object]) -> dict
     return result
 
 
-def _tool_result_pred_grep(tr: ToolResultDict) -> bool:
-    return "mode" in tr and "numFiles" in tr
-
-
 def _tool_result_build_grep(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
     result["result_type"] = "grep"
@@ -99,10 +98,6 @@ def _tool_result_build_grep(tr: ToolResultDict, base: dict[str, object]) -> dict
     return result
 
 
-def _tool_result_pred_file_read(tr: ToolResultDict) -> bool:
-    return "file" in tr and isinstance(tr["file"], dict)
-
-
 def _tool_result_build_file_read(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
     raw_file = tr.get("file")
@@ -114,10 +109,6 @@ def _tool_result_build_file_read(tr: ToolResultDict, base: dict[str, object]) ->
     if isinstance(content, str):
         result["content"] = content
     return result
-
-
-def _tool_result_pred_web_search(tr: ToolResultDict) -> bool:
-    return "query" in tr and "results" in tr
 
 
 def _tool_result_build_web_search(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
@@ -135,10 +126,6 @@ def _tool_result_build_web_search(tr: ToolResultDict, base: dict[str, object]) -
     return result
 
 
-def _tool_result_pred_web_fetch(tr: ToolResultDict) -> bool:
-    return "url" in tr and "code" in tr
-
-
 def _tool_result_build_web_fetch(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
     result["result_type"] = "web_fetch"
@@ -146,14 +133,6 @@ def _tool_result_build_web_fetch(tr: ToolResultDict, base: dict[str, object]) ->
     result["status_code"] = tr.get("code")
     result["duration_ms"] = tr.get("durationMs")
     return result
-
-
-def _tool_result_pred_task_message(tr: ToolResultDict) -> bool:
-    # Broad: matches ``task_id`` OR ``message``. Runs before retrieval/completed/async
-    # arms below — same short-circuit order as the original if/elif chain. Payloads
-    # that also carry e.g. ``agentId`` still classify here if they have ``message``.
-    # Refining order needs golden fixtures; track as follow-up if real collisions appear.
-    return "task_id" in tr or "message" in tr
 
 
 def _tool_result_build_task_message(
@@ -166,10 +145,6 @@ def _tool_result_build_task_message(
     return result
 
 
-def _tool_result_pred_task_retrieval(tr: ToolResultDict) -> bool:
-    return "retrieval_status" in tr and "task" in tr
-
-
 def _tool_result_build_task_retrieval(
     tr: ToolResultDict, base: dict[str, object]
 ) -> dict[str, object]:
@@ -179,10 +154,6 @@ def _tool_result_build_task_retrieval(
     result["retrieval_status"] = tr.get("retrieval_status")
     result["task_id"] = task_obj.get("task_id")
     return result
-
-
-def _tool_result_pred_task_completed(tr: ToolResultDict) -> bool:
-    return "agentId" in tr and "totalDurationMs" in tr
 
 
 def _tool_result_build_task_completed(
@@ -198,10 +169,6 @@ def _tool_result_build_task_completed(
     return result
 
 
-def _tool_result_pred_task_async(tr: ToolResultDict) -> bool:
-    return "agentId" in tr and "isAsync" in tr
-
-
 def _tool_result_build_task_async(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
     result["result_type"] = "task"
@@ -211,10 +178,6 @@ def _tool_result_build_task_async(tr: ToolResultDict, base: dict[str, object]) -
     return result
 
 
-def _tool_result_pred_todo_write(tr: ToolResultDict) -> bool:
-    return "newTodos" in tr or "oldTodos" in tr
-
-
 def _tool_result_build_todo_write(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
     result = dict(base)
     new_todos = tr.get("newTodos", [])
@@ -222,10 +185,6 @@ def _tool_result_build_todo_write(tr: ToolResultDict, base: dict[str, object]) -
     result["todo_count"] = len(new_todos) if isinstance(new_todos, list) else 0
     result["todos"] = new_todos if isinstance(new_todos, list) else []
     return result
-
-
-def _tool_result_pred_user_input(tr: ToolResultDict) -> bool:
-    return "questions" in tr and "answers" in tr
 
 
 def _tool_result_build_user_input(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
@@ -239,21 +198,21 @@ def _tool_result_build_user_input(tr: ToolResultDict, base: dict[str, object]) -
 # Registry order is load-bearing (see module docstring).
 # ``plan`` before ``file_write``: plan blobs may carry ``filePath`` + ``content``.
 _TOOL_RESULT_DISPATCH = (
-    (_tool_result_pred_bash, _tool_result_build_bash),
-    (_tool_result_pred_file_edit, _tool_result_build_file_edit),
-    (_tool_result_pred_plan, _tool_result_build_plan),
-    (_tool_result_pred_file_write, _tool_result_build_file_write),
-    (_tool_result_pred_glob, _tool_result_build_glob),
-    (_tool_result_pred_grep, _tool_result_build_grep),
-    (_tool_result_pred_file_read, _tool_result_build_file_read),
-    (_tool_result_pred_web_search, _tool_result_build_web_search),
-    (_tool_result_pred_web_fetch, _tool_result_build_web_fetch),
-    (_tool_result_pred_task_message, _tool_result_build_task_message),
-    (_tool_result_pred_task_retrieval, _tool_result_build_task_retrieval),
-    (_tool_result_pred_task_completed, _tool_result_build_task_completed),
-    (_tool_result_pred_task_async, _tool_result_build_task_async),
-    (_tool_result_pred_todo_write, _tool_result_build_todo_write),
-    (_tool_result_pred_user_input, _tool_result_build_user_input),
+    (is_bash_tool_result, _tool_result_build_bash),
+    (is_file_edit_tool_result, _tool_result_build_file_edit),
+    (is_plan_tool_result, _tool_result_build_plan),
+    (is_file_write_tool_result, _tool_result_build_file_write),
+    (is_glob_tool_result, _tool_result_build_glob),
+    (is_grep_tool_result, _tool_result_build_grep),
+    (is_read_tool_result, _tool_result_build_file_read),
+    (is_web_search_tool_result, _tool_result_build_web_search),
+    (is_web_fetch_tool_result, _tool_result_build_web_fetch),
+    (is_task_message_tool_result, _tool_result_build_task_message),
+    (is_task_retrieval_tool_result, _tool_result_build_task_retrieval),
+    (is_task_completed_tool_result, _tool_result_build_task_completed),
+    (is_task_async_tool_result, _tool_result_build_task_async),
+    (is_todo_write_tool_result, _tool_result_build_todo_write),
+    (is_user_input_tool_result, _tool_result_build_user_input),
 )
 
 
@@ -276,7 +235,8 @@ def _parse_tool_result(
     base: dict[str, object] = {"slug": slug}
     for pred, build in _TOOL_RESULT_DISPATCH:
         if pred(tool_result):
-            return build(tool_result, base)
+            # Builders take ToolResultDict; cast after pred (heterogeneous tuple, no union narrow).
+            return build(cast(ToolResultDict, tool_result), base)
 
     result = dict(base)
     result["result_type"] = "unknown"
