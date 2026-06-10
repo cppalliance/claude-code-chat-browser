@@ -1,6 +1,27 @@
 """Parsed session shapes from jsonl_parser."""
 
-from typing import Any, NotRequired, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
+
+from models.record_data import RecordDataUnion
+from models.tool_results import ToolNameLiteral, ToolResultUnion
+
+
+class ToolUseDict(TypedDict, total=False):
+    id: str
+    # Literal | str is just str for mypy — documents known tool names, not exhaustiveness.
+    name: ToolNameLiteral | str
+    input: dict[str, object]
+
+
+class MessageUsageDict(TypedDict, total=False):
+    input_tokens: int
+    output_tokens: int
+    cache_read: int
+    cache_creation: int
+    service_tier: str | None
+
+
+SystemSubtypeLiteral = Literal["compact_boundary", "init"]
 
 
 class MessageDict(TypedDict):
@@ -12,18 +33,18 @@ class MessageDict(TypedDict):
     content: NotRequired[str]
     images: NotRequired[list[Any] | None]
     is_sidechain: NotRequired[bool]
-    tool_result: NotRequired[Any]
-    tool_result_parsed: NotRequired[dict[str, Any] | None]
+    tool_result: NotRequired[ToolResultUnion | None]
+    tool_result_parsed: NotRequired[dict[str, object] | None]
     slug: NotRequired[str | None]
     model: NotRequired[str]
     stop_reason: NotRequired[str]
     thinking: NotRequired[str | None]
-    tool_uses: NotRequired[list[dict[str, Any]] | None]
+    tool_uses: NotRequired[list[ToolUseDict] | None]
     is_api_error: NotRequired[bool]
-    usage: NotRequired[dict[str, Any]]
+    usage: NotRequired[MessageUsageDict]
     subtype: NotRequired[str]
     level: NotRequired[str]
-    data: NotRequired[Any]
+    data: NotRequired[RecordDataUnion]
     progress_type: NotRequired[str]
     tool_use_id: NotRequired[str | None]
     parent_tool_use_id: NotRequired[str | None]

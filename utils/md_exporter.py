@@ -4,7 +4,7 @@
 from datetime import datetime
 from typing import Any
 
-from models.session import MessageDict, SessionDict
+from models.session import MessageDict, SessionDict, ToolUseDict
 from models.stats import SessionStatsDict
 from utils.session_stats import format_duration
 
@@ -266,9 +266,10 @@ def _render_assistant(msg: MessageDict) -> str:
     return "\n".join(lines)
 
 
-def _render_tool_use(tool: dict[str, Any]) -> str:
+def _render_tool_use(tool: ToolUseDict) -> str:
     name = tool.get("name", "unknown")
-    inp = tool.get("input", {})
+    raw_inp = tool.get("input", {})
+    inp: dict[str, object] = raw_inp if isinstance(raw_inp, dict) else {}
     lines = []
     lines.append(f"\n> **Tool: {name}**")
 
@@ -307,15 +308,23 @@ def _render_tool_use(tool: dict[str, Any]) -> str:
         if inp.get("prompt"):
             lines.append(f">\n> **Prompt:**\n> ```\n> {inp['prompt']}\n> ```")
     elif name == "TodoWrite":
-        todos = inp.get("todos", [])
-        for t in todos:
-            status = t.get("status", "")
-            icon = {"completed": "[x]", "in_progress": "[~]", "pending": "[ ]"}.get(status, "[ ]")
-            lines.append(f"> - {icon} {t.get('content', '')}")
+        raw_todos = inp.get("todos", [])
+        if isinstance(raw_todos, list):
+            for t in raw_todos:
+                if not isinstance(t, dict):
+                    continue
+                status = t.get("status", "")
+                icon = {"completed": "[x]", "in_progress": "[~]", "pending": "[ ]"}.get(
+                    str(status), "[ ]"
+                )
+                lines.append(f"> - {icon} {t.get('content', '')}")
     elif name == "AskUserQuestion":
-        questions = inp.get("questions", [])
-        for q in questions:
-            lines.append(f">\n> Q: {q.get('question', '')}")
+        raw_questions = inp.get("questions", [])
+        if isinstance(raw_questions, list):
+            for q in raw_questions:
+                if not isinstance(q, dict):
+                    continue
+                lines.append(f">\n> Q: {q.get('question', '')}")
     else:
         lines.append(f">\n> Input: `{str(inp)}`")
 
