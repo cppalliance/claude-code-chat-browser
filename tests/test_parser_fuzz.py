@@ -13,25 +13,21 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from utils.jsonl_parser import parse_session
 
-FUZZ_SETTINGS = settings(
-    max_examples=200,
-    deadline=5000,
-    suppress_health_check=[HealthCheck.function_scoped_fixture],
-)
+# Only suppress the tmp_path health check; max_examples and deadline come from
+# the active Hypothesis profile (ci/dev) registered in conftest.py.
+FUZZ_SETTINGS = settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
 
+# Structured errors that are acceptable instead of a clean parse. Empty for now —
+# the invariant is that parse_session never raises an unhandled exception.
 ALLOWED_EXCEPTIONS: tuple[type[BaseException], ...] = ()
-
-
-def _fuzz_jsonl_path(tmp_path: Path, name: str) -> Path:
-    return tmp_path / name
 
 
 def _parse_file_without_crash(path: str) -> None:
     try:
         parse_session(path)
+    except ALLOWED_EXCEPTIONS:
+        return
     except Exception as exc:
-        if ALLOWED_EXCEPTIONS and isinstance(exc, ALLOWED_EXCEPTIONS):
-            return
         raise AssertionError(f"unhandled {type(exc).__name__}: {exc}") from exc
 
 
@@ -151,17 +147,17 @@ def structured_entry(draw: st.DrawFn) -> dict:
 @given(st.lists(st.text(min_size=0, max_size=500), min_size=0, max_size=30))
 def test_raw_line_soup_does_not_crash(tmp_path: Path, lines: list[str]) -> None:
     """Malformed JSON lines, garbage text, and empty lines."""
-    path = _write_jsonl(_fuzz_jsonl_path(tmp_path, "soup.jsonl"), lines)
+    path = _write_jsonl(tmp_path / "soup.jsonl", lines)
     _parse_file_without_crash(path)
 
 
 @FUZZ_SETTINGS
 @given(st.text(min_size=1, max_size=500))
 def test_truncated_json_line(tmp_path: Path, prefix: str) -> None:
-    """Partial JSON simulating concurrent writes."""
-    half = json.dumps(prefix)[: max(1, len(prefix) // 2)]
-    line = '{"type": "user", "message": {"content": ' + half
-    path = _write_jsonl(_fuzz_jsonl_path(tmp_path, "trunc.jsonl"), [line])
+    """Partial JSON simulating concurrent writes (object cut mid-serialization)."""
+    full_line = json.dumps({"type": "user", "message": {"content": prefix}})
+    truncated = full_line[: max(1, len(full_line) // 2)]
+    path = _write_jsonl(tmp_path / "trunc.jsonl", [truncated])
     _parse_file_without_crash(path)
 
 
@@ -170,7 +166,7 @@ def test_truncated_json_line(tmp_path: Path, prefix: str) -> None:
 def test_structured_entries_with_fuzzed_fields(tmp_path: Path, entries: list[dict]) -> None:
     """Unknown types, missing/extra fields, wrong-typed nested values."""
     lines = [json.dumps(e, default=str) for e in entries]
-    path = _write_jsonl(_fuzz_jsonl_path(tmp_path, "structured.jsonl"), lines)
+    path = _write_jsonl(tmp_path / "structured.jsonl", lines)
     _parse_file_without_crash(path)
 
 
@@ -182,7 +178,7 @@ def test_deep_nesting_in_message_content(tmp_path: Path, nested_values: list) ->
         "timestamp": "2026-06-11T00:00:00Z",
         "message": {"content": nested_values},
     }
-    path = _write_jsonl(_fuzz_jsonl_path(tmp_path, "nest.jsonl"), [json.dumps(entry, default=str)])
+    path = _write_jsonl(tmp_path / "nest.jsonl", [json.dumps(entry, default=str)])
     _parse_file_without_crash(path)
 
 
@@ -195,7 +191,7 @@ def test_long_line_payload(tmp_path: Path, length: int) -> None:
         "timestamp": "2026-06-11T00:00:00Z",
         "message": {"content": [{"type": "text", "text": payload}]},
     }
-    path = _write_jsonl(_fuzz_jsonl_path(tmp_path, "long.jsonl"), [json.dumps(entry)])
+    path = _write_jsonl(tmp_path / "long.jsonl", [json.dumps(entry)])
     _parse_file_without_crash(path)
 
 
@@ -215,7 +211,7 @@ def test_empty_lines_between_records(tmp_path: Path, texts: list[str]) -> None:
             )
         )
         lines.append("   ")
-    path = _write_jsonl(_fuzz_jsonl_path(tmp_path, "empty.jsonl"), lines)
+    path = _write_jsonl(tmp_path / "empty.jsonl", lines)
     _parse_file_without_crash(path)
 
 
@@ -243,4 +239,27 @@ def test_unknown_record_type_is_graceful(tmp_path: Path) -> None:
     path = _write_jsonl(tmp_path / "unknown.jsonl", lines)
     session = parse_session(path)
     assert session["metadata"]["entry_counts"].get("totally-new-claude-record") == 1
-    assert len(session["messages"]) >= 1
+    # Unknown type produces no message; only the valid user line does.
+    assert len(session["messages"]) == 1
+
+
+def test_non_numeric_usage_tokens_do_not_crash(tmp_path: Path) -> None:
+    """Non-numeric usage fields must coerce to 0, not raise TypeError on +=."""
+    entry = {
+        "type": "assistant",
+        "timestamp": "2026-06-11T00:00:00Z",
+        "message": {
+            "model": "claude-test",
+            "content": [{"type": "text", "text": "hi"}],
+            "usage": {
+                "input_tokens": "five",
+                "output_tokens": ["not", "a", "number"],
+                "cache_creation": {"ephemeral_5m_input_tokens": "lots"},
+            },
+        },
+    }
+    path = _write_jsonl(tmp_path / "bad_usage.jsonl", [json.dumps(entry)])
+    session = parse_session(path)
+    assert session["metadata"]["total_input_tokens"] == 0
+    assert session["metadata"]["total_output_tokens"] == 0
+    assert session["metadata"]["total_ephemeral_5m_tokens"] == 0

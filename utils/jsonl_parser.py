@@ -40,6 +40,16 @@ __all__ = [
 ]
 
 
+def _safe_int(val: Any) -> int:
+    """Coerce a value to int for token accounting; non-numeric input becomes 0
+    so fuzzed/malformed usage fields never raise during arithmetic."""
+    if isinstance(val, bool):
+        return 0
+    if isinstance(val, (int, float)):
+        return int(val)
+    return 0
+
+
 def parse_session(filepath: str) -> SessionDict:
     """Main entry point. Reads every line from a .jsonl file and builds up
     a session dict with messages, metadata (tokens, models, tool counts),
@@ -223,19 +233,19 @@ def _process_assistant(
     usage = msg.get("usage", {})
     if not isinstance(usage, dict):
         usage = {}
-    metadata["total_input_tokens"] += usage.get("input_tokens") or 0
-    metadata["total_output_tokens"] += usage.get("output_tokens") or 0
-    metadata["total_cache_read_tokens"] += usage.get("cache_read_input_tokens") or 0
-    metadata["total_cache_creation_tokens"] += usage.get("cache_creation_input_tokens") or 0
+    metadata["total_input_tokens"] += _safe_int(usage.get("input_tokens"))
+    metadata["total_output_tokens"] += _safe_int(usage.get("output_tokens"))
+    metadata["total_cache_read_tokens"] += _safe_int(usage.get("cache_read_input_tokens"))
+    metadata["total_cache_creation_tokens"] += _safe_int(usage.get("cache_creation_input_tokens"))
 
     # Extended cache metrics
     cache_creation = usage.get("cache_creation", {})
     if isinstance(cache_creation, dict):
-        metadata["total_ephemeral_5m_tokens"] += (
-            cache_creation.get("ephemeral_5m_input_tokens") or 0
+        metadata["total_ephemeral_5m_tokens"] += _safe_int(
+            cache_creation.get("ephemeral_5m_input_tokens")
         )
-        metadata["total_ephemeral_1h_tokens"] += (
-            cache_creation.get("ephemeral_1h_input_tokens") or 0
+        metadata["total_ephemeral_1h_tokens"] += _safe_int(
+            cache_creation.get("ephemeral_1h_input_tokens")
         )
 
     # Service tier
@@ -292,10 +302,10 @@ def _process_assistant(
             "is_sidechain": entry.get("isSidechain", False),
             "is_api_error": entry.get("isApiErrorMessage", False),
             "usage": {
-                "input_tokens": usage.get("input_tokens") or 0,
-                "output_tokens": usage.get("output_tokens") or 0,
-                "cache_read": usage.get("cache_read_input_tokens") or 0,
-                "cache_creation": usage.get("cache_creation_input_tokens") or 0,
+                "input_tokens": _safe_int(usage.get("input_tokens")),
+                "output_tokens": _safe_int(usage.get("output_tokens")),
+                "cache_read": _safe_int(usage.get("cache_read_input_tokens")),
+                "cache_creation": _safe_int(usage.get("cache_creation_input_tokens")),
                 "service_tier": usage.get("service_tier"),
             },
         }

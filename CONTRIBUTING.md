@@ -112,7 +112,7 @@ npm run test:coverage   # optional
   - [ ] `ruff check .` and `ruff format --check .` green locally
   - [ ] `pytest -q` green locally
   - [ ] `npm test` green if JS changed
-  - [ ] CI jobs green (`lint-and-audit`, `pytest`, `integration-tests`, `js-tests` on Ubuntu + Windows; `mypy`, `prod-install-smoke` on Ubuntu)
+  - [ ] CI jobs green (`lint-and-audit`, `pytest`, `integration-tests`, `js-tests` on Ubuntu + Windows + macOS; `mypy`, `prod-install-smoke` on Ubuntu)
   - [ ] PR description includes a **Test plan** section
   - [ ] API changes update [`docs/api-reference.md`](docs/api-reference.md) if behavior or errors change
 
