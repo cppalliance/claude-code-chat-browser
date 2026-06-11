@@ -188,4 +188,19 @@ jobs:
           cache: npm
 
       - run: npm ci
+      # npm optional-deps bug: platform rollup binaries are sometimes skipped after npm ci
+      # (https://github.com/npm/cli/issues/4828). Install the native package explicitly.
+      - name: Ensure Rollup native binary
+        shell: bash
+        run: |
+          ROLLUP_VERSION=$(node -p "require('./node_modules/rollup/package.json').version")
+          case "$(node -p "process.platform + '-' + process.arch")" in
+            darwin-arm64) PKG="@rollup/rollup-darwin-arm64" ;;
+            darwin-x64)   PKG="@rollup/rollup-darwin-x64" ;;
+            linux-x64)    PKG="@rollup/rollup-linux-x64-gnu" ;;
+            win32-x64)    PKG="@rollup/rollup-win32-x64-msvc" ;;
+            win32-arm64)  PKG="@rollup/rollup-win32-arm64-msvc" ;;
+            *) echo "Unsupported Node platform: $(node -p "process.platform + '-' + process.arch")"; exit 1 ;;
+          esac
+          npm install --no-save "${PKG}@${ROLLUP_VERSION}"
       - run: npm test

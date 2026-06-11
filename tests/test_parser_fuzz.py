@@ -5,22 +5,25 @@ from __future__ import annotations
 import json
 import os
 import sys
-import tempfile
 from pathlib import Path
 
-from hypothesis import given, settings, strategies as st
+from hypothesis import HealthCheck, given, settings, strategies as st
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from utils.jsonl_parser import parse_session
 
-FUZZ_SETTINGS = settings(max_examples=200, deadline=5000)
+FUZZ_SETTINGS = settings(
+    max_examples=200,
+    deadline=5000,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
 
 ALLOWED_EXCEPTIONS: tuple[type[BaseException], ...] = ()
 
 
-def _fuzz_jsonl_path(name: str) -> Path:
-    return Path(tempfile.mkdtemp()) / name
+def _fuzz_jsonl_path(tmp_path: Path, name: str) -> Path:
+    return tmp_path / name
 
 
 def _parse_file_without_crash(path: str) -> None:
@@ -145,59 +148,59 @@ def structured_entry(draw: st.DrawFn) -> dict:
 
 @FUZZ_SETTINGS
 @given(st.lists(st.text(min_size=0, max_size=500), min_size=0, max_size=30))
-def test_raw_line_soup_does_not_crash(lines: list[str]) -> None:
+def test_raw_line_soup_does_not_crash(tmp_path: Path, lines: list[str]) -> None:
     """Malformed JSON lines, garbage text, and empty lines."""
-    path = _write_jsonl(_fuzz_jsonl_path("soup.jsonl"), lines)
+    path = _write_jsonl(_fuzz_jsonl_path(tmp_path, "soup.jsonl"), lines)
     _parse_file_without_crash(path)
 
 
 @FUZZ_SETTINGS
 @given(st.text(min_size=1, max_size=500))
-def test_truncated_json_line(prefix: str) -> None:
+def test_truncated_json_line(tmp_path: Path, prefix: str) -> None:
     """Partial JSON simulating concurrent writes."""
     half = json.dumps(prefix)[: max(1, len(prefix) // 2)]
     line = '{"type": "user", "message": {"content": ' + half
-    path = _write_jsonl(_fuzz_jsonl_path("trunc.jsonl"), [line])
+    path = _write_jsonl(_fuzz_jsonl_path(tmp_path, "trunc.jsonl"), [line])
     _parse_file_without_crash(path)
 
 
 @FUZZ_SETTINGS
 @given(st.lists(structured_entry(), min_size=0, max_size=15))
-def test_structured_entries_with_fuzzed_fields(entries: list[dict]) -> None:
+def test_structured_entries_with_fuzzed_fields(tmp_path: Path, entries: list[dict]) -> None:
     """Unknown types, missing/extra fields, wrong-typed nested values."""
     lines = [json.dumps(e, default=str) for e in entries]
-    path = _write_jsonl(_fuzz_jsonl_path("structured.jsonl"), lines)
+    path = _write_jsonl(_fuzz_jsonl_path(tmp_path, "structured.jsonl"), lines)
     _parse_file_without_crash(path)
 
 
 @FUZZ_SETTINGS
 @given(st.lists(_json_value, min_size=1, max_size=5))
-def test_deep_nesting_in_message_content(nested_values: list) -> None:
+def test_deep_nesting_in_message_content(tmp_path: Path, nested_values: list) -> None:
     entry = {
         "type": "user",
         "timestamp": "2026-06-11T00:00:00Z",
         "message": {"content": nested_values},
     }
-    path = _write_jsonl(_fuzz_jsonl_path("nest.jsonl"), [json.dumps(entry, default=str)])
+    path = _write_jsonl(_fuzz_jsonl_path(tmp_path, "nest.jsonl"), [json.dumps(entry, default=str)])
     _parse_file_without_crash(path)
 
 
 @FUZZ_SETTINGS
 @given(st.integers(min_value=10_000, max_value=50_000))
-def test_long_line_payload(length: int) -> None:
+def test_long_line_payload(tmp_path: Path, length: int) -> None:
     payload = "x" * length
     entry = {
         "type": "user",
         "timestamp": "2026-06-11T00:00:00Z",
         "message": {"content": [{"type": "text", "text": payload}]},
     }
-    path = _write_jsonl(_fuzz_jsonl_path("long.jsonl"), [json.dumps(entry)])
+    path = _write_jsonl(_fuzz_jsonl_path(tmp_path, "long.jsonl"), [json.dumps(entry)])
     _parse_file_without_crash(path)
 
 
 @FUZZ_SETTINGS
 @given(st.lists(st.text(max_size=100), min_size=1, max_size=10))
-def test_empty_lines_between_records(texts: list[str]) -> None:
+def test_empty_lines_between_records(tmp_path: Path, texts: list[str]) -> None:
     lines: list[str] = []
     for text in texts:
         lines.append("")
@@ -211,7 +214,7 @@ def test_empty_lines_between_records(texts: list[str]) -> None:
             )
         )
         lines.append("   ")
-    path = _write_jsonl(_fuzz_jsonl_path("empty.jsonl"), lines)
+    path = _write_jsonl(_fuzz_jsonl_path(tmp_path, "empty.jsonl"), lines)
     _parse_file_without_crash(path)
 
 
