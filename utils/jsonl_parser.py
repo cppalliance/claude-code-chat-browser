@@ -2,6 +2,7 @@
 actually work with -- messages, tool calls, token counts, file activity, etc."""
 
 import json
+import math
 import os
 from datetime import datetime
 from typing import Any
@@ -41,12 +42,15 @@ __all__ = [
 
 
 def _safe_int(val: Any) -> int:
-    """Coerce a value to int for token accounting; non-numeric input becomes 0
-    so fuzzed/malformed usage fields never raise during arithmetic."""
+    """Coerce a value to int for token accounting; non-numeric or non-finite
+    input becomes 0 so fuzzed/malformed usage fields never raise during
+    arithmetic. json.loads accepts NaN/Infinity literals, so guard against them."""
     if isinstance(val, bool):
         return 0
-    if isinstance(val, (int, float)):
-        return int(val)
+    if isinstance(val, int):
+        return val
+    if isinstance(val, float):
+        return int(val) if math.isfinite(val) else 0
     return 0
 
 
@@ -122,8 +126,9 @@ def parse_session(filepath: str) -> SessionDict:
                     metadata["first_timestamp"] = ts
                 metadata["last_timestamp"] = ts
 
-            # Count entry types (upstream may send non-str discriminants)
-            if entry_type is not None:
+            # Count entry types (upstream may send non-str/unhashable discriminants;
+            # coerce to str. Falsy types like "" are skipped, matching prior behavior).
+            if entry_type:
                 type_key = entry_type if isinstance(entry_type, str) else str(entry_type)
                 metadata["entry_counts"][type_key] = metadata["entry_counts"].get(type_key, 0) + 1
 
@@ -306,7 +311,7 @@ def _process_assistant(
                 "output_tokens": _safe_int(usage.get("output_tokens")),
                 "cache_read": _safe_int(usage.get("cache_read_input_tokens")),
                 "cache_creation": _safe_int(usage.get("cache_creation_input_tokens")),
-                "service_tier": usage.get("service_tier"),
+                "service_tier": tier if isinstance(tier, str) else None,
             },
         }
     )

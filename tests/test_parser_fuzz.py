@@ -53,7 +53,8 @@ _json_leaf = st.one_of(
     st.none(),
     st.booleans(),
     st.integers(),
-    st.floats(allow_nan=False, allow_infinity=False),
+    # Allow NaN/Infinity: json.loads accepts these literals, so the parser must too.
+    st.floats(allow_nan=True, allow_infinity=True),
     st.text(max_size=200),
 )
 
@@ -262,4 +263,22 @@ def test_non_numeric_usage_tokens_do_not_crash(tmp_path: Path) -> None:
     session = parse_session(path)
     assert session["metadata"]["total_input_tokens"] == 0
     assert session["metadata"]["total_output_tokens"] == 0
+    assert session["metadata"]["total_ephemeral_5m_tokens"] == 0
+
+
+def test_non_finite_usage_tokens_do_not_crash(tmp_path: Path) -> None:
+    """json.loads accepts NaN/Infinity literals; int(nan)/int(inf) raise, so the
+    parser must coerce them to 0 rather than propagate ValueError/OverflowError."""
+    # Raw literals (not valid via json.dumps of finite floats) — written directly.
+    line = (
+        '{"type": "assistant", "message": {"usage": '
+        '{"input_tokens": NaN, "output_tokens": Infinity, '
+        '"cache_read_input_tokens": -Infinity, '
+        '"cache_creation": {"ephemeral_5m_input_tokens": NaN}}}}'
+    )
+    path = _write_jsonl(tmp_path / "nonfinite.jsonl", [line])
+    session = parse_session(path)
+    assert session["metadata"]["total_input_tokens"] == 0
+    assert session["metadata"]["total_output_tokens"] == 0
+    assert session["metadata"]["total_cache_read_tokens"] == 0
     assert session["metadata"]["total_ephemeral_5m_tokens"] == 0
