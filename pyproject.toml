@@ -27,6 +27,9 @@ select = ["E", "F", "W", "I"]
 [tool.ruff.lint.isort]
 combine-as-imports = true
 
+[tool.hypothesis]
+max_examples = 200
+
 [tool.ruff.lint.per-file-ignores]
 # CLI bootstrap: sys.path must be set before local imports.
 "scripts/export.py" = ["E402"]

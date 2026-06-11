@@ -9,7 +9,7 @@ Thanks for considering a patch. This repo is a small Flask app plus a hash-route
 - **Python 3.12** (matches CI)
 - **Node 20+** (only if you change `static/js/` or run frontend unit tests)
 
-CI runs **`ruff check`**, **`ruff format --check`**, **`pip-audit`**, **`pytest`**, **integration tests**, and **Vitest** on **ubuntu-latest** and **windows-latest** (Python 3.12, Node 20). Type-check (`mypy`) and production install smoke run on Ubuntu only.
+CI runs **`ruff check`**, **`ruff format --check`**, **`pip-audit`**, **`pytest`**, **integration tests**, and **Vitest** on **Ubuntu, Windows, and macOS** (`ubuntu-latest`, `windows-latest`, `macos-latest`; Python 3.12, Node 20). Type-check (`mypy`) and production install smoke run on Ubuntu only.
 
 ### Bootstrap (Windows PowerShell)
 

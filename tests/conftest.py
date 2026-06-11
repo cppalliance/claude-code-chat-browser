@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
+from hypothesis import settings
 
 from app import create_app
+
+if os.environ.get("CI"):
+    settings.register_profile("ci", max_examples=100, deadline=None)
+    settings.load_profile("ci")
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

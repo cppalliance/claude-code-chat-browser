@@ -96,6 +96,9 @@ def parse_session(filepath: str) -> SessionDict:
             except json.JSONDecodeError:
                 continue
 
+            if not isinstance(entry, dict):
+                continue
+
             entry_type = entry.get("type")
             ts = entry.get("timestamp")
             # file-history-snapshot stores timestamp inside snapshot
@@ -109,11 +112,10 @@ def parse_session(filepath: str) -> SessionDict:
                     metadata["first_timestamp"] = ts
                 metadata["last_timestamp"] = ts
 
-            # Count entry types
-            if entry_type:
-                metadata["entry_counts"][entry_type] = (
-                    metadata["entry_counts"].get(entry_type, 0) + 1
-                )
+            # Count entry types (upstream may send non-str discriminants)
+            if entry_type is not None:
+                type_key = entry_type if isinstance(entry_type, str) else str(entry_type)
+                metadata["entry_counts"][type_key] = metadata["entry_counts"].get(type_key, 0) + 1
 
             # Track sidechain
             if entry.get("isSidechain"):
@@ -135,10 +137,12 @@ def parse_session(filepath: str) -> SessionDict:
     metadata["files_created"] = sorted(metadata["files_created"])
 
     # Compute wall clock time
-    if metadata["first_timestamp"] and metadata["last_timestamp"]:
+    first_ts = metadata["first_timestamp"]
+    last_ts = metadata["last_timestamp"]
+    if isinstance(first_ts, str) and isinstance(last_ts, str):
         try:
-            t0 = datetime.fromisoformat(metadata["first_timestamp"].replace("Z", "+00:00"))
-            t1 = datetime.fromisoformat(metadata["last_timestamp"].replace("Z", "+00:00"))
+            t0 = datetime.fromisoformat(first_ts.replace("Z", "+00:00"))
+            t1 = datetime.fromisoformat(last_ts.replace("Z", "+00:00"))
             metadata["session_wall_time_seconds"] = max(0, (t1 - t0).total_seconds())
         except (ValueError, AttributeError):
             pass
@@ -209,7 +213,7 @@ def _process_assistant(
     and tool_use calls, and accumulates token/model/tool stats."""
     msg = _entry_message(entry)
     model = msg.get("model", "")
-    if model and model != "<synthetic>":
+    if isinstance(model, str) and model and model != "<synthetic>":
         metadata["models_used"].add(model)
 
     # API error tracking
@@ -236,12 +240,12 @@ def _process_assistant(
 
     # Service tier
     tier = usage.get("service_tier")
-    if tier:
+    if isinstance(tier, str) and tier:
         metadata["service_tiers"].add(tier)
 
     # Stop reason tracking
     stop_reason = msg.get("stop_reason", "")
-    if stop_reason:
+    if isinstance(stop_reason, str) and stop_reason:
         metadata["stop_reasons"][stop_reason] = metadata["stop_reasons"].get(stop_reason, 0) + 1
 
     content_parts = _normalize_content(msg.get("content", []))
@@ -256,7 +260,8 @@ def _process_assistant(
         elif ptype == "thinking":
             thinking_parts.append(part.get("thinking", ""))
         elif ptype == "tool_use":
-            tool_name = part.get("name", "unknown")
+            raw_name = part.get("name", "unknown")
+            tool_name = raw_name if isinstance(raw_name, str) else "unknown"
             raw_input = part.get("input", {})
             safe_input = raw_input if isinstance(raw_input, dict) else {}
             metadata["total_tool_calls"] += 1
@@ -355,7 +360,8 @@ def _track_file_activity(
 ) -> None:
     """Look at what each tool call did and record which files got touched,
     what commands got run, what URLs got fetched."""
-    fp = tool_input.get("file_path", "")
+    raw_fp = tool_input.get("file_path", "")
+    fp = raw_fp if isinstance(raw_fp, str) else ""
     if tool_name == "Read" and fp:
         metadata["files_read"].add(fp)
     elif tool_name == "Write" and fp:
@@ -364,9 +370,9 @@ def _track_file_activity(
         metadata["files_written"].add(fp)
     elif tool_name == "Bash":
         cmd = tool_input.get("command", "")
-        if cmd:
+        if isinstance(cmd, str) and cmd:
             metadata["bash_commands"].append(cmd)
     elif tool_name in ("WebFetch", "WebSearch"):
         url_or_query = tool_input.get("url") or tool_input.get("query", "")
-        if url_or_query:
+        if isinstance(url_or_query, str) and url_or_query:
             metadata["web_fetches"].append(url_or_query)
