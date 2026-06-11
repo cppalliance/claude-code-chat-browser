@@ -117,7 +117,8 @@ def structured_entry(draw: st.DrawFn) -> dict:
         entry = dict(_minimal_assistant)
         entry.update(base)
         if draw(st.booleans()):
-            msg = dict(entry.get("message", {}))
+            msg_val = entry.get("message", {})
+            msg = dict(msg_val) if isinstance(msg_val, dict) else {}
             if draw(st.booleans()):
                 msg["usage"] = draw(
                     st.one_of(st.text(), st.integers(), st.dictionaries(st.text(), _json_value))
