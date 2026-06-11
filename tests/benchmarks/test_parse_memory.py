@@ -14,8 +14,10 @@ def test_large_parse_peak_memory_under_ceiling(parse_large_file: Path) -> None:
     ceiling = file_bytes * 10
 
     tracemalloc.start()
+    tracemalloc.clear_traces()
     try:
-        parse_session(str(path))
+        result = parse_session(str(path))
+        assert len(result["messages"]) > 0, "parse_session returned no messages"
         _, peak = tracemalloc.get_traced_memory()
     finally:
         tracemalloc.stop()

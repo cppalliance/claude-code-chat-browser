@@ -1,5 +1,7 @@
 # Performance benchmarks
 
+Test files live under `tests/benchmarks/`; this directory holds only documentation and the informational `baselines.json` snapshot.
+
 Repeatable local measurements for parse, bulk export, and search hot paths.
 
 ## Run locally
@@ -12,7 +14,7 @@ pytest tests/benchmarks/ --benchmark-only -o addopts= -v
 ## Memory check
 
 ```bash
-pytest tests/benchmarks/test_parse_memory.py -v
+pytest tests/benchmarks/test_parse_memory.py -v -o addopts=
 ```
 
 The memory test also runs as part of the normal `pytest` suite (timing benchmarks are skipped via `--benchmark-skip` in `pyproject.toml`).
