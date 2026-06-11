@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -15,9 +16,10 @@ TEMPLATE_LINE = (FIXTURES / "session_with_tools.jsonl").read_text(encoding="utf-
 
 def write_jsonl(path: Path, line_count: int) -> Path:
     """Write a JSONL session file with *line_count* rows derived from the template fixture."""
+    template = json.loads(TEMPLATE_LINE)
     with path.open("w", encoding="utf-8") as f:
         for i in range(line_count):
-            entry = json.loads(TEMPLATE_LINE)
+            entry = deepcopy(template)
             entry["timestamp"] = f"2026-06-12T10:{i % 60:02d}:00Z"
             if i % 3 == 1:
                 msg = entry.setdefault("message", {})
@@ -39,7 +41,7 @@ def seed_search_corpus(
 ) -> Path:
     """Create a multi-session project tree under *base_dir* for search benchmarks."""
     project = base_dir / "bench-project"
-    project.mkdir(parents=True)
+    project.mkdir(parents=True, exist_ok=True)
     for i in range(session_count):
         write_jsonl(project / f"session_{i:04d}.jsonl", lines_per_session)
     return base_dir
