@@ -23,7 +23,11 @@ def write_jsonl(path: Path, line_count: int) -> Path:
                 msg = entry.setdefault("message", {})
                 if isinstance(msg, dict) and "content" in msg:
                     msg["content"] = [{"type": "text", "text": f"benchmark token {i} searchable"}]
-            f.write(json.dumps(entry, separators=(",", ":")) + "\n")
+            # json.dumps for file I/O — jsonify is Flask's HTTP helper, not file serialization.
+            serialized = (
+                json.dumps(entry, separators=(",", ":")) + "\n"  # linters-ignore: prefer-jsonify
+            )
+            f.write(serialized)
     return path
 
 
