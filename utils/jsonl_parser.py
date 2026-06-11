@@ -42,15 +42,15 @@ __all__ = [
 
 
 def _safe_int(val: Any) -> int:
-    """Coerce a value to int for token accounting; non-numeric or non-finite
-    input becomes 0 so fuzzed/malformed usage fields never raise during
-    arithmetic. json.loads accepts NaN/Infinity literals, so guard against them."""
+    """Coerce a value to a non-negative int for token accounting; non-numeric,
+    non-finite, or negative input becomes 0 so fuzzed/malformed usage fields
+    never raise during arithmetic and counters cannot go below zero."""
     if isinstance(val, bool):
         return 0
     if isinstance(val, int):
-        return val
+        return max(0, val)
     if isinstance(val, float):
-        return int(val) if math.isfinite(val) else 0
+        return max(0, int(val)) if math.isfinite(val) else 0
     return 0
 
 

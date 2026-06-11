@@ -266,6 +266,28 @@ def test_non_numeric_usage_tokens_do_not_crash(tmp_path: Path) -> None:
     assert session["metadata"]["total_ephemeral_5m_tokens"] == 0
 
 
+def test_negative_usage_tokens_clamp_to_zero(tmp_path: Path) -> None:
+    """Negative token counts must not reduce session metadata totals."""
+    entry = {
+        "type": "assistant",
+        "timestamp": "2026-06-11T00:00:00Z",
+        "message": {
+            "model": "claude-test",
+            "content": [{"type": "text", "text": "hi"}],
+            "usage": {
+                "input_tokens": -100,
+                "output_tokens": -1.5,
+                "cache_creation": {"ephemeral_5m_input_tokens": -50},
+            },
+        },
+    }
+    path = _write_jsonl(tmp_path / "negative_usage.jsonl", [json.dumps(entry)])
+    session = parse_session(path)
+    assert session["metadata"]["total_input_tokens"] == 0
+    assert session["metadata"]["total_output_tokens"] == 0
+    assert session["metadata"]["total_ephemeral_5m_tokens"] == 0
+
+
 def test_non_finite_usage_tokens_do_not_crash(tmp_path: Path) -> None:
     """json.loads accepts NaN/Infinity literals; int(nan)/int(inf) raise, so the
     parser must coerce them to 0 rather than propagate ValueError/OverflowError."""
