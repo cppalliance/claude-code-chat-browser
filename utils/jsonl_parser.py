@@ -2,6 +2,7 @@
 actually work with -- messages, tool calls, token counts, file activity, etc."""
 
 import json
+import math
 import os
 from datetime import datetime
 from typing import Any
@@ -38,6 +39,19 @@ __all__ = [
     "_strip_system_tags",
     "_track_file_activity",
 ]
+
+
+def _safe_int(val: Any) -> int:
+    """Coerce a value to a non-negative int for token accounting; non-numeric,
+    non-finite, or negative input becomes 0 so fuzzed/malformed usage fields
+    never raise during arithmetic and counters cannot go below zero."""
+    if isinstance(val, bool):
+        return 0
+    if isinstance(val, int):
+        return max(0, val)
+    if isinstance(val, float):
+        return max(0, int(val)) if math.isfinite(val) else 0
+    return 0
 
 
 def parse_session(filepath: str) -> SessionDict:
@@ -96,6 +110,9 @@ def parse_session(filepath: str) -> SessionDict:
             except json.JSONDecodeError:
                 continue
 
+            if not isinstance(entry, dict):
+                continue
+
             entry_type = entry.get("type")
             ts = entry.get("timestamp")
             # file-history-snapshot stores timestamp inside snapshot
@@ -109,11 +126,11 @@ def parse_session(filepath: str) -> SessionDict:
                     metadata["first_timestamp"] = ts
                 metadata["last_timestamp"] = ts
 
-            # Count entry types
+            # Count entry types (upstream may send non-str/unhashable discriminants;
+            # coerce to str. Falsy types like "" are skipped, matching prior behavior).
             if entry_type:
-                metadata["entry_counts"][entry_type] = (
-                    metadata["entry_counts"].get(entry_type, 0) + 1
-                )
+                type_key = entry_type if isinstance(entry_type, str) else str(entry_type)
+                metadata["entry_counts"][type_key] = metadata["entry_counts"].get(type_key, 0) + 1
 
             # Track sidechain
             if entry.get("isSidechain"):
@@ -135,10 +152,12 @@ def parse_session(filepath: str) -> SessionDict:
     metadata["files_created"] = sorted(metadata["files_created"])
 
     # Compute wall clock time
-    if metadata["first_timestamp"] and metadata["last_timestamp"]:
+    first_ts = metadata["first_timestamp"]
+    last_ts = metadata["last_timestamp"]
+    if isinstance(first_ts, str) and isinstance(last_ts, str):
         try:
-            t0 = datetime.fromisoformat(metadata["first_timestamp"].replace("Z", "+00:00"))
-            t1 = datetime.fromisoformat(metadata["last_timestamp"].replace("Z", "+00:00"))
+            t0 = datetime.fromisoformat(first_ts.replace("Z", "+00:00"))
+            t1 = datetime.fromisoformat(last_ts.replace("Z", "+00:00"))
             metadata["session_wall_time_seconds"] = max(0, (t1 - t0).total_seconds())
         except (ValueError, AttributeError):
             pass
@@ -209,7 +228,7 @@ def _process_assistant(
     and tool_use calls, and accumulates token/model/tool stats."""
     msg = _entry_message(entry)
     model = msg.get("model", "")
-    if model and model != "<synthetic>":
+    if isinstance(model, str) and model and model != "<synthetic>":
         metadata["models_used"].add(model)
 
     # API error tracking
@@ -219,29 +238,29 @@ def _process_assistant(
     usage = msg.get("usage", {})
     if not isinstance(usage, dict):
         usage = {}
-    metadata["total_input_tokens"] += usage.get("input_tokens") or 0
-    metadata["total_output_tokens"] += usage.get("output_tokens") or 0
-    metadata["total_cache_read_tokens"] += usage.get("cache_read_input_tokens") or 0
-    metadata["total_cache_creation_tokens"] += usage.get("cache_creation_input_tokens") or 0
+    metadata["total_input_tokens"] += _safe_int(usage.get("input_tokens"))
+    metadata["total_output_tokens"] += _safe_int(usage.get("output_tokens"))
+    metadata["total_cache_read_tokens"] += _safe_int(usage.get("cache_read_input_tokens"))
+    metadata["total_cache_creation_tokens"] += _safe_int(usage.get("cache_creation_input_tokens"))
 
     # Extended cache metrics
     cache_creation = usage.get("cache_creation", {})
     if isinstance(cache_creation, dict):
-        metadata["total_ephemeral_5m_tokens"] += (
-            cache_creation.get("ephemeral_5m_input_tokens") or 0
+        metadata["total_ephemeral_5m_tokens"] += _safe_int(
+            cache_creation.get("ephemeral_5m_input_tokens")
         )
-        metadata["total_ephemeral_1h_tokens"] += (
-            cache_creation.get("ephemeral_1h_input_tokens") or 0
+        metadata["total_ephemeral_1h_tokens"] += _safe_int(
+            cache_creation.get("ephemeral_1h_input_tokens")
         )
 
     # Service tier
     tier = usage.get("service_tier")
-    if tier:
+    if isinstance(tier, str) and tier:
         metadata["service_tiers"].add(tier)
 
     # Stop reason tracking
     stop_reason = msg.get("stop_reason", "")
-    if stop_reason:
+    if isinstance(stop_reason, str) and stop_reason:
         metadata["stop_reasons"][stop_reason] = metadata["stop_reasons"].get(stop_reason, 0) + 1
 
     content_parts = _normalize_content(msg.get("content", []))
@@ -256,7 +275,8 @@ def _process_assistant(
         elif ptype == "thinking":
             thinking_parts.append(part.get("thinking", ""))
         elif ptype == "tool_use":
-            tool_name = part.get("name", "unknown")
+            raw_name = part.get("name", "unknown")
+            tool_name = raw_name if isinstance(raw_name, str) else "unknown"
             raw_input = part.get("input", {})
             safe_input = raw_input if isinstance(raw_input, dict) else {}
             metadata["total_tool_calls"] += 1
@@ -287,11 +307,11 @@ def _process_assistant(
             "is_sidechain": entry.get("isSidechain", False),
             "is_api_error": entry.get("isApiErrorMessage", False),
             "usage": {
-                "input_tokens": usage.get("input_tokens") or 0,
-                "output_tokens": usage.get("output_tokens") or 0,
-                "cache_read": usage.get("cache_read_input_tokens") or 0,
-                "cache_creation": usage.get("cache_creation_input_tokens") or 0,
-                "service_tier": usage.get("service_tier"),
+                "input_tokens": _safe_int(usage.get("input_tokens")),
+                "output_tokens": _safe_int(usage.get("output_tokens")),
+                "cache_read": _safe_int(usage.get("cache_read_input_tokens")),
+                "cache_creation": _safe_int(usage.get("cache_creation_input_tokens")),
+                "service_tier": tier if isinstance(tier, str) else None,
             },
         }
     )
@@ -355,7 +375,8 @@ def _track_file_activity(
 ) -> None:
     """Look at what each tool call did and record which files got touched,
     what commands got run, what URLs got fetched."""
-    fp = tool_input.get("file_path", "")
+    raw_fp = tool_input.get("file_path", "")
+    fp = raw_fp if isinstance(raw_fp, str) else ""
     if tool_name == "Read" and fp:
         metadata["files_read"].add(fp)
     elif tool_name == "Write" and fp:
@@ -364,9 +385,9 @@ def _track_file_activity(
         metadata["files_written"].add(fp)
     elif tool_name == "Bash":
         cmd = tool_input.get("command", "")
-        if cmd:
+        if isinstance(cmd, str) and cmd:
             metadata["bash_commands"].append(cmd)
     elif tool_name in ("WebFetch", "WebSearch"):
         url_or_query = tool_input.get("url") or tool_input.get("query", "")
-        if url_or_query:
+        if isinstance(url_or_query, str) and url_or_query:
             metadata["web_fetches"].append(url_or_query)

@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
+from hypothesis import settings
 
 from app import create_app
+
+# Hypothesis profiles drive fuzz example counts/deadlines (deadline disabled to
+# avoid timing flakiness on slow/CI runners). CI runs fewer examples for speed.
+settings.register_profile("dev", max_examples=200, deadline=None)
+settings.register_profile("ci", max_examples=100, deadline=None)
+settings.load_profile("ci" if os.environ.get("CI") else "dev")
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
