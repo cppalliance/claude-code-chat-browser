@@ -23,6 +23,7 @@ def test_bulk_export_session_count(
     projects = [{"name": "bench-project", "path": str(export_corpus), "display_name": "Bench"}]
 
     def _run() -> object:
+        # NoopSink + since="all" + empty last_export_sessions: no disk/state writes per round.
         return run_bulk_export(
             projects=projects,
             since="all",

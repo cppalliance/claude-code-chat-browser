@@ -16,4 +16,5 @@ def test_search_full_corpus(
 
     resp = benchmark(_run)
     assert resp.status_code == 200
-    assert resp.get_json(), "expected search hits from synthetic searchable tokens"
+    hits = resp.get_json()
+    assert isinstance(hits, list) and len(hits) > 0, "expected search hits from synthetic corpus"

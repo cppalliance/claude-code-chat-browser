@@ -29,6 +29,10 @@ The memory test also runs as part of the normal `pytest` suite (timing benchmark
 
 Large JSONL files (5000+ lines) are generated at test session scope under pytest's temp directory — not committed to git.
 
+Corpora repeat one row from `tests/fixtures/session_with_tools.jsonl`, so parse/export numbers measure steady-state throughput on a narrow schema slice — not full parser branch coverage. Treat as v1 baselines, not exhaustive perf proof.
+
+The memory test (`test_parse_memory.py`) is intentionally **not** skipped by `--benchmark-skip`; it runs in the main `pytest` job and builds the session-scoped 5000-line fixture once per session.
+
 ## CI
 
 The `benchmarks` workflow job uploads `benchmark-results.json` as a downloadable artifact. There is no regression gate yet.
