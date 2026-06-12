@@ -66,6 +66,7 @@ pytest tests/test_api_integration.py -v
 pytest tests/test_search.py -v
 pytest tests/test_api_routes.py -v
 pytest tests/test_error_codes.py -v
+pytest tests/benchmarks/ --benchmark-only -o addopts= -v   # performance baselines (see benchmarks/README.md)
 ```
 
 ### JavaScript (vitest)

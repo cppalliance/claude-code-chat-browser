@@ -1,0 +1,10 @@
+{
+  "_note": "Informational snapshot only — CI does not gate on these values.",
+  "updated": null,
+  "machine": null,
+  "groups": {
+    "parse": {},
+    "export": {},
+    "search": {}
+  }
+}

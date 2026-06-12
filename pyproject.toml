@@ -5,8 +5,11 @@ packages = ["api", "utils", "models"]
 exclude = ["tests/"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=api --cov=utils --cov-report=term-missing --cov-report=xml:coverage.xml"
+addopts = "--cov=api --cov=utils --cov-report=term-missing --cov-report=xml:coverage.xml --benchmark-skip"
 testpaths = ["tests"]
+markers = [
+    "benchmark: performance benchmarks (pytest-benchmark)",
+]
 
 [tool.coverage.run]
 omit = [
@@ -31,4 +34,4 @@ combine-as-imports = true
 # CLI bootstrap: sys.path must be set before local imports.
 "scripts/export.py" = ["E402"]
 # Tests mirror the same path bootstrap before importing app/utils.
-"tests/*.py" = ["E402"]
+"tests/**/*.py" = ["E402"]
