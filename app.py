@@ -25,6 +25,8 @@ CSP_POLICY = "; ".join(
         "img-src 'self' data:",
         "connect-src 'self'",
         "font-src 'self'",
+        "base-uri 'self'",
+        "frame-ancestors 'none'",
     ]
 )
 

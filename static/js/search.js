@@ -2,6 +2,7 @@
 
 import { esc, smoothSet, setHamburgerVisible } from './shared/utils.js';
 import { setWorkspaceMode } from './shared/theme.js';
+import { showProjects } from './projects.js';
 
 // ==================== Search ====================
 
@@ -14,19 +15,26 @@ export function showSearchPage() {
     const content = document.getElementById('content');
     content.innerHTML = `
         <div class="search-page">
-            <a class="back-link" href="#" onclick="showProjects();return false;">
+            <a class="back-link" href="#" id="search-back-link">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
                 Back to Projects
             </a>
             <br><br>
             <h1>Search</h1>
             <div class="search-bar">
-                <input class="input" type="text" id="search-input" placeholder="Search conversations..." autofocus
-                       onkeydown="if(event.key==='Enter') doSearch()">
-                <button class="btn btn-primary" onclick="doSearch()">Search</button>
+                <input class="input" type="text" id="search-input" placeholder="Search conversations..." autofocus>
+                <button type="button" class="btn btn-primary" id="search-submit-btn">Search</button>
             </div>
             <div id="search-results"></div>
         </div>`;
+    document.getElementById('search-back-link')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        showProjects();
+    });
+    document.getElementById('search-submit-btn')?.addEventListener('click', doSearch);
+    document.getElementById('search-input')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') doSearch();
+    });
     document.getElementById('search-results').addEventListener('click', (e) => {
         if (!(e.target instanceof Element)) return;
         const result = e.target.closest('.search-result[data-project]');

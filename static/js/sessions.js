@@ -5,6 +5,7 @@ import { esc, formatDate, formatTs, smoothSet, loadingBar, showToast, closeSideb
 import { renderMarkdown, cleanContent } from './shared/markdown.js';
 import { setWorkspaceMode } from './shared/theme.js';
 import { downloadSession } from './export.js';
+import { showProjects } from './projects.js';
 import { renderToolUse, renderToolResult, toolResultHasBody } from './render/registry.js';
 
 // ==================== Workspace (split layout) ====================
@@ -66,7 +67,7 @@ export async function showWorkspace(projectName, selectedSessionId) {
         sidebar += '</div>';
 
         let html = `<div class="workspace-top-bar">
-            <a class="btn btn-ghost btn-sm back-link" href="#" onclick="showProjects();return false;">
+            <a class="btn btn-ghost btn-sm back-link" href="#" id="ws-back-link">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
                 Back to Projects
             </a>
@@ -84,6 +85,10 @@ export async function showWorkspace(projectName, selectedSessionId) {
         </div>`;
         smoothSet(content, html);
         bindSidebarSessionClicks();
+        content.querySelector('#ws-back-link')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            showProjects();
+        });
         loadingBar.done();
 
         if (selectedSessionId) {
@@ -175,7 +180,7 @@ export async function loadSession(projectName, sessionId) {
         const wsActions = document.getElementById('ws-actions');
         if (wsActions) {
             wsActions.innerHTML = `<div class="btn-group">
-                <button class="btn btn-outline btn-sm" onclick="copyAll()">
+                <button type="button" class="btn btn-outline btn-sm" id="btn-copy-all">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     Copy All
                 </button>
@@ -185,6 +190,7 @@ export async function loadSession(projectName, sessionId) {
                 </button>
             </div>`;
             bindWorkspaceDownloadClick(wsActions);
+            wsActions.querySelector('#btn-copy-all')?.addEventListener('click', copyAll);
         }
 
         html += `<div class="card">

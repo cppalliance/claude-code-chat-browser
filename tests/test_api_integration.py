@@ -9,6 +9,7 @@ Fixtures (`client`, `client_empty`, `client_thinking`) live in tests/conftest.py
 
 from __future__ import annotations
 
+from app import CSP_POLICY
 from tests.conftest import assert_error_response as _assert_error_shape
 
 # --- / (SPA shell) ---
@@ -16,8 +17,8 @@ from tests.conftest import assert_error_response as _assert_error_shape
 
 def test_root_sets_csp_header(client):
     resp = client.get("/")
-    assert "Content-Security-Policy" in resp.headers
-    assert "default-src 'self'" in resp.headers["Content-Security-Policy"]
+    assert resp.status_code == 200
+    assert resp.headers.get("Content-Security-Policy") == CSP_POLICY
 
 
 # --- /api/projects ---
