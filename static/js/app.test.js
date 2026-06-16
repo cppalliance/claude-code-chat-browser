@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { state } from './shared/state.js';
 
 const showProjects = vi.fn();
@@ -19,11 +19,19 @@ vi.mock('./shared/theme.js', () => ({
 }));
 
 describe('router (app.js)', () => {
+    const origScrollTo = window.scrollTo;
+    const origScrollIntoView = Element.prototype.scrollIntoView;
+
     beforeAll(async () => {
         window.scrollTo = vi.fn();
         Element.prototype.scrollIntoView = vi.fn();
         await import('./app.js');
         document.dispatchEvent(new Event('DOMContentLoaded'));
+    });
+
+    afterAll(() => {
+        window.scrollTo = origScrollTo;
+        Element.prototype.scrollIntoView = origScrollIntoView;
     });
 
     beforeEach(() => {

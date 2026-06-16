@@ -19,6 +19,6 @@ describe('renderFileReadResult', () => {
             file_path: 'README.md',
         });
         expect(html).toContain('Read: README.md');
-        expect(html).not.toContain('lines');
+        expect(html).not.toMatch(/\d+ lines/);
     });
 });

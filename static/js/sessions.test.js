@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { state } from './shared/state.js';
 import { showWorkspace, loadSession, selectSession, copyAll } from './sessions.js';
 
@@ -62,7 +62,16 @@ function mockWorkspaceFetch() {
             return Promise.resolve({ ok: true, json: () => Promise.resolve(SESSION_LIST) });
         }
         if (url.startsWith('/api/sessions/alpha/')) {
-            return Promise.resolve({ ok: true, json: () => Promise.resolve(SESSION_DETAIL) });
+            const sessionId = decodeURIComponent(url.split('/').pop());
+            const row = SESSION_LIST.find((s) => s.id === sessionId) ?? SESSION_LIST[0];
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({
+                    ...SESSION_DETAIL,
+                    session_id: sessionId,
+                    title: row.title,
+                }),
+            });
         }
         return Promise.reject(new Error(`unexpected fetch: ${url}`));
     });
@@ -76,6 +85,10 @@ describe('sessions workspace', () => {
         state.projectDisplayNames = {};
         vi.stubGlobal('fetch', vi.fn());
         window.location.hash = '';
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
     });
 
     it('showWorkspace populates the sidebar with session entries', async () => {
@@ -142,6 +155,6 @@ describe('sessions workspace', () => {
 
         copyAll();
 
-        expect(writeText).toHaveBeenCalledWith('Line one\nLine two');
+        await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('Line one\nLine two'));
     });
 });

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { showProjects } from './projects.js';
 
 // ProjectDict[] — mirrors models/project.py.
@@ -23,6 +23,10 @@ describe('showProjects', () => {
     beforeEach(() => {
         document.body.innerHTML = '<div id="content"></div>';
         vi.stubGlobal('fetch', vi.fn());
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
     });
 
     it('renders project cards from the API response', async () => {

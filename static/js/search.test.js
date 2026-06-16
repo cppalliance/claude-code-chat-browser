@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { showSearchPage, doSearch } from './search.js';
 
 // SearchHitDict[] — mirrors models/search.py (no highlight wrapper in search.js; snippets are escaped text only).
@@ -26,6 +26,10 @@ describe('search page', () => {
         document.body.innerHTML = '<div id="content"></div>';
         vi.stubGlobal('fetch', vi.fn());
         window.location.hash = '';
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
     });
 
     it('showSearchPage renders the search UI and sets hash', () => {

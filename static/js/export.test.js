@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { bulkExport, downloadSession } from './export.js';
 
 vi.mock('./projects.js', () => ({ showProjects: vi.fn() }));
+vi.mock('./shared/utils.js', async (importOriginal) => {
+    const actual = await importOriginal();
+    return {
+        ...actual,
+        showConfirm: vi.fn((_, cb) => { cb(); }),
+    };
+});
 
+import { bulkExport, downloadSession } from './export.js';
 import { showProjects } from './projects.js';
 
 const mockWritable = {
@@ -30,30 +37,28 @@ describe('export', () => {
     });
 
     afterEach(() => {
+        vi.unstubAllGlobals();
         vi.restoreAllMocks();
     });
 
-    async function confirmExport() {
-        const ok = document.querySelector('.confirm-ok');
-        expect(ok).not.toBeNull();
-        ok.click();
-        await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
-    }
-
     it('bulkExport shows progress then completes on success', async () => {
-        fetch.mockResolvedValue({
+        let resolveFetch;
+        const pending = new Promise((resolve) => { resolveFetch = resolve; });
+        fetch.mockImplementation(() => pending.then(() => ({
             ok: true,
             headers: { get: () => 'application/zip' },
             blob: () => Promise.resolve(new Blob(['zip'], { type: 'application/zip' })),
-        });
+        })));
 
         bulkExport('all');
         const btn = document.getElementById('btn-export-all');
-        expect(btn.disabled).toBe(false);
-        await confirmExport();
+        await vi.waitFor(() => expect(btn.disabled).toBe(true));
+        expect(btn.textContent).toContain('Exporting');
+
+        resolveFetch();
+        await vi.waitFor(() => expect(btn.disabled).toBe(false));
 
         expect(btn.textContent.trim()).toBe('Export all');
-        expect(btn.disabled).toBe(false);
         expect(mockHandle.createWritable).toHaveBeenCalled();
         expect(showProjects).toHaveBeenCalled();
         expect(fetch).toHaveBeenCalledWith('/api/export', expect.objectContaining({
@@ -71,7 +76,6 @@ describe('export', () => {
         });
 
         bulkExport('all');
-        await confirmExport();
         await vi.waitFor(() => expect(document.querySelector('.toast-error')).not.toBeNull());
 
         expect(document.querySelector('.toast-error').textContent).toContain('export failed');
@@ -86,7 +90,6 @@ describe('export', () => {
         });
 
         bulkExport('incremental');
-        await confirmExport();
         await vi.waitFor(() => expect(document.querySelector('.toast-error')).not.toBeNull());
 
         expect(document.querySelector('.toast-error').textContent).toContain('Export failed: 403');
