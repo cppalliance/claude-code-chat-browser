@@ -2,13 +2,14 @@
 actually work with -- messages, tool calls, token counts, file activity, etc."""
 
 import json
+import logging
 import math
 import os
 from datetime import datetime
-from typing import Any
+from typing import Any, cast, get_args
 
 from models.record_data import RecordDataUnion
-from models.session import MessageDict, SessionDict, ToolUseDict
+from models.session import MessageDict, RoleLiteral, SessionDict, ToolUseDict
 from models.tool_results import ToolResultUnion, is_tool_result_dict
 from utils.jsonl_helpers import (
     entry_message as _entry_message,
@@ -22,6 +23,30 @@ from utils.tool_dispatch import _parse_tool_result
 from utils.validation import validate_session_dict
 
 __all__ = ["parse_session", "quick_session_info"]
+
+_HANDLED_ENTRY_TYPES = frozenset({"user", "assistant", "system", "progress"})
+_VALID_ROLES = frozenset(get_args(RoleLiteral))
+
+
+def _coerce_role(raw: str) -> RoleLiteral:
+    if raw in _VALID_ROLES:
+        return cast(RoleLiteral, raw)
+    logging.warning("Unknown message role %r; mapping to 'system'", raw)
+    return "system"
+
+
+def _fallback_message(entry: dict[str, Any], role: RoleLiteral) -> MessageDict:
+    """Minimal message for JSONL entry types without a dedicated processor."""
+    content = entry.get("content", "")
+    text = content if isinstance(content, str) else (str(content) if content is not None else "")
+    return {
+        "role": role,
+        "uuid": entry.get("uuid"),
+        "parent_uuid": entry.get("parentUuid"),
+        "timestamp": entry.get("timestamp"),
+        "content": text,
+        "is_sidechain": entry.get("isSidechain", False),
+    }
 
 
 def _safe_int(val: Any) -> int:
@@ -127,6 +152,10 @@ def parse_session(filepath: str) -> SessionDict:
                 _process_system(entry, messages, metadata)
             elif entry_type == "progress":
                 _process_progress(entry, messages)
+            elif entry_type:
+                type_str = entry_type if isinstance(entry_type, str) else str(entry_type)
+                if type_str not in _HANDLED_ENTRY_TYPES:
+                    messages.append(_fallback_message(entry, _coerce_role(type_str)))
 
     metadata["models_used"] = sorted(metadata["models_used"])
     metadata["service_tiers"] = sorted(metadata["service_tiers"])

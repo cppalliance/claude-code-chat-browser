@@ -5,6 +5,8 @@ from typing import Any, Literal, NotRequired, TypedDict
 from models.record_data import RecordDataUnion
 from models.tool_results import ToolNameLiteral, ToolResultUnion
 
+RoleLiteral = Literal["user", "assistant", "system", "result", "progress"]
+
 
 class ToolUseDict(TypedDict, total=False):
     id: str
@@ -25,7 +27,7 @@ SystemSubtypeLiteral = Literal["compact_boundary", "init"]
 
 
 class MessageDict(TypedDict):
-    role: str
+    role: RoleLiteral
     uuid: NotRequired[str | None]
     parent_uuid: NotRequired[str | None]
     timestamp: NotRequired[str | None]

@@ -686,16 +686,19 @@ class TestParseSession:
         finally:
             os.unlink(path)
 
-    def test_unknown_entry_type_silently_ignored(self):
+    def test_unknown_entry_type_maps_to_system(self, caplog):
         path = _write_jsonl(
             [
                 {"type": "custom", "timestamp": "2026-01-01T00:00:00Z"},
             ]
         )
         try:
-            s = parse_session(path)
-            assert s["messages"] == []
+            with caplog.at_level("WARNING"):
+                s = parse_session(path)
+            assert len(s["messages"]) == 1
+            assert s["messages"][0]["role"] == "system"
             assert s["metadata"]["entry_counts"].get("custom") == 1
+            assert "Unknown message role" in caplog.text
         finally:
             os.unlink(path)
 
@@ -981,3 +984,48 @@ class TestMalformedPartialEntries:
             ]
         )
         assert s["messages"][0]["tool_result_parsed"] is None
+
+
+# ---------------------------------------------------------------------------
+# Unknown role coercion
+# ---------------------------------------------------------------------------
+
+
+class TestUnknownRoleCoercion:
+    def test_unknown_entry_type_maps_to_system_with_warning(self, caplog):
+        path = _write_jsonl(
+            [
+                {
+                    "type": "mystery_future_type",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "content": "forward-compat payload",
+                }
+            ]
+        )
+        try:
+            with caplog.at_level("WARNING"):
+                s = parse_session(path)
+            assert len(s["messages"]) == 1
+            assert s["messages"][0]["role"] == "system"
+            assert s["messages"][0]["content"] == "forward-compat payload"
+            assert "Unknown message role" in caplog.text
+            assert "mystery_future_type" in caplog.text
+        finally:
+            os.unlink(path)
+
+    def test_valid_unhandled_result_type_emits_result_role(self):
+        path = _write_jsonl(
+            [
+                {
+                    "type": "result",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "content": "task outcome",
+                }
+            ]
+        )
+        try:
+            s = parse_session(path)
+            assert len(s["messages"]) == 1
+            assert s["messages"][0]["role"] == "result"
+        finally:
+            os.unlink(path)

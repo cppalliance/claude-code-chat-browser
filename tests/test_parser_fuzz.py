@@ -240,8 +240,10 @@ def test_unknown_record_type_is_graceful(tmp_path: Path) -> None:
     path = _write_jsonl(tmp_path / "unknown.jsonl", lines)
     session = parse_session(path)
     assert session["metadata"]["entry_counts"].get("totally-new-claude-record") == 1
-    # Unknown type produces no message; only the valid user line does.
-    assert len(session["messages"]) == 1
+    # Unknown type is coerced to a system message; the valid user line follows.
+    assert len(session["messages"]) == 2
+    assert session["messages"][0]["role"] == "system"
+    assert session["messages"][1]["role"] == "user"
 
 
 def test_non_numeric_usage_tokens_do_not_crash(tmp_path: Path) -> None:
