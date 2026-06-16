@@ -24,27 +24,33 @@ from utils.validation import validate_session_dict
 
 __all__ = ["parse_session", "quick_session_info"]
 
-_HANDLED_ENTRY_TYPES = frozenset({"user", "assistant", "system", "progress"})
 _SKIP_ENTRY_TYPES = frozenset({"file-history-snapshot"})
 _VALID_ROLES = frozenset(get_args(RoleLiteral))
+_log = logging.getLogger(__name__)
 
 
 def _coerce_role(raw: str) -> RoleLiteral:
     if raw in _VALID_ROLES:
         return cast(RoleLiteral, raw)
-    logging.warning("Unknown message role %r; mapping to 'system'", raw)
+    _log.warning("Unknown message role %r; mapping to 'system'", raw)
     return "system"
 
 
 def _fallback_message(entry: dict[str, Any], role: RoleLiteral) -> MessageDict:
     """Minimal message for JSONL entry types without a dedicated processor."""
-    content = entry.get("content", "")
-    text = content if isinstance(content, str) else (str(content) if content is not None else "")
+    raw_content = entry.get("content", "")
+    if isinstance(raw_content, str):
+        text = raw_content
+    elif raw_content is not None:
+        text = _extract_text(_normalize_content(raw_content))
+    else:
+        text = ""
     return {
         "role": role,
         "uuid": entry.get("uuid"),
         "parent_uuid": entry.get("parentUuid"),
         "timestamp": entry.get("timestamp"),
+        "text": text,
         "content": text,
         "is_sidechain": entry.get("isSidechain", False),
     }
@@ -155,7 +161,7 @@ def parse_session(filepath: str) -> SessionDict:
                 _process_progress(entry, messages)
             elif entry_type:
                 type_str = entry_type if isinstance(entry_type, str) else str(entry_type)
-                if type_str not in _HANDLED_ENTRY_TYPES and type_str not in _SKIP_ENTRY_TYPES:
+                if type_str not in _SKIP_ENTRY_TYPES:
                     messages.append(_fallback_message(entry, _coerce_role(type_str)))
 
     metadata["models_used"] = sorted(metadata["models_used"])

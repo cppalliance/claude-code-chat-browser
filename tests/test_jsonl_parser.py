@@ -988,13 +988,31 @@ class TestUnknownRoleCoercion:
             ]
         )
         try:
-            with caplog.at_level("WARNING"):
+            with caplog.at_level("WARNING", logger="utils.jsonl_parser"):
                 s = parse_session(path)
             assert len(s["messages"]) == 1
             assert s["messages"][0]["role"] == "system"
+            assert s["messages"][0]["text"] == "forward-compat payload"
             assert s["messages"][0]["content"] == "forward-compat payload"
             assert "Unknown message role" in caplog.text
             assert "mystery_future_type" in caplog.text
+        finally:
+            os.unlink(path)
+
+    def test_fallback_message_extracts_text_from_structured_content(self):
+        path = _write_jsonl(
+            [
+                {
+                    "type": "result",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "content": [{"type": "text", "text": "block body"}],
+                }
+            ]
+        )
+        try:
+            s = parse_session(path)
+            assert s["messages"][0]["text"] == "block body"
+            assert s["messages"][0]["content"] == "block body"
         finally:
             os.unlink(path)
 
@@ -1014,3 +1032,19 @@ class TestUnknownRoleCoercion:
             assert s["messages"][0]["role"] == "result"
         finally:
             os.unlink(path)
+
+
+class TestCoerceRole:
+    def test_known_roles_returned_unchanged(self):
+        from utils.jsonl_parser import _coerce_role
+
+        for role in ("user", "assistant", "system", "result", "progress"):
+            assert _coerce_role(role) == role
+
+    def test_unknown_role_maps_to_system_with_warning(self, caplog):
+        from utils.jsonl_parser import _coerce_role
+
+        with caplog.at_level("WARNING", logger="utils.jsonl_parser"):
+            result = _coerce_role("totally_unknown")
+        assert result == "system"
+        assert "totally_unknown" in caplog.text
