@@ -25,6 +25,7 @@ from utils.validation import validate_session_dict
 __all__ = ["parse_session", "quick_session_info"]
 
 _HANDLED_ENTRY_TYPES = frozenset({"user", "assistant", "system", "progress"})
+_SKIP_ENTRY_TYPES = frozenset({"file-history-snapshot"})
 _VALID_ROLES = frozenset(get_args(RoleLiteral))
 
 
@@ -154,7 +155,7 @@ def parse_session(filepath: str) -> SessionDict:
                 _process_progress(entry, messages)
             elif entry_type:
                 type_str = entry_type if isinstance(entry_type, str) else str(entry_type)
-                if type_str not in _HANDLED_ENTRY_TYPES:
+                if type_str not in _HANDLED_ENTRY_TYPES and type_str not in _SKIP_ENTRY_TYPES:
                     messages.append(_fallback_message(entry, _coerce_role(type_str)))
 
     metadata["models_used"] = sorted(metadata["models_used"])

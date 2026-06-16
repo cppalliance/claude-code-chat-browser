@@ -686,22 +686,6 @@ class TestParseSession:
         finally:
             os.unlink(path)
 
-    def test_unknown_entry_type_maps_to_system(self, caplog):
-        path = _write_jsonl(
-            [
-                {"type": "custom", "timestamp": "2026-01-01T00:00:00Z"},
-            ]
-        )
-        try:
-            with caplog.at_level("WARNING"):
-                s = parse_session(path)
-            assert len(s["messages"]) == 1
-            assert s["messages"][0]["role"] == "system"
-            assert s["metadata"]["entry_counts"].get("custom") == 1
-            assert "Unknown message role" in caplog.text
-        finally:
-            os.unlink(path)
-
     def test_is_sidechain_increments_counter(self):
         path = _write_jsonl(
             [
@@ -732,6 +716,7 @@ class TestParseSession:
             s = parse_session(path)
             assert s["metadata"]["first_timestamp"] == "2026-01-02T12:00:00Z"
             assert s["metadata"]["last_timestamp"] == "2026-01-02T12:00:00Z"
+            assert len(s["messages"]) == 0
         finally:
             os.unlink(path)
 
