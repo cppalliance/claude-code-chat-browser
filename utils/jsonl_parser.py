@@ -24,7 +24,8 @@ from utils.validation import validate_session_dict
 
 __all__ = ["parse_session", "quick_session_info"]
 
-_SKIP_ENTRY_TYPES = frozenset({"file-history-snapshot"})
+# Metadata-only JSONL entry types: contribute timestamps/counts but not messages.
+_SKIP_ENTRY_TYPES = frozenset({"file-history-snapshot", "summary"})
 _VALID_ROLES = frozenset(get_args(RoleLiteral))
 _log = logging.getLogger(__name__)
 

@@ -720,6 +720,25 @@ class TestParseSession:
         finally:
             os.unlink(path)
 
+    def test_summary_entry_type_produces_no_message(self, caplog):
+        path = _write_jsonl(
+            [
+                {
+                    "type": "summary",
+                    "timestamp": "2026-01-03T08:00:00Z",
+                    "summary": "Session recap metadata",
+                },
+            ]
+        )
+        try:
+            with caplog.at_level("WARNING", logger="utils.jsonl_parser"):
+                s = parse_session(path)
+            assert len(s["messages"]) == 0
+            assert s["metadata"]["entry_counts"].get("summary") == 1
+            assert "Unknown message role" not in caplog.text
+        finally:
+            os.unlink(path)
+
     def test_entry_counts_accumulated(self):
         assistant_entry = {
             "type": "assistant",
