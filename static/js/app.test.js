@@ -5,16 +5,22 @@ const showProjects = vi.fn();
 const showWorkspace = vi.fn();
 const loadSession = vi.fn();
 const showSearchPage = vi.fn();
+const toggleTheme = vi.fn();
+const toggleSidebar = vi.fn();
 
 vi.mock('./projects.js', () => ({ showProjects }));
 vi.mock('./sessions.js', () => ({ showWorkspace, loadSession, selectSession: vi.fn(), copyAll: vi.fn() }));
 vi.mock('./search.js', () => ({ showSearchPage, doSearch: vi.fn() }));
 vi.mock('./export.js', () => ({ bulkExport: vi.fn(), downloadSession: vi.fn() }));
+vi.mock('./shared/utils.js', async (importOriginal) => {
+    const actual = await importOriginal();
+    return { ...actual, toggleSidebar, closeSidebar: vi.fn() };
+});
 vi.mock('./shared/theme.js', () => ({
     HLJS_THEME_SHEETS: {},
     applyHljsTheme: vi.fn(),
     applyTheme: vi.fn(),
-    toggleTheme: vi.fn(),
+    toggleTheme,
     setWorkspaceMode: vi.fn(),
 }));
 
@@ -107,5 +113,57 @@ describe('router (app.js)', () => {
         showSearchPage.mockClear();
         routeTo('#project/other');
         expect(showWorkspace).toHaveBeenCalledWith('other');
+    });
+});
+
+describe('navbar handlers (app.js DOMContentLoaded)', () => {
+    const origScrollTo = window.scrollTo;
+
+    beforeAll(async () => {
+        vi.resetModules();
+        window.scrollTo = vi.fn();
+        document.body.innerHTML = `
+            <button id="hamburger-btn"></button>
+            <a id="navbar-brand" href="#"></a>
+            <a id="nav-search-link" href="#search"></a>
+            <button id="theme-toggle"></button>
+            <div id="content"></div>
+            <span id="footer-year"></span>
+        `;
+        await import('./app.js');
+        document.dispatchEvent(new Event('DOMContentLoaded'));
+    });
+
+    afterAll(() => {
+        window.scrollTo = origScrollTo;
+    });
+
+    beforeEach(() => {
+        toggleTheme.mockClear();
+        toggleSidebar.mockClear();
+        showProjects.mockClear();
+        showSearchPage.mockClear();
+    });
+
+    it('wires hamburger click to toggleSidebar', () => {
+        document.getElementById('hamburger-btn').click();
+        expect(toggleSidebar).toHaveBeenCalledTimes(1);
+    });
+
+    it('wires navbar brand click to showProjects', () => {
+        const brand = document.getElementById('navbar-brand');
+        brand.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        expect(showProjects).toHaveBeenCalled();
+    });
+
+    it('wires nav search link click to showSearchPage', () => {
+        const link = document.getElementById('nav-search-link');
+        link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        expect(showSearchPage).toHaveBeenCalled();
+    });
+
+    it('wires theme toggle click to toggleTheme', () => {
+        document.getElementById('theme-toggle').click();
+        expect(toggleTheme).toHaveBeenCalledTimes(1);
     });
 });
