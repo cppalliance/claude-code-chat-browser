@@ -70,6 +70,12 @@ class TestValidateSessionDict:
         assert result["session_id"] == "abc123"
         assert result["messages"][0]["role"] == "user"
 
+    def test_invalid_role_in_message(self):
+        with pytest.raises(SessionValidationError) as exc_info:
+            validate_session_dict(_valid_payload(messages=[{"role": "custom", "text": "x"}]))
+        assert exc_info.value.path == "messages[0].role"
+        assert "custom" in exc_info.value.detail
+
 
 class TestParseSessionValidationRegression:
     def test_session_minimal_fixture_unchanged(self):

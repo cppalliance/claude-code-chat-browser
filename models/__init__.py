@@ -8,6 +8,7 @@ from models.search import SearchHitDict
 from models.session import (
     MessageDict,
     QuickSessionInfoDict,
+    RoleLiteral,
     SessionDict,
     SessionMetadataDict,
     ToolUseDict,
@@ -23,6 +24,7 @@ __all__ = [
     "ProjectDict",
     "ProjectSessionRowDict",
     "QuickSessionInfoDict",
+    "RoleLiteral",
     "SearchHitDict",
     "SessionDict",
     "SessionListItemDict",

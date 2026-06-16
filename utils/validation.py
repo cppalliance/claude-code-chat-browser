@@ -1,9 +1,11 @@
 """Runtime validation for TypedDict shapes at untrusted-data boundaries."""
 
-from typing import Any, cast
+from typing import Any, cast, get_args
 
 from models.errors import SessionValidationError
-from models.session import SessionDict
+from models.session import RoleLiteral, SessionDict
+
+_VALID_ROLES = frozenset(get_args(RoleLiteral))
 
 _ROOT_PATH = "(root)"
 
@@ -49,6 +51,11 @@ def validate_session_dict(data: dict[str, Any]) -> SessionDict:
     for index, message in enumerate(messages):
         path = f"messages[{index}]"
         msg_dict = _require_value(path, message, dict, "dict")
-        _require_field(msg_dict, "role", str, "str", path=f"{path}.role")
+        role = _require_field(msg_dict, "role", str, "str", path=f"{path}.role")
+        if role not in _VALID_ROLES:
+            raise SessionValidationError(
+                f"{path}.role",
+                f"expected one of {sorted(_VALID_ROLES)!r}, got {role!r}",
+            )
 
     return cast(SessionDict, data)
