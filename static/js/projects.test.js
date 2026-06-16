@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { showProjects } from './projects.js';
 
+// ProjectDict[] — mirrors models/project.py.
 const PROJECT_FIXTURE = [
     {
         name: 'alpha',

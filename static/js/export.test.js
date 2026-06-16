@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bulkExport, downloadSession } from './export.js';
 
 vi.mock('./projects.js', () => ({ showProjects: vi.fn() }));
@@ -27,6 +27,10 @@ describe('export', () => {
         mockWritable.close.mockClear();
         mockHandle.createWritable.mockClear();
         showProjects.mockClear();
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
     });
 
     async function confirmExport() {

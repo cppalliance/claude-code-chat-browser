@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { showSearchPage, doSearch } from './search.js';
 
+// SearchHitDict[] — mirrors models/search.py (no highlight wrapper in search.js; snippets are escaped text only).
 const SEARCH_HITS = [
     {
         project: 'alpha',

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { state } from './shared/state.js';
 import { showWorkspace, loadSession, selectSession, copyAll } from './sessions.js';
 
+// Session list + detail shapes mirror models/session.py (ProjectSessionRowDict / SessionDict).
 const SESSION_LIST = [
     {
         id: 'sess-1',

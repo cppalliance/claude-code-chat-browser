@@ -9,6 +9,9 @@ export default defineConfig({
             reporter: ['text', 'lcov'],
             include: ['static/js/**/*.js'],
             exclude: ['static/js/**/*.test.js'],
+            thresholds: {
+                lines: 50,
+            },
         },
     },
 });
