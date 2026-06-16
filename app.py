@@ -13,6 +13,21 @@ from api.search import search_bp
 from api.sessions import sessions_bp
 from utils.exclusion_rules import load_rules, resolve_exclusion_rules_path
 
+# Content-Security-Policy for all Flask responses. 'unsafe-inline' in style-src is
+# required because highlight.js themes apply inline styles; can be tightened with
+# nonces later. script-src lists cdnjs only — keep in sync with SRI <script>/<link>
+# sources in static/index.html.
+CSP_POLICY = "; ".join(
+    [
+        "default-src 'self'",
+        "script-src 'self' https://cdnjs.cloudflare.com",
+        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com",
+        "img-src 'self' data:",
+        "connect-src 'self'",
+        "font-src 'self'",
+    ]
+)
+
 
 def _normalize_bind_host(host: str) -> str:
     """Lowercase host for checks; strip optional IPv6 brackets (e.g. ``[::1]`` → ``::1``)."""
@@ -82,6 +97,11 @@ def create_app(
     app.register_blueprint(sessions_bp)
     app.register_blueprint(search_bp)
     app.register_blueprint(export_bp)
+
+    @app.after_request
+    def set_security_headers(response):
+        response.headers.setdefault("Content-Security-Policy", CSP_POLICY)
+        return response
 
     @app.route("/")
     def index():

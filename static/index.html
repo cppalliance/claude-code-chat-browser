@@ -4,15 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Claude Code Chat Browser</title>
-  <script>
-    /* Apply saved theme before first paint (avoids dark flash in light mode).
-       hljs URLs/integrity must match HLJS_THEME_SHEETS in static/js/shared/theme.js */
-    (function () {
-      var t = localStorage.getItem('theme');
-      if (t !== 'light' && t !== 'dark') t = 'dark';
-      document.documentElement.setAttribute('data-theme', t);
-    })();
-  </script>
+  <script src="/static/js/theme-init.js"></script>
   <link rel="stylesheet" href="/static/css/style.css">
   <!-- SRI hashes pin each CDN asset to a specific known-good payload; the
        browser refuses anything whose hash does not match (issue #19).
@@ -26,16 +18,7 @@
         integrity="sha512-mtXspRdOWHCYp+f4c7CkWGYPPRAhq9X+xCvJMUBVAb6pqA4U8pxhT3RWT3LP3bKbiolYL2CkL1bSKZZO4eeTew=="
         crossorigin="anonymous"
         id="hljs-theme">
-  <script>
-    (function () {
-      var t = document.documentElement.getAttribute('data-theme') || 'dark';
-      if (t !== 'light') return;
-      var link = document.getElementById('hljs-theme');
-      if (!link) return;
-      link.integrity = 'sha512-0aPQyyeZrWgKOP0mUipLQ6OZXu8l4IcAmD2u31EPEy9VcIMvl7SoAaKe8bLXZhYoMaE/in+gcgA==';
-      link.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css';
-    })();
-  </script>
+  <script src="/static/js/hljs-theme-init.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"
           integrity="sha512-D9gUyxqja7hBtkWpPWGt9wfbfaMGVt9gnyCvYa+jojwwPHLCzUm5i8rpk7vD7wNee9bA35eYIjobYPaQuKS1MQ=="
           crossorigin="anonymous"></script>

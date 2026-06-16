@@ -11,6 +11,15 @@ from __future__ import annotations
 
 from tests.conftest import assert_error_response as _assert_error_shape
 
+# --- / (SPA shell) ---
+
+
+def test_root_sets_csp_header(client):
+    resp = client.get("/")
+    assert "Content-Security-Policy" in resp.headers
+    assert "default-src 'self'" in resp.headers["Content-Security-Policy"]
+
+
 # --- /api/projects ---
 
 
