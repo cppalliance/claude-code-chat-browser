@@ -113,6 +113,21 @@ The UI is a **hash-routed** SPA with ES modules under `static/js/`:
 
 No bundler step — modern browsers load modules directly. Frontend unit tests use **vitest** + **jsdom** (`npm test`), including `static/js/render/registry.test.js` for registry wiring and renderer escaping.
 
+## Content-Security-Policy
+
+`create_app()` registers an `@app.after_request` hook that sets a `Content-Security-Policy` header on every Flask response. The policy is defined as `CSP_POLICY` in `app.py`:
+
+| Directive | Sources | Notes |
+|-----------|---------|-------|
+| `default-src` | `'self'` | Fallback for unspecified fetch types |
+| `script-src` | `'self'`, `https://cdnjs.cloudflare.com` | Self-hosted JS (e.g. `theme-init.js`, ES modules) plus SRI-pinned CDN scripts in `index.html` |
+| `style-src` | `'self'`, `'unsafe-inline'`, `https://cdnjs.cloudflare.com` | `'unsafe-inline'` needed for highlight.js theme inline styles; tighten with nonces later |
+| `img-src` | `'self'`, `data:` | Session images and data URLs |
+| `connect-src` | `'self'` | API `fetch` calls to same origin |
+| `font-src` | `'self'` | Local fonts only |
+
+**Keeping CDN sources in sync:** when adding or bumping a CDN asset in `static/index.html`, update both the SRI `integrity` hash and `CSP_POLICY` if the origin changes (today all CDN assets use `cdnjs.cloudflare.com`). Theme-init scripts were externalized to `static/js/theme-init.js` and `static/js/hljs-theme-init.js` so `script-src` does not require `'unsafe-inline'`.
+
 ## Continuous integration
 
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs on push/PR:
