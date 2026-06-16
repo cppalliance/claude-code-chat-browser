@@ -3,8 +3,14 @@
 import { state } from './shared/state.js';
 import { esc, formatDate, smoothSet, loadingBar, setHamburgerVisible } from './shared/utils.js';
 import { setWorkspaceMode } from './shared/theme.js';
+import { bulkExport } from './export.js';
 
 // ==================== Projects (home) ====================
+
+function bindProjectsExportButtons(root) {
+    root.querySelector('#btn-export-since')?.addEventListener('click', () => bulkExport('incremental'));
+    root.querySelector('#btn-export-all')?.addEventListener('click', () => bulkExport('all'));
+}
 
 export async function showProjects() {
     state.currentProject = null;
@@ -69,7 +75,7 @@ export async function showProjects() {
         }
 
         const sinceBtnHtml = hasPreviousExport
-            ? `<button class="btn btn-primary btn-sm" id="btn-export-since" onclick="bulkExport('incremental')">
+            ? `<button type="button" class="btn btn-primary btn-sm" id="btn-export-since">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Export new since last
               </button>`
@@ -80,7 +86,7 @@ export async function showProjects() {
                 <h1>Projects</h1>
                 <div class="btn-group">
                     ${sinceBtnHtml}
-                    <button class="btn btn-outline btn-sm" id="btn-export-all" onclick="bulkExport('all')">
+                    <button type="button" class="btn btn-outline btn-sm" id="btn-export-all">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                         Export all
                     </button>
@@ -140,6 +146,7 @@ export async function showProjects() {
 
         loadingBar.done();
         smoothSet(content, html);
+        bindProjectsExportButtons(content);
     } catch (e) {
         loadingBar.done();
         smoothSet(content, `<div class="loading"><p class="text-danger">Failed to load projects.</p></div>`);

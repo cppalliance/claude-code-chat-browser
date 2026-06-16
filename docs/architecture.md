@@ -125,8 +125,10 @@ No bundler step — modern browsers load modules directly. Frontend unit tests u
 | `img-src` | `'self'`, `data:` | Session images and data URLs |
 | `connect-src` | `'self'` | API `fetch` calls to same origin |
 | `font-src` | `'self'` | Local fonts only |
+| `base-uri` | `'self'` | Restrict `<base>` tag injection |
+| `frame-ancestors` | `'none'` | Prevent clickjacking via iframes |
 
-**Keeping CDN sources in sync:** when adding or bumping a CDN asset in `static/index.html`, update both the SRI `integrity` hash and `CSP_POLICY` if the origin changes (today all CDN assets use `cdnjs.cloudflare.com`). Theme-init scripts were externalized to `static/js/theme-init.js` and `static/js/hljs-theme-init.js` so `script-src` does not require `'unsafe-inline'`.
+**Keeping CDN sources in sync:** when adding or bumping a CDN asset in `static/index.html`, update both the SRI `integrity` hash and `CSP_POLICY` if the origin changes (today all CDN assets use `cdnjs.cloudflare.com`). Theme-init scripts were externalized to `static/js/theme-init.js` and `static/js/hljs-theme-init.js` so `script-src` does not require `'unsafe-inline'`. Navbar and route UI handlers use `addEventListener` instead of inline `onclick` attributes for the same reason.
 
 ## Continuous integration
 
