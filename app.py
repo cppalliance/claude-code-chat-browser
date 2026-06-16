@@ -25,6 +25,8 @@ CSP_POLICY = "; ".join(
         "img-src 'self' data:",
         "connect-src 'self'",
         "font-src 'self'",
+        "object-src 'none'",
+        "form-action 'self'",
         "base-uri 'self'",
         "frame-ancestors 'none'",
     ]
@@ -102,7 +104,8 @@ def create_app(
 
     @app.after_request
     def set_security_headers(response):
-        response.headers.setdefault("Content-Security-Policy", CSP_POLICY)
+        # Always set — do not use setdefault; a blueprint must not weaken CSP.
+        response.headers["Content-Security-Policy"] = CSP_POLICY
         return response
 
     @app.route("/")

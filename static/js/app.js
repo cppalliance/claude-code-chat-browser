@@ -3,8 +3,8 @@
 // Shared helpers live in shared/utils.js, shared/markdown.js, shared/theme.js.
 
 import { state } from './shared/state.js';
-import { toggleSidebar, closeSidebar, loadingBar } from './shared/utils.js';
-import { HLJS_THEME_SHEETS, applyHljsTheme, applyTheme, toggleTheme, setWorkspaceMode } from './shared/theme.js';
+import { toggleSidebar, closeSidebar } from './shared/utils.js';
+import { HLJS_THEME_SHEETS, applyTheme, toggleTheme } from './shared/theme.js';
 import { showProjects } from './projects.js';
 import { showWorkspace, loadSession } from './sessions.js';
 import { showSearchPage } from './search.js';

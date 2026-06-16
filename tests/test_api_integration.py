@@ -21,6 +21,12 @@ def test_root_sets_csp_header(client):
     assert resp.headers.get("Content-Security-Policy") == CSP_POLICY
 
 
+def test_api_routes_set_csp_header(client):
+    resp = client.get("/api/projects")
+    assert resp.status_code == 200
+    assert resp.headers.get("Content-Security-Policy") == CSP_POLICY
+
+
 # --- /api/projects ---
 
 
