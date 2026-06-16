@@ -12,11 +12,8 @@ import os
 
 import pytest
 
-from utils.jsonl_parser import (
-    _TOOL_RESULT_DISPATCH,
-    _parse_tool_result,
-    parse_session,
-)
+from utils.jsonl_parser import parse_session
+from utils.tool_dispatch import _TOOL_RESULT_DISPATCH, _parse_tool_result
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 

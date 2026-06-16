@@ -6,6 +6,7 @@ from typing import Any
 
 from models.session import MessageDict, SessionDict, ToolUseDict
 from models.stats import SessionStatsDict
+from utils.jsonl_helpers import strip_system_tags
 from utils.session_stats import format_duration
 
 
@@ -208,9 +209,7 @@ def _render_user(msg: MessageDict) -> str:
         )
 
     if msg.get("text"):
-        from utils.jsonl_parser import _strip_system_tags
-
-        lines.append(_strip_system_tags(msg["text"]))
+        lines.append(strip_system_tags(msg["text"]))
 
     # Render structured tool result instead of raw dump
     trp = msg.get("tool_result_parsed")
@@ -255,9 +254,7 @@ def _render_assistant(msg: MessageDict) -> str:
         lines.append("\n</details>\n")
 
     if msg.get("text"):
-        from utils.jsonl_parser import _strip_system_tags
-
-        lines.append(_strip_system_tags(msg["text"]))
+        lines.append(strip_system_tags(msg["text"]))
 
     for tool in msg.get("tool_uses") or []:
         lines.append(_render_tool_use(tool))

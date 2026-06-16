@@ -7,58 +7,19 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from utils.jsonl_parser import (
-    _extract_images,
-    _extract_text,
-    _infer_title,
-    _normalize_content,
-    _parse_tool_result,
-    _process_assistant,
-    _process_system,
-    _process_user,
-    _strip_system_tags,
-    _track_file_activity,
-    parse_session,
-    quick_session_info,
+from utils.jsonl_helpers import (
+    extract_images,
+    extract_text,
+    infer_title,
+    normalize_content,
+    strip_system_tags,
 )
+from utils.jsonl_parser import parse_session, quick_session_info
+from utils.tool_dispatch import _parse_tool_result
 
 # ---------------------------------------------------------------------------
 # Metadata helpers (match parse_session initialisation)
 # ---------------------------------------------------------------------------
-
-
-def _fresh_metadata() -> dict:
-    return {
-        "session_id": "x",
-        "models_used": set(),
-        "total_input_tokens": 0,
-        "total_output_tokens": 0,
-        "total_cache_read_tokens": 0,
-        "total_cache_creation_tokens": 0,
-        "total_tool_calls": 0,
-        "tool_call_counts": {},
-        "first_timestamp": None,
-        "last_timestamp": None,
-        "version": None,
-        "cwd": None,
-        "git_branch": None,
-        "permission_mode": None,
-        "compactions": 0,
-        "total_ephemeral_5m_tokens": 0,
-        "total_ephemeral_1h_tokens": 0,
-        "service_tiers": set(),
-        "session_wall_time_seconds": None,
-        "compact_boundaries": [],
-        "api_errors": 0,
-        "files_read": set(),
-        "files_written": set(),
-        "files_created": set(),
-        "bash_commands": [],
-        "web_fetches": [],
-        "sidechain_messages": 0,
-        "stop_reasons": {},
-        "entry_counts": {},
-    }
 
 
 def _write_jsonl(entries: list) -> str:
@@ -67,6 +28,14 @@ def _write_jsonl(entries: list) -> str:
         f.write(json.dumps(entry) + "\n")
     f.close()
     return f.name
+
+
+def _parse_entries(entries: list) -> dict:
+    path = _write_jsonl(entries)
+    try:
+        return parse_session(path)
+    finally:
+        os.unlink(path)
 
 
 # ---------------------------------------------------------------------------
@@ -279,54 +248,54 @@ class TestParseToolResult:
 
 
 # ---------------------------------------------------------------------------
-# _normalize_content, _extract_text, _extract_images
+# normalize_content, extract_text, extract_images
 # ---------------------------------------------------------------------------
 
 
 class TestNormalizeContent:
     def test_plain_string(self):
-        assert _normalize_content("hi") == [{"type": "text", "text": "hi"}]
+        assert normalize_content("hi") == [{"type": "text", "text": "hi"}]
 
     def test_list_of_strings(self):
-        assert _normalize_content(["a", "b"]) == [
+        assert normalize_content(["a", "b"]) == [
             {"type": "text", "text": "a"},
             {"type": "text", "text": "b"},
         ]
 
     def test_list_of_dicts(self):
         d = {"type": "text", "text": "x"}
-        assert _normalize_content([d]) == [d]
+        assert normalize_content([d]) == [d]
 
     def test_mixed_string_and_dict(self):
-        out = _normalize_content(["s", {"type": "thinking", "thinking": "t"}])
+        out = normalize_content(["s", {"type": "thinking", "thinking": "t"}])
         assert out[0]["type"] == "text"
         assert out[1]["type"] == "thinking"
 
     def test_none_returns_empty(self):
-        assert _normalize_content(None) == []
+        assert normalize_content(None) == []
 
     def test_wrong_type_returns_empty(self):
-        assert _normalize_content(42) == []
+        assert normalize_content(42) == []
 
 
 class TestExtractText:
     def test_text_blocks_joined(self):
         blocks = [{"type": "text", "text": "a"}, {"type": "text", "text": "b"}]
-        assert _extract_text(blocks) == "a\nb"
+        assert extract_text(blocks) == "a\nb"
 
     def test_tool_use_blocks_ignored(self):
-        assert _extract_text([{"type": "tool_use", "name": "Read"}]) == ""
+        assert extract_text([{"type": "tool_use", "name": "Read"}]) == ""
 
     def test_thinking_blocks_ignored(self):
-        assert _extract_text([{"type": "thinking", "thinking": "secret"}]) == ""
+        assert extract_text([{"type": "thinking", "thinking": "secret"}]) == ""
 
     def test_empty_content(self):
-        assert _extract_text([]) == ""
+        assert extract_text([]) == ""
 
 
 class TestExtractImages:
     def test_base64_image_extracted(self):
-        imgs = _extract_images(
+        imgs = extract_images(
             [
                 {
                     "type": "image",
@@ -338,7 +307,7 @@ class TestExtractImages:
         assert imgs[0]["data"] == "AAA"
 
     def test_nested_tool_result_image_extracted(self):
-        imgs = _extract_images(
+        imgs = extract_images(
             [
                 {
                     "type": "tool_result",
@@ -355,17 +324,17 @@ class TestExtractImages:
         assert imgs[0]["data"] == "BBB"
 
     def test_non_image_skipped(self):
-        assert _extract_images([{"type": "text", "text": "x"}]) == []
+        assert extract_images([{"type": "text", "text": "x"}]) == []
 
 
 # ---------------------------------------------------------------------------
-# _infer_title, _strip_system_tags
+# infer_title, strip_system_tags
 # ---------------------------------------------------------------------------
 
 
 class TestInferTitle:
     def test_first_user_message_used(self):
-        title = _infer_title(
+        title = infer_title(
             [
                 {"role": "assistant", "text": "a"},
                 {"role": "user", "text": "My title line\nmore"},
@@ -375,36 +344,36 @@ class TestInferTitle:
 
     def test_truncated_to_100_chars(self):
         long_line = "x" * 120
-        title = _infer_title([{"role": "user", "text": long_line}])
+        title = infer_title([{"role": "user", "text": long_line}])
         assert len(title) == 100
         assert title == "x" * 100
 
     def test_no_text_messages_returns_untitled(self):
-        assert _infer_title([{"role": "user", "text": ""}]) == "Untitled Session"
+        assert infer_title([{"role": "user", "text": ""}]) == "Untitled Session"
 
     def test_sidechain_only_returns_untitled(self):
-        assert _infer_title([]) == "Untitled Session"
+        assert infer_title([]) == "Untitled Session"
 
 
 class TestStripSystemTags:
     def test_system_reminder_removed(self):
         t = "<system-reminder>in</system-reminder>keep"
-        assert _strip_system_tags(t) == "keep"
+        assert strip_system_tags(t) == "keep"
 
     def test_ide_opened_file_removed(self):
         t = "<ide_opened_file>x</ide_opened_file>y"
-        assert _strip_system_tags(t) == "y"
+        assert strip_system_tags(t) == "y"
 
     def test_user_prompt_submit_hook_removed(self):
         t = "<user-prompt-submit-hook>h</user-prompt-submit-hook>z"
-        assert _strip_system_tags(t) == "z"
+        assert strip_system_tags(t) == "z"
 
     def test_remaining_known_opening_closing_tags_stripped(self):
         t = "</ide_selection><command-name>foo</command-name>bar"
-        assert _strip_system_tags(t) == "foobar"
+        assert strip_system_tags(t) == "foobar"
 
     def test_clean_text_unchanged(self):
-        assert _strip_system_tags("hello world") == "hello world"
+        assert strip_system_tags("hello world") == "hello world"
 
 
 # ---------------------------------------------------------------------------
@@ -414,64 +383,55 @@ class TestStripSystemTags:
 
 class TestProcessUser:
     def test_metadata_captured_from_first_entry_only(self):
-        messages = []
-        meta = _fresh_metadata()
-        _process_user(
-            {
-                "type": "user",
-                "version": 1,
-                "cwd": "/first",
-                "gitBranch": "main",
-                "permissionMode": "default",
-                "message": {"content": [{"type": "text", "text": "a"}]},
-            },
-            messages,
-            meta,
+        s = _parse_entries(
+            [
+                {
+                    "type": "user",
+                    "version": 1,
+                    "cwd": "/first",
+                    "gitBranch": "main",
+                    "permissionMode": "default",
+                    "message": {"content": [{"type": "text", "text": "a"}]},
+                },
+                {
+                    "type": "user",
+                    "version": 2,
+                    "cwd": "/second",
+                    "gitBranch": "dev",
+                    "permissionMode": "all",
+                    "message": {"content": [{"type": "text", "text": "b"}]},
+                },
+            ]
         )
-        _process_user(
-            {
-                "type": "user",
-                "version": 2,
-                "cwd": "/second",
-                "gitBranch": "dev",
-                "permissionMode": "all",
-                "message": {"content": [{"type": "text", "text": "b"}]},
-            },
-            messages,
-            meta,
-        )
-        assert meta["version"] == 1
-        assert meta["cwd"] == "/first"
-        assert meta["git_branch"] == "main"
-        assert meta["permission_mode"] == "default"
+        assert s["metadata"]["version"] == 1
+        assert s["metadata"]["cwd"] == "/first"
+        assert s["metadata"]["git_branch"] == "main"
+        assert s["metadata"]["permission_mode"] == "default"
 
     def test_missing_message_key_no_crash(self):
-        messages = []
-        meta = _fresh_metadata()
-        _process_user({"type": "user"}, messages, meta)
-        assert len(messages) == 1
-        assert messages[0]["text"] == ""
+        s = _parse_entries([{"type": "user"}])
+        assert len(s["messages"]) == 1
+        assert s["messages"][0]["text"] == ""
 
     def test_tool_use_result_images_extracted(self):
-        messages = []
-        meta = _fresh_metadata()
-        _process_user(
-            {
-                "message": {"content": []},
-                "toolUseResult": {
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {"type": "base64", "data": "IMG"},
-                        }
-                    ],
-                },
-            },
-            messages,
-            meta,
+        s = _parse_entries(
+            [
+                {
+                    "type": "user",
+                    "message": {"content": []},
+                    "toolUseResult": {
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {"type": "base64", "data": "IMG"},
+                            }
+                        ],
+                    },
+                }
+            ]
         )
-        assert messages[0]["images"]
-        assert messages[0]["images"][0]["data"] == "IMG"
+        assert s["messages"][0]["images"]
+        assert s["messages"][0]["images"][0]["data"] == "IMG"
 
 
 # ---------------------------------------------------------------------------
@@ -481,149 +441,144 @@ class TestProcessUser:
 
 class TestProcessAssistant:
     def test_content_plain_string_normalized(self):
-        messages = []
-        meta = _fresh_metadata()
-        _process_assistant(
-            {
-                "message": {
-                    "model": "m",
-                    "content": "plain string body",
-                    "usage": {},
-                },
-            },
-            messages,
-            meta,
+        s = _parse_entries(
+            [
+                {
+                    "type": "assistant",
+                    "message": {
+                        "model": "m",
+                        "content": "plain string body",
+                        "usage": {},
+                    },
+                }
+            ]
         )
-        assert messages[0]["text"] == "plain string body"
+        assert s["messages"][0]["text"] == "plain string body"
 
     def test_synthetic_model_not_added(self):
-        meta = _fresh_metadata()
-        _process_assistant(
-            {
-                "message": {
-                    "model": "<synthetic>",
-                    "content": [{"type": "text", "text": "x"}],
-                    "usage": {},
-                },
-            },
-            [],
-            meta,
+        s = _parse_entries(
+            [
+                {
+                    "type": "assistant",
+                    "message": {
+                        "model": "<synthetic>",
+                        "content": [{"type": "text", "text": "x"}],
+                        "usage": {},
+                    },
+                }
+            ]
         )
-        assert meta["models_used"] == set()
+        assert s["metadata"]["models_used"] == []
 
     def test_thinking_blocks_joined(self):
-        messages = []
-        meta = _fresh_metadata()
-        _process_assistant(
-            {
-                "message": {
-                    "model": "m",
-                    "content": [
-                        {"type": "thinking", "thinking": "t1"},
-                        {"type": "thinking", "thinking": "t2"},
-                    ],
-                    "usage": {},
-                },
-            },
-            messages,
-            meta,
+        s = _parse_entries(
+            [
+                {
+                    "type": "assistant",
+                    "message": {
+                        "model": "m",
+                        "content": [
+                            {"type": "thinking", "thinking": "t1"},
+                            {"type": "thinking", "thinking": "t2"},
+                        ],
+                        "usage": {},
+                    },
+                }
+            ]
         )
-        assert messages[0]["thinking"] == "t1\n\nt2"
+        assert s["messages"][0]["thinking"] == "t1\n\nt2"
 
     def test_tool_use_counts_accumulated(self):
-        meta = _fresh_metadata()
-        _process_assistant(
-            {
-                "message": {
-                    "model": "m",
-                    "content": [
-                        {"type": "tool_use", "name": "Read", "input": {"file_path": "/a"}},
-                        {"type": "tool_use", "name": "Read", "input": {"file_path": "/b"}},
-                    ],
-                    "usage": {},
-                },
-            },
-            [],
-            meta,
+        s = _parse_entries(
+            [
+                {
+                    "type": "assistant",
+                    "message": {
+                        "model": "m",
+                        "content": [
+                            {"type": "tool_use", "name": "Read", "input": {"file_path": "/a"}},
+                            {"type": "tool_use", "name": "Read", "input": {"file_path": "/b"}},
+                        ],
+                        "usage": {},
+                    },
+                }
+            ]
         )
-        assert meta["total_tool_calls"] == 2
-        assert meta["tool_call_counts"]["Read"] == 2
+        assert s["metadata"]["total_tool_calls"] == 2
+        assert s["metadata"]["tool_call_counts"]["Read"] == 2
 
     def test_api_error_flag_increments_api_errors(self):
-        meta = _fresh_metadata()
-        _process_assistant(
-            {
-                "isApiErrorMessage": True,
-                "message": {"model": "m", "content": [], "usage": {}},
-            },
-            [],
-            meta,
+        s = _parse_entries(
+            [
+                {
+                    "type": "assistant",
+                    "isApiErrorMessage": True,
+                    "message": {"model": "m", "content": [], "usage": {}},
+                }
+            ]
         )
-        assert meta["api_errors"] == 1
+        assert s["metadata"]["api_errors"] == 1
 
     def test_stop_reason_accumulated(self):
-        meta = _fresh_metadata()
-        _process_assistant(
-            {
-                "message": {
-                    "model": "m",
-                    "content": [],
-                    "stop_reason": "max_tokens",
-                    "usage": {},
-                },
-            },
-            [],
-            meta,
-        )
-        _process_assistant(
-            {
-                "message": {
-                    "model": "m",
-                    "content": [],
-                    "stop_reason": "max_tokens",
-                    "usage": {},
-                },
-            },
-            [],
-            meta,
-        )
-        assert meta["stop_reasons"]["max_tokens"] == 2
-
-    def test_service_tier_added(self):
-        meta = _fresh_metadata()
-        _process_assistant(
-            {
-                "message": {
-                    "model": "m",
-                    "content": [],
-                    "usage": {"service_tier": "priority"},
-                },
-            },
-            [],
-            meta,
-        )
-        assert "priority" in meta["service_tiers"]
-
-    def test_ephemeral_cache_tokens_accumulated(self):
-        meta = _fresh_metadata()
-        _process_assistant(
-            {
-                "message": {
-                    "model": "m",
-                    "content": [],
-                    "usage": {
-                        "cache_creation": {
-                            "ephemeral_5m_input_tokens": 7,
-                            "ephemeral_1h_input_tokens": 3,
-                        },
+        s = _parse_entries(
+            [
+                {
+                    "type": "assistant",
+                    "message": {
+                        "model": "m",
+                        "content": [],
+                        "stop_reason": "max_tokens",
+                        "usage": {},
                     },
                 },
-            },
-            [],
-            meta,
+                {
+                    "type": "assistant",
+                    "message": {
+                        "model": "m",
+                        "content": [],
+                        "stop_reason": "max_tokens",
+                        "usage": {},
+                    },
+                },
+            ]
         )
-        assert meta["total_ephemeral_5m_tokens"] == 7
-        assert meta["total_ephemeral_1h_tokens"] == 3
+        assert s["metadata"]["stop_reasons"]["max_tokens"] == 2
+
+    def test_service_tier_added(self):
+        s = _parse_entries(
+            [
+                {
+                    "type": "assistant",
+                    "message": {
+                        "model": "m",
+                        "content": [],
+                        "usage": {"service_tier": "priority"},
+                    },
+                }
+            ]
+        )
+        assert "priority" in s["metadata"]["service_tiers"]
+
+    def test_ephemeral_cache_tokens_accumulated(self):
+        s = _parse_entries(
+            [
+                {
+                    "type": "assistant",
+                    "message": {
+                        "model": "m",
+                        "content": [],
+                        "usage": {
+                            "cache_creation": {
+                                "ephemeral_5m_input_tokens": 7,
+                                "ephemeral_1h_input_tokens": 3,
+                            },
+                        },
+                    },
+                }
+            ]
+        )
+        assert s["metadata"]["total_ephemeral_5m_tokens"] == 7
+        assert s["metadata"]["total_ephemeral_1h_tokens"] == 3
 
 
 # ---------------------------------------------------------------------------
@@ -632,49 +587,47 @@ class TestProcessAssistant:
 
 
 class TestTrackFileActivity:
-    def _meta(self):
-        return {
-            "files_read": set(),
-            "files_written": set(),
-            "files_created": set(),
-            "bash_commands": [],
-            "web_fetches": [],
-        }
+    def _assistant_with_tool(self, name: str, tool_input: dict) -> dict:
+        return _parse_entries(
+            [
+                {
+                    "type": "assistant",
+                    "message": {
+                        "model": "m",
+                        "content": [{"type": "tool_use", "name": name, "input": tool_input}],
+                        "usage": {},
+                    },
+                }
+            ]
+        )
 
     def test_read_tool_adds_to_files_read(self):
-        m = self._meta()
-        _track_file_activity("Read", {"file_path": "/r"}, m)
-        assert "/r" in m["files_read"]
+        s = self._assistant_with_tool("Read", {"file_path": "/r"})
+        assert "/r" in s["metadata"]["files_read"]
 
     def test_write_tool_adds_to_files_created(self):
-        m = self._meta()
-        _track_file_activity("Write", {"file_path": "/w"}, m)
-        assert "/w" in m["files_created"]
+        s = self._assistant_with_tool("Write", {"file_path": "/w"})
+        assert "/w" in s["metadata"]["files_created"]
 
     def test_edit_tool_adds_to_files_written(self):
-        m = self._meta()
-        _track_file_activity("Edit", {"file_path": "/e"}, m)
-        assert "/e" in m["files_written"]
+        s = self._assistant_with_tool("Edit", {"file_path": "/e"})
+        assert "/e" in s["metadata"]["files_written"]
 
     def test_bash_command_appended(self):
-        m = self._meta()
-        _track_file_activity("Bash", {"command": "ls"}, m)
-        assert m["bash_commands"] == ["ls"]
+        s = self._assistant_with_tool("Bash", {"command": "ls"})
+        assert s["metadata"]["bash_commands"] == ["ls"]
 
     def test_web_fetch_url_appended(self):
-        m = self._meta()
-        _track_file_activity("WebFetch", {"url": "https://a"}, m)
-        assert m["web_fetches"] == ["https://a"]
+        s = self._assistant_with_tool("WebFetch", {"url": "https://a"})
+        assert s["metadata"]["web_fetches"] == ["https://a"]
 
     def test_web_search_query_appended(self):
-        m = self._meta()
-        _track_file_activity("WebSearch", {"query": "qterm"}, m)
-        assert m["web_fetches"] == ["qterm"]
+        s = self._assistant_with_tool("WebSearch", {"query": "qterm"})
+        assert s["metadata"]["web_fetches"] == ["qterm"]
 
     def test_empty_file_path_not_added(self):
-        m = self._meta()
-        _track_file_activity("Read", {"file_path": ""}, m)
-        assert m["files_read"] == set()
+        s = self._assistant_with_tool("Read", {"file_path": ""})
+        assert s["metadata"]["files_read"] == []
 
 
 # ---------------------------------------------------------------------------
@@ -684,41 +637,37 @@ class TestTrackFileActivity:
 
 class TestProcessSystem:
     def test_compact_boundary_increments_compaction(self):
-        messages = []
-        meta = _fresh_metadata()
-        _process_system(
-            {
-                "subtype": "compact_boundary",
-                "timestamp": "2026-01-01T00:00:00Z",
-                "compactMetadata": {"trigger": "size", "preTokens": 100},
-            },
-            messages,
-            meta,
+        s = _parse_entries(
+            [
+                {
+                    "type": "system",
+                    "subtype": "compact_boundary",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "compactMetadata": {"trigger": "size", "preTokens": 100},
+                }
+            ]
         )
-        assert meta["compactions"] == 1
-        assert len(meta["compact_boundaries"]) == 1
-        assert meta["compact_boundaries"][0]["trigger"] == "size"
+        assert s["metadata"]["compactions"] == 1
+        assert len(s["metadata"]["compact_boundaries"]) == 1
+        assert s["metadata"]["compact_boundaries"][0]["trigger"] == "size"
 
     def test_compact_boundary_missing_metadata_no_crash(self):
-        messages = []
-        meta = _fresh_metadata()
-        _process_system(
-            {
-                "subtype": "compact_boundary",
-                "compactMetadata": None,
-            },
-            messages,
-            meta,
+        s = _parse_entries(
+            [
+                {
+                    "type": "system",
+                    "subtype": "compact_boundary",
+                    "compactMetadata": None,
+                }
+            ]
         )
-        assert meta["compactions"] == 1
-        assert meta["compact_boundaries"] == []
+        assert s["metadata"]["compactions"] == 1
+        assert s["metadata"]["compact_boundaries"] == []
 
     def test_other_subtype_no_compaction_increment(self):
-        messages = []
-        meta = _fresh_metadata()
-        _process_system({"subtype": "init", "content": "c"}, messages, meta)
-        assert meta["compactions"] == 0
-        assert messages[0]["subtype"] == "init"
+        s = _parse_entries([{"type": "system", "subtype": "init", "content": "c"}])
+        assert s["metadata"]["compactions"] == 0
+        assert s["messages"][0]["subtype"] == "init"
 
 
 # ---------------------------------------------------------------------------
@@ -1010,27 +959,25 @@ class TestMalformedPartialEntries:
             os.unlink(path)
 
     def test_tool_use_result_null_returns_none_in_message(self):
-        messages = []
-        meta = _fresh_metadata()
-        _process_user(
-            {
-                "message": {"content": []},
-                "toolUseResult": None,
-            },
-            messages,
-            meta,
+        s = _parse_entries(
+            [
+                {
+                    "type": "user",
+                    "message": {"content": []},
+                    "toolUseResult": None,
+                }
+            ]
         )
-        assert messages[0]["tool_result_parsed"] is None
+        assert s["messages"][0]["tool_result_parsed"] is None
 
     def test_tool_use_result_string_returns_none(self):
-        messages = []
-        meta = _fresh_metadata()
-        _process_user(
-            {
-                "message": {"content": []},
-                "toolUseResult": "oops",
-            },
-            messages,
-            meta,
+        s = _parse_entries(
+            [
+                {
+                    "type": "user",
+                    "message": {"content": []},
+                    "toolUseResult": "oops",
+                }
+            ]
         )
-        assert messages[0]["tool_result_parsed"] is None
+        assert s["messages"][0]["tool_result_parsed"] is None
