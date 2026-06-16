@@ -28,5 +28,7 @@ describe('renderEditUse', () => {
         });
         expect(html).not.toContain('<bad>');
         expect(html).toContain('&lt;bad&gt;');
+        expect(html).not.toContain('<worse>');
+        expect(html).toContain('&lt;worse&gt;');
     });
 });

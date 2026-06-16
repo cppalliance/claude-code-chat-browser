@@ -203,6 +203,7 @@ jobs:
             *) echo "Unsupported Node platform: $(node -p "process.platform + '-' + process.arch")"; exit 1 ;;
           esac
           npm install --no-save "${PKG}@${ROLLUP_VERSION}"
+      # Same vitest suite as npm test; --coverage enforces thresholds in vitest.config.js
       - run: npm run test:coverage
 
   benchmarks:

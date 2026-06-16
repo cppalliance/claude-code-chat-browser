@@ -112,7 +112,10 @@ describe('export', () => {
         vi.stubGlobal('showSaveFilePicker', undefined);
         const createObjectURL = vi.fn(() => 'blob:fake-url');
         const revokeObjectURL = vi.fn();
-        vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
+        const origCreate = URL.createObjectURL;
+        const origRevoke = URL.revokeObjectURL;
+        URL.createObjectURL = createObjectURL;
+        URL.revokeObjectURL = revokeObjectURL;
         const click = vi.fn();
         const anchor = document.createElement('a');
         anchor.click = click;
@@ -127,10 +130,17 @@ describe('export', () => {
             blob: () => Promise.resolve(new Blob(['content'], { type: 'text/markdown' })),
         });
 
-        await downloadSession('alpha', 'sess-abcdef12');
+        try {
+            await downloadSession('alpha', 'sess-abcdef12');
 
-        expect(createObjectURL).toHaveBeenCalled();
-        expect(anchor.download).toBe('session-sess-abc.md');
-        expect(click).toHaveBeenCalled();
+            expect(createObjectURL).toHaveBeenCalled();
+            expect(anchor.download).toBe('session-sess-abc.md');
+            expect(click).toHaveBeenCalled();
+        } finally {
+            if (origCreate) URL.createObjectURL = origCreate;
+            else delete URL.createObjectURL;
+            if (origRevoke) URL.revokeObjectURL = origRevoke;
+            else delete URL.revokeObjectURL;
+        }
     });
 });

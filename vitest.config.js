@@ -10,7 +10,9 @@ export default defineConfig({
             include: ['static/js/**/*.js'],
             exclude: ['static/js/**/*.test.js'],
             thresholds: {
-                lines: 50,
+                lines: 80,
+                functions: 70,
+                branches: 50,
             },
         },
     },

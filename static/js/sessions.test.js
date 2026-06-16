@@ -78,6 +78,8 @@ function mockWorkspaceFetch() {
 }
 
 describe('sessions workspace', () => {
+    let clipboardRestore;
+
     beforeEach(() => {
         document.body.innerHTML = '<div id="content"></div>';
         state.currentProject = null;
@@ -88,6 +90,14 @@ describe('sessions workspace', () => {
     });
 
     afterEach(() => {
+        if (clipboardRestore) {
+            Object.defineProperty(navigator, 'clipboard', {
+                value: clipboardRestore,
+                configurable: true,
+                writable: true,
+            });
+            clipboardRestore = null;
+        }
         vi.unstubAllGlobals();
     });
 
@@ -146,7 +156,12 @@ describe('sessions workspace', () => {
 
     it('copyAll writes session text to the clipboard', async () => {
         const writeText = vi.fn(() => Promise.resolve());
-        Object.assign(navigator, { clipboard: { writeText } });
+        clipboardRestore = navigator.clipboard;
+        Object.defineProperty(navigator, 'clipboard', {
+            value: { writeText },
+            configurable: true,
+            writable: true,
+        });
         const el = document.createElement('div');
         el.className = 'session-content-inner';
         el.textContent = 'Line one\nLine two';
