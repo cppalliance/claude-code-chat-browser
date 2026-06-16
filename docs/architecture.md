@@ -121,7 +121,7 @@ No bundler step — modern browsers load modules directly. Frontend unit tests u
 |-----------|---------|-------|
 | `default-src` | `'self'` | Fallback for unspecified fetch types |
 | `script-src` | `'self'`, `https://cdnjs.cloudflare.com` | Self-hosted JS (e.g. `theme-init.js`, ES modules) plus SRI-pinned CDN scripts in `index.html` |
-| `style-src` | `'self'`, `'unsafe-inline'`, `https://cdnjs.cloudflare.com` | `'unsafe-inline'` needed for highlight.js theme inline styles; tighten with nonces later |
+| `style-src` | `'self'`, `'unsafe-inline'`, `https://cdnjs.cloudflare.com` | `'unsafe-inline'` required for highlight.js theme inline styles **and** the app's own inline `style` attributes (e.g. hamburger `display:none` in `index.html`, layout tweaks in JS templates). Dropping highlight.js alone does not remove this need; nonces are the future tightening path |
 | `img-src` | `'self'`, `data:` | Session images and data URLs |
 | `connect-src` | `'self'` | API `fetch` calls to same origin |
 | `font-src` | `'self'` | Local fonts only |
@@ -130,7 +130,7 @@ No bundler step — modern browsers load modules directly. Frontend unit tests u
 | `base-uri` | `'self'` | Restrict `<base>` tag injection |
 | `frame-ancestors` | `'none'` | Prevent clickjacking via iframes |
 
-**Keeping CDN sources in sync:** when adding or bumping a CDN asset in `static/index.html`, update both the SRI `integrity` hash and `CSP_POLICY` if the origin changes (today all CDN assets use `cdnjs.cloudflare.com`). Theme-init scripts were externalized to `static/js/theme-init.js` and `static/js/hljs-theme-init.js` so `script-src` does not require `'unsafe-inline'`. Navbar and route UI handlers use `addEventListener` instead of inline `onclick` attributes for the same reason.
+**Keeping CDN sources in sync:** when adding or bumping a CDN asset in `static/index.html`, update both the SRI `integrity` hash and `CSP_POLICY` if the origin changes (today all CDN assets use `cdnjs.cloudflare.com`). Recompute SRI hashes against the live CDN payload when bumping highlight.js — `tests/test_hljs_theme_consistency.py` cross-checks `index.html`, `hljs-theme-init.js`, and `theme.js` stay in sync with each other (not the live CDN, which would be flaky in CI). Theme-init scripts were externalized to `static/js/theme-init.js` and `static/js/hljs-theme-init.js` so `script-src` does not require `'unsafe-inline'`. Navbar and route UI handlers use `addEventListener` instead of inline `onclick` attributes for the same reason.
 
 ## Continuous integration
 
