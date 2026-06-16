@@ -203,7 +203,7 @@ jobs:
             *) echo "Unsupported Node platform: $(node -p "process.platform + '-' + process.arch")"; exit 1 ;;
           esac
           npm install --no-save "${PKG}@${ROLLUP_VERSION}"
-      - run: npm test
+      - run: npm run test:coverage
 
   benchmarks:
     name: Performance benchmarks (informational)
