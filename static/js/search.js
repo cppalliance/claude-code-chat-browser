@@ -44,7 +44,7 @@ export function showSearchPage() {
         if (!project || !sessionId) return;
         window.location.hash = `#project/${encodeURIComponent(project)}/${encodeURIComponent(sessionId)}`;
     });
-    document.getElementById('search-input').focus();
+    document.getElementById('search-input')?.focus();
 }
 
 export async function doSearch() {

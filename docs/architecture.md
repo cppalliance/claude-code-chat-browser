@@ -125,6 +125,8 @@ No bundler step — modern browsers load modules directly. Frontend unit tests u
 | `img-src` | `'self'`, `data:` | Session images and data URLs |
 | `connect-src` | `'self'` | API `fetch` calls to same origin |
 | `font-src` | `'self'` | Local fonts only |
+| `object-src` | `'none'` | Block plugins / `<object>` embeds (no plugin use in this app) |
+| `form-action` | `'self'` | Restrict form submissions to same origin |
 | `base-uri` | `'self'` | Restrict `<base>` tag injection |
 | `frame-ancestors` | `'none'` | Prevent clickjacking via iframes |
 
