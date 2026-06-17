@@ -11,6 +11,13 @@ from pathlib import Path
 GATED_GROUPS = ("parse", "export", "search")
 
 
+def _positive_float(value: str) -> float:
+    parsed = float(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("slack must be greater than zero")
+    return parsed
+
+
 def reduce_baselines(
     raw_path: str | Path,
     out_path: str | Path,
@@ -43,9 +50,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("out_path", help="destination baselines.json path")
     parser.add_argument(
         "--slack",
-        type=float,
+        type=_positive_float,
         default=1.0,
-        help="multiply means by this factor (e.g. 1.25 when capturing on a faster host)",
+        help="multiply means by this factor (must be > 0)",
     )
     args = parser.parse_args(argv)
     reduce_baselines(args.raw_path, args.out_path, slack=args.slack)

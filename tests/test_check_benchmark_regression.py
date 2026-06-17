@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from scripts.check_benchmark_regression import check_regression
+from scripts.check_benchmark_regression import BenchmarkDataError, check_regression, load_results
 
 
 def _write_results(path, benchmarks: list[dict]) -> None:
@@ -75,3 +75,33 @@ def test_within_threshold_passes(tmp_path) -> None:
     )
 
     assert check_regression(results, baselines) == 0
+
+
+def test_load_results_rejects_malformed_json(tmp_path) -> None:
+    path = tmp_path / "bad.json"
+    path.write_text("{not json", encoding="utf-8")
+    with pytest.raises(BenchmarkDataError, match="invalid JSON"):
+        load_results(path)
+
+
+def test_load_results_requires_benchmarks_array(tmp_path) -> None:
+    path = tmp_path / "results.json"
+    path.write_text("{}", encoding="utf-8")
+    with pytest.raises(BenchmarkDataError, match="'benchmarks' array"):
+        load_results(path)
+
+
+def test_zero_baseline_skips_ratio_check(tmp_path, capsys: pytest.CaptureFixture[str]) -> None:
+    results = tmp_path / "results.json"
+    baselines = tmp_path / "baselines.json"
+    _write_results(
+        results,
+        [{"name": "test_parse_session_small", "stats": {"mean": 0.0002}}],
+    )
+    _write_baselines(
+        baselines,
+        {"parse": {"test_parse_session_small": 0.0}},
+    )
+
+    assert check_regression(results, baselines) == 0
+    assert "baseline for 'test_parse_session_small' is zero" in capsys.readouterr().out
