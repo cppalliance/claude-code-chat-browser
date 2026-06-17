@@ -60,6 +60,7 @@ def load_baseline_means(baselines_path: str | Path) -> dict[str, float]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except OSError as exc:
+        raise BenchmarkDataError(f"cannot read {path}: {exc}") from exc
     except json.JSONDecodeError as exc:
         raise BenchmarkDataError(f"invalid JSON in {path}: {exc}") from exc
     if not isinstance(data, dict):
