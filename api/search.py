@@ -6,7 +6,7 @@ from api._flask_types import FlaskReturn, json_response
 from api.error_codes import ErrorCode, error_response
 from models.search import SearchHitDict
 from utils.exclusion_rules import is_session_excluded
-from utils.jsonl_parser import parse_session
+from utils.session_cache import get_cached_session
 from utils.session_path import get_claude_projects_dir, list_projects, list_sessions
 
 search_bp = Blueprint("search", __name__)
@@ -49,12 +49,14 @@ def search() -> FlaskReturn:
     rules = current_app.config.get("EXCLUSION_RULES") or []
     results: list[SearchHitDict] = []
     for project in projects:
+        if len(results) >= max_results:
+            break
         sessions = list_sessions(project["path"])
         for sess_info in sessions:
             if len(results) >= max_results:
                 break
             try:
-                session = parse_session(sess_info["path"])
+                session = get_cached_session(sess_info["path"])
             except Exception:
                 continue
 

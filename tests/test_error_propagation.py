@@ -109,7 +109,7 @@ class TestGetSessionErrorBody:
         def _boom(*args, **kwargs):
             raise KeyError("internal_secret_field_id")
 
-        monkeypatch.setattr("api.sessions.parse_session", _boom)
+        monkeypatch.setattr("api.sessions.get_cached_session", _boom)
 
         resp = client.get("/api/sessions/proj/abc")
         assert resp.status_code == 500
@@ -151,7 +151,7 @@ class TestGetSessionStatsErrorBody:
         def _boom(*args, **kwargs):
             raise ValueError("invalid literal: '/private/path/secret.json'")
 
-        monkeypatch.setattr("api.sessions.parse_session", _boom)
+        monkeypatch.setattr("api.sessions.get_cached_session", _boom)
 
         resp = client.get("/api/sessions/proj/abc/stats")
         assert resp.status_code == 500
@@ -179,9 +179,7 @@ class TestGetProjectsErrorCard:
         def _boom(*args, **kwargs):
             raise KeyError("internal_secret_field_id")
 
-        # api/projects.py imports parse_session inside the handler body,
-        # so patch the source module rather than the consumer.
-        monkeypatch.setattr("utils.jsonl_parser.parse_session", _boom)
+        monkeypatch.setattr("api.projects.get_cached_session", _boom)
 
         resp = client.get("/api/projects/myproj/sessions")
         # Pin the response shape so a future wrapper change (e.g. {"sessions": [...]})
