@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import os
 import shutil
-import time
 from pathlib import Path
 
 import pytest
@@ -51,10 +51,36 @@ def test_cache_hit_avoids_reparse(sample_session: Path, monkeypatch: pytest.Monk
 def test_cache_invalidates_on_mtime_change(sample_session: Path) -> None:
     path = str(sample_session)
     first = get_cached_session(path)
-    time.sleep(0.05)
-    sample_session.touch()
+    stat = sample_session.stat()
+    os.utime(sample_session, (stat.st_mtime + 1, stat.st_mtime + 1))
     second = get_cached_session(path)
     assert first is not second
+
+
+def test_cache_normalizes_relative_and_absolute_paths(
+    sample_session: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def counting_parse(p: str):
+        nonlocal calls
+        calls += 1
+        return parse_session(p)
+
+    monkeypatch.setattr("utils.session_cache.parse_session", counting_parse)
+    rel = "session.jsonl"
+    abs_path = str(sample_session.resolve())
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+        get_cached_session(rel)
+        assert calls == 1
+        get_cached_session(abs_path)
+        assert calls == 1
+    finally:
+        os.chdir(original_cwd)
 
 
 def test_lru_eviction(sample_session: Path, tmp_path: Path) -> None:
@@ -87,3 +113,8 @@ def test_lru_eviction(sample_session: Path, tmp_path: Path) -> None:
         assert calls == 1
     finally:
         monkeypatch.undo()
+
+
+def test_set_max_entries_rejects_negative() -> None:
+    with pytest.raises(ValueError, match="non-negative"):
+        set_max_entries(-1)

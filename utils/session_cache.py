@@ -42,6 +42,8 @@ def clear_cache() -> None:
 
 def set_max_entries(max_entries: int) -> None:
     """Override the LRU capacity (primarily for tests)."""
+    if max_entries < 0:
+        raise ValueError(f"max_entries must be non-negative, got {max_entries}")
     global _max_entries
     with _lock:
         _max_entries = max_entries

@@ -17,12 +17,7 @@ def _reset_cache() -> None:
 @pytest.mark.benchmark(group="cache")
 def test_cache_cold_parse(benchmark, parse_medium_file: Path) -> None:
     path = str(parse_medium_file)
-
-    def cold() -> None:
-        clear_cache()
-        get_cached_session(path)
-
-    benchmark(cold)
+    benchmark.pedantic(get_cached_session, args=(path,), setup=clear_cache)
 
 
 @pytest.mark.benchmark(group="cache")
