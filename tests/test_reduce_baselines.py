@@ -74,5 +74,6 @@ def test_reduce_baselines_cli_rejects_non_positive_slack(tmp_path) -> None:
         [{"group": "parse", "name": "test_parse_session_small", "stats": {"mean": 0.0001}}],
     )
 
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit) as exc_info:
         main([str(raw), str(tmp_path / "out.json"), "--slack", "0"])
+    assert exc_info.value.code == 2

@@ -31,6 +31,8 @@ def reduce_baselines(
         raw = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise BenchmarkDataError(f"invalid JSON in {path}: {exc}") from exc
+    except OSError as exc:
+        raise BenchmarkDataError(f"cannot read {path}: {exc}") from exc
 
     try:
         entries = raw["benchmarks"]
@@ -55,15 +57,19 @@ def reduce_baselines(
             continue
         groups[group][str(name)] = mean * slack
 
-    machine_info = raw.get("machine_info", {})
+    machine_info = raw.get("machine_info")
+    machine = machine_info.get("system") if isinstance(machine_info, dict) else None
     output: dict[str, object] = {
         "_note": "CI gates the ubuntu benchmarks job when mean exceeds baseline by >20%.",
         "updated": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "machine": machine_info.get("system"),
+        "machine": machine,
         "groups": groups,
     }
     out = Path(out_path)
-    out.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
+    try:
+        out.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
+    except OSError as exc:
+        raise BenchmarkDataError(f"cannot write {out}: {exc}") from exc
     return output
 
 

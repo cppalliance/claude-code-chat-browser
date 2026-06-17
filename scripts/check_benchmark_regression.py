@@ -33,12 +33,12 @@ def load_results(results_path: str | Path) -> dict[str, float]:
             raise BenchmarkDataError(f"{path} benchmarks[{index}] must be an object")
         try:
             name = entry["name"]
-            mean = entry["stats"]["mean"]
-        except (KeyError, TypeError) as exc:
+            mean = float(entry["stats"]["mean"])
+        except (KeyError, TypeError, ValueError) as exc:
             raise BenchmarkDataError(
                 f"{path} benchmarks[{index}] missing 'name' or 'stats.mean'"
             ) from exc
-        results[str(name)] = float(mean)
+        results[str(name)] = mean
     return results
 
 
