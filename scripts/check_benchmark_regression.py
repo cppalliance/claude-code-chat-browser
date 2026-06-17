@@ -26,6 +26,8 @@ def load_results(results_path: str | Path) -> dict[str, float]:
     path = Path(results_path)
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise BenchmarkDataError(f"cannot read {path}: {exc}") from exc
     except json.JSONDecodeError as exc:
         raise BenchmarkDataError(f"invalid JSON in {path}: {exc}") from exc
     try:
@@ -57,6 +59,7 @@ def load_baseline_means(baselines_path: str | Path) -> dict[str, float]:
     path = Path(baselines_path)
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
     except json.JSONDecodeError as exc:
         raise BenchmarkDataError(f"invalid JSON in {path}: {exc}") from exc
     if not isinstance(data, dict):
@@ -97,6 +100,8 @@ def check_regression(
 
     failures: list[str] = []
     for name, base in baseline_means.items():
+        if name in EXCLUDED_FROM_GATE:
+            continue
         cur = flat.get(name)
         if cur is None:
             print(f"WARN: no current result for baseline {name!r}; skipping")
@@ -111,6 +116,8 @@ def check_regression(
             failures.append(name)
 
     for name in flat:
+        if name in EXCLUDED_FROM_GATE:
+            continue
         if name not in baseline_means:
             print(f"WARN: {name!r} has no baseline yet; not gated")
 

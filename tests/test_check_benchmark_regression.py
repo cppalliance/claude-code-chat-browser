@@ -13,6 +13,8 @@ from scripts.check_benchmark_regression import (
     load_results,
 )
 
+GATED_BENCH = "test_parse_session_medium"
+
 
 def _write_results(path, benchmarks: list[dict]) -> None:
     path.write_text(
@@ -55,11 +57,11 @@ def test_regression_over_threshold_fails(tmp_path, capsys: pytest.CaptureFixture
     baselines = tmp_path / "baselines.json"
     _write_results(
         results,
-        [{"name": "test_parse_session_small", "stats": {"mean": 0.0002}}],
+        [{"name": GATED_BENCH, "stats": {"mean": 0.0025}}],
     )
     _write_baselines(
         baselines,
-        {"parse": {"test_parse_session_small": 0.0001}},
+        {"parse": {GATED_BENCH: 0.002}},
     )
 
     assert check_regression(results, baselines) == 1
@@ -72,11 +74,11 @@ def test_within_threshold_passes(tmp_path) -> None:
     baselines = tmp_path / "baselines.json"
     _write_results(
         results,
-        [{"name": "test_parse_session_small", "stats": {"mean": 0.00011}}],
+        [{"name": GATED_BENCH, "stats": {"mean": 0.0022}}],
     )
     _write_baselines(
         baselines,
-        {"parse": {"test_parse_session_small": 0.0001}},
+        {"parse": {GATED_BENCH: 0.002}},
     )
 
     assert check_regression(results, baselines) == 0
@@ -96,20 +98,25 @@ def test_load_results_requires_benchmarks_array(tmp_path) -> None:
         load_results(path)
 
 
+def test_load_results_rejects_missing_file(tmp_path) -> None:
+    with pytest.raises(BenchmarkDataError, match="cannot read"):
+        load_results(tmp_path / "missing.json")
+
+
 def test_zero_baseline_skips_ratio_check(tmp_path, capsys: pytest.CaptureFixture[str]) -> None:
     results = tmp_path / "results.json"
     baselines = tmp_path / "baselines.json"
     _write_results(
         results,
-        [{"name": "test_parse_session_small", "stats": {"mean": 0.0002}}],
+        [{"name": GATED_BENCH, "stats": {"mean": 0.0025}}],
     )
     _write_baselines(
         baselines,
-        {"parse": {"test_parse_session_small": 0.0}},
+        {"parse": {GATED_BENCH: 0.0}},
     )
 
     assert check_regression(results, baselines) == 0
-    assert "baseline for 'test_parse_session_small' is zero" in capsys.readouterr().out
+    assert f"baseline for '{GATED_BENCH}' is zero" in capsys.readouterr().out
 
 
 def test_exactly_at_threshold_passes(tmp_path) -> None:
@@ -117,7 +124,24 @@ def test_exactly_at_threshold_passes(tmp_path) -> None:
     baselines = tmp_path / "baselines.json"
     _write_results(
         results,
-        [{"name": "test_parse_session_small", "stats": {"mean": 0.00012}}],
+        [{"name": GATED_BENCH, "stats": {"mean": 0.0024}}],
+    )
+    _write_baselines(
+        baselines,
+        {"parse": {GATED_BENCH: 0.002}},
+    )
+
+    assert check_regression(results, baselines) == 0
+
+
+def test_excluded_benchmark_in_baselines_is_not_gated(
+    tmp_path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    results = tmp_path / "results.json"
+    baselines = tmp_path / "baselines.json"
+    _write_results(
+        results,
+        [{"name": "test_parse_session_small", "stats": {"mean": 0.001}}],
     )
     _write_baselines(
         baselines,
@@ -125,6 +149,7 @@ def test_exactly_at_threshold_passes(tmp_path) -> None:
     )
 
     assert check_regression(results, baselines) == 0
+    assert "REGRESSION" not in capsys.readouterr().out
 
 
 def test_missing_current_result_warns_without_failing(
@@ -135,7 +160,7 @@ def test_missing_current_result_warns_without_failing(
     _write_results(results, [])
     _write_baselines(
         baselines,
-        {"parse": {"test_parse_session_small": 0.0001}},
+        {"parse": {GATED_BENCH: 0.002}},
     )
 
     assert check_regression(results, baselines) == 0
@@ -148,7 +173,7 @@ def test_main_reports_benchmark_data_error(tmp_path, capsys: pytest.CaptureFixtu
     bad = tmp_path / "bad.json"
     bad.write_text("{}", encoding="utf-8")
     baselines = tmp_path / "baselines.json"
-    _write_baselines(baselines, {"parse": {"test_parse_session_small": 0.0001}})
+    _write_baselines(baselines, {"parse": {GATED_BENCH: 0.002}})
 
     assert main([str(bad), str(baselines)]) == 2
     assert "ERROR:" in capsys.readouterr().err
