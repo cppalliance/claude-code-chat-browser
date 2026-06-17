@@ -7,6 +7,7 @@ from api.error_codes import ErrorCode, error_response
 from models.project import ProjectSessionRowDict, SessionListItemDict
 from models.session import SessionDict
 from utils.exclusion_rules import is_session_excluded
+from utils.session_cache import get_cached_session
 from utils.session_path import get_claude_projects_dir, list_projects, list_sessions, safe_join
 
 projects_bp = Blueprint("projects", __name__)
@@ -80,9 +81,6 @@ def get_project_sessions(project_name: str) -> FlaskReturn:
     except ValueError:
         return error_response(ErrorCode.INVALID_PATH, "Invalid path", 400)
     sessions = list_sessions(project_dir)
-    # Add summary preview for each session
-    from utils.session_cache import get_cached_session
-
     rules = current_app.config.get("EXCLUSION_RULES") or []
     result: list[ProjectSessionRowDict] = []
     for s in sessions:

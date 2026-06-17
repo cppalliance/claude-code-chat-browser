@@ -179,9 +179,7 @@ class TestGetProjectsErrorCard:
         def _boom(*args, **kwargs):
             raise KeyError("internal_secret_field_id")
 
-        # api/projects.py imports parse_session inside the handler body,
-        # so patch the source module rather than the consumer.
-        monkeypatch.setattr("utils.session_cache.get_cached_session", _boom)
+        monkeypatch.setattr("api.projects.get_cached_session", _boom)
 
         resp = client.get("/api/projects/myproj/sessions")
         # Pin the response shape so a future wrapper change (e.g. {"sessions": [...]})

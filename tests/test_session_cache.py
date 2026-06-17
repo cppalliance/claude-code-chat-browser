@@ -48,13 +48,25 @@ def test_cache_hit_avoids_reparse(sample_session: Path, monkeypatch: pytest.Monk
     assert calls == 0
 
 
-def test_cache_invalidates_on_mtime_change(sample_session: Path) -> None:
+def test_cache_invalidates_on_mtime_change(
+    sample_session: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     path = str(sample_session)
-    first = get_cached_session(path)
+    get_cached_session(path)
+
+    calls = 0
+
+    def counting_parse(p: str):
+        nonlocal calls
+        calls += 1
+        return parse_session(p)
+
+    monkeypatch.setattr("utils.session_cache.parse_session", counting_parse)
+
     stat = sample_session.stat()
     os.utime(sample_session, (stat.st_mtime + 1, stat.st_mtime + 1))
-    second = get_cached_session(path)
-    assert first is not second
+    get_cached_session(path)
+    assert calls == 1
 
 
 def test_cache_normalizes_relative_and_absolute_paths(
@@ -83,7 +95,9 @@ def test_cache_normalizes_relative_and_absolute_paths(
         os.chdir(original_cwd)
 
 
-def test_lru_eviction(sample_session: Path, tmp_path: Path) -> None:
+def test_lru_eviction(
+    sample_session: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     set_max_entries(2)
     content = sample_session.read_text(encoding="utf-8")
     paths = []
@@ -102,17 +116,13 @@ def test_lru_eviction(sample_session: Path, tmp_path: Path) -> None:
         calls += 1
         return parse_session(p)
 
-    monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr("utils.session_cache.parse_session", counting_parse)
-    try:
-        get_cached_session(str(paths[2]))
-        assert calls == 0
-        get_cached_session(str(paths[1]))
-        assert calls == 0
-        get_cached_session(str(paths[0]))
-        assert calls == 1
-    finally:
-        monkeypatch.undo()
+    get_cached_session(str(paths[2]))
+    assert calls == 0
+    get_cached_session(str(paths[1]))
+    assert calls == 0
+    get_cached_session(str(paths[0]))
+    assert calls == 1
 
 
 def test_set_max_entries_rejects_negative() -> None:

@@ -49,6 +49,8 @@ def search() -> FlaskReturn:
     rules = current_app.config.get("EXCLUSION_RULES") or []
     results: list[SearchHitDict] = []
     for project in projects:
+        if len(results) >= max_results:
+            break
         sessions = list_sessions(project["path"])
         for sess_info in sessions:
             if len(results) >= max_results:

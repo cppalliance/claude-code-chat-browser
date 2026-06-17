@@ -17,20 +17,28 @@ _max_entries = DEFAULT_MAX_ENTRIES
 
 
 def get_cached_session(path: str) -> SessionDict:
-    """Return a parsed session, reusing the cache when mtime is unchanged."""
+    """Return a parsed session, reusing the cache when mtime is unchanged.
+
+    Concurrent requests for different paths proceed in parallel.
+    Concurrent misses on the *same* path will each parse independently;
+    the last writer wins. This is safe but may parse the file more than
+    once under high concurrency for a cold key.
+    """
     abspath = os.path.abspath(path)
-    mtime = os.path.getmtime(abspath)
+    mtime_before = os.path.getmtime(abspath)
     with _lock:
         hit = _cache.get(abspath)
-        if hit is not None and hit[0] == mtime:
+        if hit is not None and hit[0] == mtime_before:
             _cache.move_to_end(abspath)
             return hit[1]
     parsed = parse_session(abspath)
+    mtime_after = os.path.getmtime(abspath)
     with _lock:
-        _cache[abspath] = (mtime, parsed)
-        _cache.move_to_end(abspath)
-        while len(_cache) > _max_entries:
-            _cache.popitem(last=False)
+        if _max_entries > 0 and mtime_after == mtime_before:
+            _cache[abspath] = (mtime_after, parsed)
+            _cache.move_to_end(abspath)
+            while len(_cache) > _max_entries:
+                _cache.popitem(last=False)
     return parsed
 
 
@@ -41,7 +49,10 @@ def clear_cache() -> None:
 
 
 def set_max_entries(max_entries: int) -> None:
-    """Override the LRU capacity (primarily for tests)."""
+    """Override the LRU capacity (primarily for tests).
+
+    A value of 0 disables caching entirely — every access will parse from disk.
+    """
     if max_entries < 0:
         raise ValueError(f"max_entries must be non-negative, got {max_entries}")
     global _max_entries
