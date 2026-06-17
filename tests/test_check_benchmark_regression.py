@@ -6,7 +6,12 @@ import json
 
 import pytest
 
-from scripts.check_benchmark_regression import BenchmarkDataError, check_regression, load_results
+from scripts.check_benchmark_regression import (
+    BenchmarkDataError,
+    check_regression,
+    load_baseline_means,
+    load_results,
+)
 
 
 def _write_results(path, benchmarks: list[dict]) -> None:
@@ -147,3 +152,17 @@ def test_main_reports_benchmark_data_error(tmp_path, capsys: pytest.CaptureFixtu
 
     assert main([str(bad), str(baselines)]) == 2
     assert "ERROR:" in capsys.readouterr().err
+
+
+def test_duplicate_baseline_name_raises(tmp_path) -> None:
+    baselines = tmp_path / "baselines.json"
+    _write_baselines(
+        baselines,
+        {
+            "parse": {"test_parse_session_medium": 0.002},
+            "export": {"test_parse_session_medium": 0.003},
+        },
+    )
+
+    with pytest.raises(BenchmarkDataError, match="duplicate benchmark name"):
+        load_baseline_means(baselines)

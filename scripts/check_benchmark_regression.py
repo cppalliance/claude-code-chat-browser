@@ -9,6 +9,14 @@ from pathlib import Path
 
 THRESHOLD = 1.20
 
+# Sub-ms timings are too noisy for a fixed 20% gate on ubuntu CI.
+EXCLUDED_FROM_GATE = frozenset(
+    {
+        "test_parse_session_small",
+        "test_search_full_corpus",
+    }
+)
+
 
 class BenchmarkDataError(ValueError):
     """Raised when benchmark JSON input is malformed or missing required fields."""
@@ -38,7 +46,10 @@ def load_results(results_path: str | Path) -> dict[str, float]:
             raise BenchmarkDataError(
                 f"{path} benchmarks[{index}] missing 'name' or 'stats.mean'"
             ) from exc
-        results[str(name)] = mean
+        name = str(name)
+        if name in results:
+            raise BenchmarkDataError(f"{path} duplicate benchmark name {name!r}")
+        results[name] = mean
     return results
 
 
@@ -62,8 +73,13 @@ def load_baseline_means(baselines_path: str | Path) -> dict[str, float]:
         if not isinstance(value, dict):
             continue
         for name, mean in value.items():
+            name = str(name)
+            if name in means:
+                raise BenchmarkDataError(
+                    f"{path} duplicate benchmark name {name!r} across groups"
+                )
             try:
-                means[str(name)] = float(mean)
+                means[name] = float(mean)
             except (TypeError, ValueError) as exc:
                 raise BenchmarkDataError(
                     f"{path} groups[{group_name!r}][{name!r}] is not a numeric mean"

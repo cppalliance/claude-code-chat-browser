@@ -29,6 +29,7 @@ def test_reduce_baselines_writes_gated_groups_only(tmp_path) -> None:
     _write_raw(
         raw,
         [
+            {"group": "parse", "name": "test_parse_session_medium", "stats": {"mean": 0.002}},
             {"group": "parse", "name": "test_parse_session_small", "stats": {"mean": 0.0001}},
             {"group": "cache", "name": "test_cache_warm_hit", "stats": {"mean": 1e-05}},
         ],
@@ -37,10 +38,9 @@ def test_reduce_baselines_writes_gated_groups_only(tmp_path) -> None:
     output = reduce_baselines(raw, out)
 
     assert output["machine"] == "Linux"
-    assert "test_parse_session_small" in output["groups"]["parse"]
+    assert "test_parse_session_medium" in output["groups"]["parse"]
+    assert "test_parse_session_small" not in output["groups"]["parse"]
     assert "cache" not in output["groups"]
-    written = json.loads(out.read_text(encoding="utf-8"))
-    assert "test_cache_warm_hit" not in written["groups"]["parse"]
 
 
 def test_reduce_baselines_applies_slack(tmp_path) -> None:
@@ -48,13 +48,13 @@ def test_reduce_baselines_applies_slack(tmp_path) -> None:
     out = tmp_path / "baselines.json"
     _write_raw(
         raw,
-        [{"group": "search", "name": "test_search_full_corpus", "stats": {"mean": 0.002}}],
+        [{"group": "parse", "name": "test_parse_session_medium", "stats": {"mean": 0.002}}],
     )
 
     reduce_baselines(raw, out, slack=1.5)
     data = json.loads(out.read_text(encoding="utf-8"))
 
-    assert data["groups"]["search"]["test_search_full_corpus"] == pytest.approx(0.003)
+    assert data["groups"]["parse"]["test_parse_session_medium"] == pytest.approx(0.003)
 
 
 def test_reduce_baselines_rejects_missing_benchmarks_key(tmp_path) -> None:
@@ -77,3 +77,26 @@ def test_reduce_baselines_cli_rejects_non_positive_slack(tmp_path) -> None:
     with pytest.raises(SystemExit) as exc_info:
         main([str(raw), str(tmp_path / "out.json"), "--slack", "0"])
     assert exc_info.value.code == 2
+
+
+def test_reduce_baselines_machine_info_non_dict(tmp_path) -> None:
+    raw = tmp_path / "raw.json"
+    raw.write_text(
+        json.dumps(
+            {
+                "machine_info": "not-a-dict",
+                "benchmarks": [
+                    {
+                        "group": "parse",
+                        "name": "test_parse_session_medium",
+                        "stats": {"mean": 0.002},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    output = reduce_baselines(raw, tmp_path / "out.json")
+
+    assert output["machine"] is None

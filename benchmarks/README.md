@@ -36,7 +36,11 @@ The memory test (`test_parse_memory.py`) is intentionally **not** skipped by `--
 
 ## CI gate
 
-The `benchmarks` job on **ubuntu-latest** runs pytest-benchmark, then `scripts/check_benchmark_regression.py`. CI fails when any gated benchmark mean exceeds its baseline by more than **20%**. Benchmarks without a baseline entry (e.g. new `cache` group) print a warning and do not fail the gate.
+The `benchmarks` job on **ubuntu-latest** runs pytest-benchmark (`--benchmark-json=benchmark-results.json`), then `scripts/check_benchmark_regression.py benchmark-results.json benchmarks/baselines.json`. CI fails when any **gated** benchmark mean exceeds its baseline by more than **20%**.
+
+**Gated:** parse medium/large, export 10/50/100 sessions.
+
+**Not gated (informational only):** `test_parse_session_small`, `test_search_full_corpus` (sub-ms CI noise), and the `cache` group. Benchmarks without a baseline entry print a warning and do not fail the gate.
 
 ## Refresh baselines
 

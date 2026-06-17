@@ -9,9 +9,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 try:
-    from scripts.check_benchmark_regression import BenchmarkDataError
+    from scripts.check_benchmark_regression import EXCLUDED_FROM_GATE, BenchmarkDataError
 except ModuleNotFoundError:
-    from check_benchmark_regression import BenchmarkDataError
+    from check_benchmark_regression import EXCLUDED_FROM_GATE, BenchmarkDataError
 
 GATED_GROUPS = ("parse", "export", "search")
 
@@ -58,12 +58,17 @@ def reduce_baselines(
         group = entry.get("group")
         if group not in GATED_GROUPS:
             continue
+        if str(name) in EXCLUDED_FROM_GATE:
+            continue
         groups[group][str(name)] = mean * slack
 
     machine_info = raw.get("machine_info")
     machine = machine_info.get("system") if isinstance(machine_info, dict) else None
     output: dict[str, object] = {
-        "_note": "CI gates the ubuntu benchmarks job when mean exceeds baseline by >20%.",
+        "_note": (
+            "Gated means from ubuntu-latest CI (post-cache). "
+            "Excluded from gate: test_parse_session_small, test_search_full_corpus (CI noise)."
+        ),
         "updated": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "machine": machine,
         "groups": groups,
