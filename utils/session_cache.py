@@ -32,7 +32,10 @@ def get_cached_session(path: str) -> SessionDict:
             _cache.move_to_end(abspath)
             return hit[1]
     parsed = parse_session(abspath)
-    mtime_after = os.path.getmtime(abspath)
+    try:
+        mtime_after = os.path.getmtime(abspath)
+    except OSError:
+        return parsed
     with _lock:
         if _max_entries > 0 and mtime_after == mtime_before:
             _cache[abspath] = (mtime_after, parsed)

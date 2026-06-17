@@ -128,3 +128,22 @@ def test_lru_eviction(
 def test_set_max_entries_rejects_negative() -> None:
     with pytest.raises(ValueError, match="non-negative"):
         set_max_entries(-1)
+
+
+def test_returns_parsed_when_mtime_after_parse_raises(
+    sample_session: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = str(sample_session)
+    real_getmtime = os.path.getmtime
+    calls = 0
+
+    def getmtime_side_effect(p: str) -> float:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("file removed after parse")
+        return real_getmtime(p)
+
+    monkeypatch.setattr(os.path, "getmtime", getmtime_side_effect)
+    result = get_cached_session(path)
+    assert result == parse_session(path)
