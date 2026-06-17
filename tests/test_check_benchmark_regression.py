@@ -105,3 +105,45 @@ def test_zero_baseline_skips_ratio_check(tmp_path, capsys: pytest.CaptureFixture
 
     assert check_regression(results, baselines) == 0
     assert "baseline for 'test_parse_session_small' is zero" in capsys.readouterr().out
+
+
+def test_exactly_at_threshold_passes(tmp_path) -> None:
+    results = tmp_path / "results.json"
+    baselines = tmp_path / "baselines.json"
+    _write_results(
+        results,
+        [{"name": "test_parse_session_small", "stats": {"mean": 0.00012}}],
+    )
+    _write_baselines(
+        baselines,
+        {"parse": {"test_parse_session_small": 0.0001}},
+    )
+
+    assert check_regression(results, baselines) == 0
+
+
+def test_missing_current_result_warns_without_failing(
+    tmp_path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    results = tmp_path / "results.json"
+    baselines = tmp_path / "baselines.json"
+    _write_results(results, [])
+    _write_baselines(
+        baselines,
+        {"parse": {"test_parse_session_small": 0.0001}},
+    )
+
+    assert check_regression(results, baselines) == 0
+    assert "no current result for baseline" in capsys.readouterr().out
+
+
+def test_main_reports_benchmark_data_error(tmp_path, capsys: pytest.CaptureFixture[str]) -> None:
+    from scripts.check_benchmark_regression import main
+
+    bad = tmp_path / "bad.json"
+    bad.write_text("{}", encoding="utf-8")
+    baselines = tmp_path / "baselines.json"
+    _write_baselines(baselines, {"parse": {"test_parse_session_small": 0.0001}})
+
+    assert main([str(bad), str(baselines)]) == 2
+    assert "ERROR:" in capsys.readouterr().err

@@ -8,6 +8,8 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from scripts.check_benchmark_regression import BenchmarkDataError
+
 GATED_GROUPS = ("parse", "export", "search")
 
 
@@ -24,13 +26,34 @@ def reduce_baselines(
     *,
     slack: float = 1.0,
 ) -> dict[str, object]:
-    raw = json.loads(Path(raw_path).read_text(encoding="utf-8"))
+    path = Path(raw_path)
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise BenchmarkDataError(f"invalid JSON in {path}: {exc}") from exc
+
+    try:
+        entries = raw["benchmarks"]
+    except (KeyError, TypeError) as exc:
+        raise BenchmarkDataError(f"{path} missing top-level 'benchmarks' array") from exc
+    if not isinstance(entries, list):
+        raise BenchmarkDataError(f"{path} 'benchmarks' must be an array")
+
     groups: dict[str, dict[str, float]] = {group: {} for group in GATED_GROUPS}
-    for entry in raw["benchmarks"]:
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            raise BenchmarkDataError(f"{path} benchmarks[{index}] must be an object")
+        try:
+            name = entry["name"]
+            mean = float(entry["stats"]["mean"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise BenchmarkDataError(
+                f"{path} benchmarks[{index}] missing 'name' or 'stats.mean'"
+            ) from exc
         group = entry.get("group")
         if group not in GATED_GROUPS:
             continue
-        groups[group][entry["name"]] = float(entry["stats"]["mean"]) * slack
+        groups[group][str(name)] = mean * slack
 
     machine_info = raw.get("machine_info", {})
     output: dict[str, object] = {
@@ -39,8 +62,8 @@ def reduce_baselines(
         "machine": machine_info.get("system"),
         "groups": groups,
     }
-    path = Path(out_path)
-    path.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
+    out = Path(out_path)
+    out.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
     return output
 
 
@@ -55,7 +78,11 @@ def main(argv: list[str] | None = None) -> int:
         help="multiply means by this factor (must be > 0)",
     )
     args = parser.parse_args(argv)
-    reduce_baselines(args.raw_path, args.out_path, slack=args.slack)
+    try:
+        reduce_baselines(args.raw_path, args.out_path, slack=args.slack)
+    except BenchmarkDataError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
     return 0
 
 

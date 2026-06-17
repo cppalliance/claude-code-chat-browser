@@ -239,6 +239,7 @@ jobs:
         run: python scripts/check_benchmark_regression.py benchmark-results.json benchmarks/baselines.json
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
         with:
           name: benchmark-results
           path: benchmark-results.json

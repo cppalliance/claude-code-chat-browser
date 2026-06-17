@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -50,9 +51,11 @@ def load_baseline_means(baselines_path: str | Path) -> dict[str, float]:
     if not isinstance(data, dict):
         raise BenchmarkDataError(f"{path} root value must be an object")
 
-    groups = data.get("groups", data)
+    if "groups" not in data:
+        raise BenchmarkDataError(f"{path} missing required 'groups' key")
+    groups = data["groups"]
     if not isinstance(groups, dict):
-        raise BenchmarkDataError(f"{path} missing 'groups' object")
+        raise BenchmarkDataError(f"{path} 'groups' must be an object")
 
     means: dict[str, float] = {}
     for group_name, value in groups.items():
@@ -104,14 +107,25 @@ def check_regression(
 
 
 def main(argv: list[str] | None = None) -> int:
-    argv = sys.argv[1:] if argv is None else argv
-    if len(argv) != 2:
-        print(
-            "usage: check_benchmark_regression.py <results.json> <baselines.json>",
-            file=sys.stderr,
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("results_path", help="pytest-benchmark --benchmark-json output")
+    parser.add_argument("baselines_path", help="path to benchmarks/baselines.json")
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=THRESHOLD,
+        help="fail when current mean exceeds baseline by more than this ratio (default: 1.20)",
+    )
+    args = parser.parse_args(argv)
+    try:
+        return check_regression(
+            args.results_path,
+            args.baselines_path,
+            threshold=args.threshold,
         )
+    except BenchmarkDataError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
         return 2
-    return check_regression(argv[0], argv[1])
 
 
 if __name__ == "__main__":

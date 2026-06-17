@@ -1,4 +1,4 @@
-.PHONY: update-baselines check-benchmarks
+.PHONY: update-baselines check-benchmarks clean-benchmark-artifacts
 
 update-baselines:
 	pytest tests/benchmarks/ --benchmark-only --benchmark-json=benchmarks/_raw.json -o addopts=
@@ -7,3 +7,6 @@ update-baselines:
 check-benchmarks:
 	pytest tests/benchmarks/ --benchmark-only --benchmark-json=benchmark-results.json -o addopts=
 	python scripts/check_benchmark_regression.py benchmark-results.json benchmarks/baselines.json
+
+clean-benchmark-artifacts:
+	rm -f benchmarks/_raw.json benchmark-results.json

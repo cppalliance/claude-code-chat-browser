@@ -53,4 +53,4 @@ pytest tests/benchmarks/ --benchmark-only --benchmark-json=benchmarks/_raw.json 
 python scripts/reduce_baselines.py benchmarks/_raw.json benchmarks/baselines.json
 ```
 
-Do not capture baselines on Windows/macOS for commit — ubuntu runners are slower and the gate will fail. Download `benchmark-results.json` from a green CI artifact to seed baselines if needed.
+Baselines must be captured on **ubuntu-latest** to match the gated CI runner. Cross-OS variance causes spurious failures. Download `benchmark-results.json` from a CI artifact to seed baselines if needed.
