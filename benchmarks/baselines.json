@@ -1,10 +1,20 @@
 {
-  "_note": "Informational snapshot only — CI does not gate on these values.",
-  "updated": null,
-  "machine": null,
+  "_note": "CI gates the ubuntu benchmarks job when mean exceeds baseline by >20%.",
+  "updated": "2026-06-17T20:33:56Z",
+  "machine": "Windows",
   "groups": {
-    "parse": {},
-    "export": {},
-    "search": {}
+    "parse": {
+      "test_parse_session_small": 8.711556942772768e-05,
+      "test_parse_session_medium": 0.0019041118800302193,
+      "test_parse_session_large": 0.018555900882518687
+    },
+    "export": {
+      "test_bulk_export_session_count[sessions-10]": 0.0034216649980517108,
+      "test_bulk_export_session_count[sessions-50]": 0.017290590000629893,
+      "test_bulk_export_session_count[sessions-100]": 0.03397804391996553
+    },
+    "search": {
+      "test_search_full_corpus": 0.002600985144447307
+    }
   }
 }
