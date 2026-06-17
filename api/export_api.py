@@ -26,8 +26,8 @@ from utils.export_state_store import (
     load_export_state_from_disk,
 )
 from utils.json_exporter import session_to_json
-from utils.jsonl_parser import parse_session
 from utils.md_exporter import session_to_markdown
+from utils.session_cache import get_cached_session
 from utils.session_path import get_claude_projects_dir, list_projects, safe_join
 from utils.session_stats import compute_stats
 from utils.slugify import slugify
@@ -237,7 +237,7 @@ def export_session(project_name: str, session_id: str) -> FlaskReturn:
 
     fmt = request.args.get("format", "md")
     try:
-        session = parse_session(filepath)
+        session = get_cached_session(filepath)
     except _EXPORT_ERRORS:
         current_app.logger.exception("Failed to parse session %s for export", session_id)
         return error_response(

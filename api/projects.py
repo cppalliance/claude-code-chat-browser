@@ -81,13 +81,13 @@ def get_project_sessions(project_name: str) -> FlaskReturn:
         return error_response(ErrorCode.INVALID_PATH, "Invalid path", 400)
     sessions = list_sessions(project_dir)
     # Add summary preview for each session
-    from utils.jsonl_parser import parse_session
+    from utils.session_cache import get_cached_session
 
     rules = current_app.config.get("EXCLUSION_RULES") or []
     result: list[ProjectSessionRowDict] = []
     for s in sessions:
         try:
-            parsed = parse_session(s["path"])
+            parsed = get_cached_session(s["path"])
             # Skip untitled sessions (no real conversation)
             if parsed["title"] == "Untitled Session":
                 continue

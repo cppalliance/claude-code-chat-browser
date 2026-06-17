@@ -8,7 +8,7 @@ from flask import Blueprint, current_app
 from api._flask_types import FlaskReturn, json_response
 from api.error_codes import ErrorCode, error_response
 from utils.exclusion_rules import is_session_excluded
-from utils.jsonl_parser import parse_session
+from utils.session_cache import get_cached_session
 from utils.session_path import get_claude_projects_dir, safe_join
 from utils.session_stats import compute_stats
 
@@ -39,7 +39,7 @@ def get_session(project_name: str, session_id: str) -> FlaskReturn:
         )
 
     try:
-        session = parse_session(filepath)
+        session = get_cached_session(filepath)
         rules = current_app.config.get("EXCLUSION_RULES") or []
         if is_session_excluded(rules, session, project_name):
             return error_response(
@@ -73,7 +73,7 @@ def get_session_stats(project_name: str, session_id: str) -> FlaskReturn:
         )
 
     try:
-        session = parse_session(filepath)
+        session = get_cached_session(filepath)
         rules = current_app.config.get("EXCLUSION_RULES") or []
         if is_session_excluded(rules, session, project_name):
             return error_response(
