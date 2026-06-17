@@ -8,7 +8,10 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from scripts.check_benchmark_regression import BenchmarkDataError
+try:
+    from scripts.check_benchmark_regression import BenchmarkDataError
+except ModuleNotFoundError:
+    from check_benchmark_regression import BenchmarkDataError
 
 GATED_GROUPS = ("parse", "export", "search")
 
