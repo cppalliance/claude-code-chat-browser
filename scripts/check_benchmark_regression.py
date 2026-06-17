@@ -75,9 +75,7 @@ def load_baseline_means(baselines_path: str | Path) -> dict[str, float]:
         for name, mean in value.items():
             name = str(name)
             if name in means:
-                raise BenchmarkDataError(
-                    f"{path} duplicate benchmark name {name!r} across groups"
-                )
+                raise BenchmarkDataError(f"{path} duplicate benchmark name {name!r} across groups")
             try:
                 means[name] = float(mean)
             except (TypeError, ValueError) as exc:
