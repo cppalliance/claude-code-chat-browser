@@ -40,7 +40,7 @@ The `benchmarks` job on **ubuntu-latest** runs pytest-benchmark, then `scripts/c
 
 ## Refresh baselines
 
-After intentional performance work on ubuntu (same OS as CI):
+After intentional performance work, capture on **ubuntu-latest** (same OS as the gated CI job):
 
 ```bash
 make update-baselines
@@ -53,4 +53,4 @@ pytest tests/benchmarks/ --benchmark-only --benchmark-json=benchmarks/_raw.json 
 python scripts/reduce_baselines.py benchmarks/_raw.json benchmarks/baselines.json
 ```
 
-Use `--slack 1.25` on `reduce_baselines.py` when capturing on a faster host than CI to absorb cross-machine variance.
+Do not capture baselines on Windows/macOS for commit — ubuntu runners are slower and the gate will fail. Download `benchmark-results.json` from a green CI artifact to seed baselines if needed.
