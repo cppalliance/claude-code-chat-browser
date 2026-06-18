@@ -25,15 +25,17 @@ A deprecated field may be removed when:
 - The bundled SPA no longer reads the field, and
 - Tests and CHANGELOG document the removal.
 
-For fields actively read by the bundled SPA (which does not track an external API version), removal happens no earlier than **two tagged releases** after the release that documented the deprecation in CHANGELOG (for example, deprecated in `0.1.0`, removable from `0.3.0` at earliest when versions advance `0.1.0` → `0.2.0` → `0.3.0`), and no earlier than **14 calendar days** after that deprecation announcement.
+For fields actively read by the bundled SPA (which does not track an external API version), removal happens no earlier than **two tagged releases** after the release that documented the deprecation in CHANGELOG, and no earlier than **14 calendar days** after that deprecation announcement.
 
-### Bundled SPA + pre-first-tag (path B)
+> **Example (illustrative):** if a field is deprecated in version _X_, it may be removed no earlier than version _X+2_. With [`v0.1.0`](../CHANGELOG.md#010---2026-06-18) as the first shipped tag, a field deprecated in `0.2.0` would be removable from `0.4.0` at earliest (versions advance `0.2.0` → `0.3.0` → `0.4.0`).
 
-Until the first git tag ships (for example while `app.__version__` is `0.1.0.dev0`), the CHANGELOG `[Unreleased]` section is the source of truth — see [Versioning](#versioning) below. The bundled SPA is deployed from the same repo and commit as the API; it does not consume a separately versioned HTTP contract.
+### Bundled SPA fast path (pre-`v0.1.0`)
 
-For fields **only read by the bundled SPA** (no external integrators on a tagged API yet), an atomic PR that (1) stops reading the field in `static/js/*.js` and (2) removes it from the JSON response is acceptable **before** the first tag, provided deprecation was announced in CHANGELOG and api-reference (PR #60) and removal is recorded under `[Unreleased]`. External integrators who pin a **tagged** release must follow the two-release + 14-day rule above.
+Before [`v0.1.0`](../CHANGELOG.md#010---2026-06-18) shipped, the CHANGELOG `[Unreleased]` section was the source of truth for API changes not yet tagged — see [Versioning](#versioning) below. The bundled SPA is deployed from the same repo and commit as the API; it does not consume a separately versioned HTTP contract.
 
-## Example (completed — pre-first-tag)
+For fields **only read by the bundled SPA** (no external integrators on a tagged API yet), an atomic PR that (1) stops reading the field in `static/js/*.js` and (2) removes it from the JSON response was acceptable **before** `v0.1.0`, provided deprecation was announced in CHANGELOG and api-reference (PR #60) and removal was recorded under `[Unreleased]`. External integrators who pin a **tagged** release must follow the two-release + 14-day rule above.
+
+## Example (completed)
 
 | Field | Endpoint | Status | Replacement | Notes |
 |-------|----------|--------|-------------|-------|
@@ -41,7 +43,7 @@ For fields **only read by the bundled SPA** (no external integrators on a tagged
 
 ## Versioning
 
-Release versions follow `MAJOR.MINOR.PATCH` in `app.__version__` and [CHANGELOG](../CHANGELOG.md). Until the first git tag ships, `main` may carry a `.dev0` suffix (for example `0.1.0.dev0`); the CHANGELOG `[Unreleased]` section is the source of truth for what is not yet tagged.
+Release versions follow `MAJOR.MINOR.PATCH` in `app.__version__` and [CHANGELOG](../CHANGELOG.md). [`v0.1.0`](https://github.com/cppalliance/claude-code-chat-browser/releases/tag/v0.1.0) is the first shipped git tag; `main` carries a `.dev0` suffix while developing the next release (currently `0.2.0.dev0`). The CHANGELOG `[Unreleased]` section is the source of truth for changes not yet tagged.
 
 | Bump | Pre-1.0 meaning |
 |------|-----------------|
