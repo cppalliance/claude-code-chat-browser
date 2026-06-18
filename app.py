@@ -1,6 +1,6 @@
 """Flask app that serves the web GUI for browsing sessions."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0.dev0"
 
 import argparse
 import sys
