@@ -37,7 +37,7 @@ For fields **only read by the bundled SPA** (no external integrators on a tagged
 
 | Field | Endpoint | Status | Replacement | Notes |
 |-------|----------|--------|-------------|-------|
-| `export_count` | `GET /api/export/state` | removed | `last_export_session_count` | Deprecated in PR #60 (`[Unreleased]`); removed in bundled SPA+API PR before first `v0.1.0` tag |
+| `export_count` | `GET /api/export/state` | removed | `last_export_session_count` | Deprecated in PR #60 (`[Unreleased]`); removed in `[0.1.0]` |
 
 ## Versioning
 
