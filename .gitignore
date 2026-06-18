@@ -14,3 +14,5 @@ node_modules/
 .coverage
 coverage/
 coverage.xml
+benchmark-results.json
+benchmarks/_raw.json

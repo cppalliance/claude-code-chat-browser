@@ -1,6 +1,6 @@
 # Performance benchmarks
 
-Test files live under `tests/benchmarks/`; this directory holds only documentation and the informational `baselines.json` snapshot.
+Test files live under `tests/benchmarks/`; this directory holds documentation and `baselines.json` for the CI regression gate.
 
 Repeatable local measurements for parse, bulk export, and search hot paths.
 
@@ -26,6 +26,7 @@ The memory test also runs as part of the normal `pytest` suite (timing benchmark
 | parse | `parse_session` on 10 / 500 / 5000+ line JSONL |
 | export | `run_bulk_export` over 10 / 50 / 100 sessions |
 | search | `GET /api/search` over a 50-session synthetic corpus |
+| cache | cold vs warm `get_cached_session` (informational; not gated) |
 
 Large JSONL files (5000+ lines) are generated at test session scope under pytest's temp directory — not committed to git.
 
@@ -33,10 +34,27 @@ Corpora repeat one row from `tests/fixtures/session_with_tools.jsonl`, so parse/
 
 The memory test (`test_parse_memory.py`) is intentionally **not** skipped by `--benchmark-skip`; it runs in the main `pytest` job and builds the session-scoped 5000-line fixture once per session.
 
-## CI
+## CI gate
 
-The `benchmarks` workflow job uploads `benchmark-results.json` as a downloadable artifact. There is no regression gate yet.
+The `benchmarks` job on **ubuntu-latest** runs pytest-benchmark (`--benchmark-json=benchmark-results.json`), then `scripts/check_benchmark_regression.py benchmark-results.json benchmarks/baselines.json`. CI fails when any **gated** benchmark mean exceeds its baseline by more than **20%**.
+
+**Gated:** parse medium/large, export 10/50/100 sessions.
+
+**Not gated (informational only):** `test_parse_session_small`, `test_search_full_corpus` (sub-ms CI noise), and the `cache` group. Benchmarks without a baseline entry print a warning and do not fail the gate.
 
 ## Refresh baselines
 
-After intentional performance work, copy key means from a local run into `baselines.json` with a date and machine note. This file is informational only; CI does not compare against it.
+After intentional performance work, capture on **ubuntu-latest** (same OS as the gated CI job):
+
+```bash
+make update-baselines
+```
+
+Or manually:
+
+```bash
+pytest tests/benchmarks/ --benchmark-only --benchmark-json=benchmarks/_raw.json -o addopts=
+python scripts/reduce_baselines.py benchmarks/_raw.json benchmarks/baselines.json
+```
+
+Baselines must be captured on **ubuntu-latest** to match the gated CI runner. Cross-OS variance causes spurious failures. Download `benchmark-results.json` from a CI artifact to seed baselines if needed.
