@@ -179,6 +179,46 @@ def test_main_reports_benchmark_data_error(tmp_path, capsys: pytest.CaptureFixtu
     assert "ERROR:" in capsys.readouterr().err
 
 
+def test_load_results_prefers_peak_bytes_extra_info(tmp_path) -> None:
+    path = tmp_path / "results.json"
+    _write_results(
+        path,
+        [
+            {
+                "name": "test_parse_large_peak_memory",
+                "stats": {"mean": 0.05},
+                "extra_info": {"peak_bytes": 12_345_678},
+            }
+        ],
+    )
+
+    assert load_results(path)["test_parse_large_peak_memory"] == 12_345_678.0
+
+
+def test_memory_metric_regression_uses_bytes(tmp_path, capsys: pytest.CaptureFixture[str]) -> None:
+    results = tmp_path / "results.json"
+    baselines = tmp_path / "baselines.json"
+    _write_results(
+        results,
+        [
+            {
+                "name": "test_parse_large_peak_memory",
+                "stats": {"mean": 0.05},
+                "extra_info": {"peak_bytes": 15_000_000},
+            }
+        ],
+    )
+    _write_baselines(
+        baselines,
+        {"parse": {"test_parse_large_peak_memory": 10_000_000}},
+    )
+
+    assert check_regression(results, baselines) == 1
+    out = capsys.readouterr().out
+    assert "bytes" in out
+    assert "REGRESSION" in out
+
+
 def test_duplicate_baseline_name_raises(tmp_path) -> None:
     baselines = tmp_path / "baselines.json"
     _write_baselines(

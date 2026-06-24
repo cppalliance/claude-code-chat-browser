@@ -1,10 +1,13 @@
-"""Peak memory ceiling for large-file parse_session (regular pytest, not benchmark-only)."""
+"""Peak memory for large-file parse_session: ceiling test + tracked benchmark."""
 
 from __future__ import annotations
 
 import tracemalloc
 from pathlib import Path
 
+import pytest
+
+from tests.benchmarks.conftest import TracemallocPeak
 from utils.jsonl_parser import parse_session
 
 
@@ -26,3 +29,21 @@ def test_large_parse_peak_memory_under_ceiling(parse_large_file: Path) -> None:
         tracemalloc.stop()
 
     assert peak < ceiling, f"peak {peak} bytes exceeds 10x file size {file_bytes}"
+
+
+@pytest.mark.benchmark(group="parse")
+def test_parse_large_peak_memory(
+    benchmark,
+    parse_large_file: Path,
+    tracemalloc_peak: TracemallocPeak,
+) -> None:
+    path = str(parse_large_file)
+    peaks: list[int] = []
+
+    def _run() -> None:
+        _, peak = tracemalloc_peak.measure(parse_session, path)
+        peaks.append(peak)
+
+    benchmark(_run)
+    assert peaks, "benchmark produced no peak memory samples"
+    benchmark.extra_info["peak_bytes"] = int(sum(peaks) / len(peaks))

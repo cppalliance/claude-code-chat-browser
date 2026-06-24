@@ -22,6 +22,24 @@ class BenchmarkDataError(ValueError):
     """Raised when benchmark JSON input is malformed or missing required fields."""
 
 
+def benchmark_entry_mean(entry: dict[str, object]) -> float:
+    """Return gated metric: peak_bytes from extra_info when present, else stats.mean."""
+    extra = entry.get("extra_info")
+    if isinstance(extra, dict) and "peak_bytes" in extra:
+        return float(extra["peak_bytes"])
+    try:
+        stats = entry["stats"]
+        return float(stats["mean"])  # type: ignore[index]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise BenchmarkDataError(
+            f"benchmark {entry.get('name')!r} missing 'stats.mean' or extra_info.peak_bytes"
+        ) from exc
+
+
+def is_memory_metric(name: str) -> bool:
+    return "peak_memory" in name
+
+
 def load_results(results_path: str | Path) -> dict[str, float]:
     path = Path(results_path)
     try:
@@ -43,10 +61,10 @@ def load_results(results_path: str | Path) -> dict[str, float]:
             raise BenchmarkDataError(f"{path} benchmarks[{index}] must be an object")
         try:
             name = entry["name"]
-            mean = float(entry["stats"]["mean"])
+            mean = benchmark_entry_mean(entry)
         except (KeyError, TypeError, ValueError) as exc:
             raise BenchmarkDataError(
-                f"{path} benchmarks[{index}] missing 'name' or 'stats.mean'"
+                f"{path} benchmarks[{index}] missing 'name' or measurable value"
             ) from exc
         name = str(name)
         if name in results:
@@ -112,7 +130,10 @@ def check_regression(
             continue
         ratio = cur / base
         tag = "FAIL" if ratio > threshold else "ok"
-        print(f"[{tag}] {name}: {cur:.6f}s vs {base:.6f}s ({ratio:.2f}x)")
+        if is_memory_metric(name):
+            print(f"[{tag}] {name}: {cur:.0f} bytes vs {base:.0f} bytes ({ratio:.2f}x)")
+        else:
+            print(f"[{tag}] {name}: {cur:.6f}s vs {base:.6f}s ({ratio:.2f}x)")
         if ratio > threshold:
             failures.append(name)
 

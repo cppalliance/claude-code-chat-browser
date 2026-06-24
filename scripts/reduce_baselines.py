@@ -9,9 +9,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 try:
-    from scripts.check_benchmark_regression import EXCLUDED_FROM_GATE, BenchmarkDataError
+    from scripts.check_benchmark_regression import (
+        EXCLUDED_FROM_GATE,
+        BenchmarkDataError,
+        benchmark_entry_mean,
+    )
 except ModuleNotFoundError:
-    from check_benchmark_regression import EXCLUDED_FROM_GATE, BenchmarkDataError
+    from check_benchmark_regression import (
+        EXCLUDED_FROM_GATE,
+        BenchmarkDataError,
+        benchmark_entry_mean,
+    )
 
 GATED_GROUPS = ("parse", "export", "search")
 
@@ -50,15 +58,13 @@ def reduce_baselines(
             raise BenchmarkDataError(f"{path} benchmarks[{index}] must be an object")
         try:
             name = entry["name"]
-            mean = float(entry["stats"]["mean"])
+            mean = benchmark_entry_mean(entry)
         except (KeyError, TypeError, ValueError) as exc:
             raise BenchmarkDataError(
-                f"{path} benchmarks[{index}] missing 'name' or 'stats.mean'"
+                f"{path} benchmarks[{index}] missing 'name' or measurable value"
             ) from exc
         group = entry.get("group")
         if group not in GATED_GROUPS:
-            continue
-        if str(name) in EXCLUDED_FROM_GATE:
             continue
         groups[group][str(name)] = mean * slack
 
@@ -67,7 +73,8 @@ def reduce_baselines(
     output: dict[str, object] = {
         "_note": (
             "Gated means from ubuntu-latest CI (post-cache). "
-            "Excluded from gate: test_parse_session_small, test_search_full_corpus (CI noise)."
+            "Excluded from gate: test_parse_session_small, test_search_full_corpus (CI noise). "
+            "Memory benchmarks use extra_info.peak_bytes (bytes); latency uses stats.mean (seconds)."
         ),
         "updated": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "machine": machine,

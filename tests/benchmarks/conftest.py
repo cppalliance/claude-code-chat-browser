@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import tracemalloc
+from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
+from typing import Any, TypeVar
 
 import pytest
 
@@ -12,6 +15,27 @@ from app import create_app
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 TEMPLATE_LINE = (FIXTURES / "session_with_tools.jsonl").read_text(encoding="utf-8").splitlines()[0]
+
+T = TypeVar("T")
+
+
+class TracemallocPeak:
+    """Measure peak Python heap bytes for one callable invocation."""
+
+    def measure(self, func: Callable[..., T], /, *args: Any, **kwargs: Any) -> tuple[T, int]:
+        tracemalloc.start()
+        tracemalloc.clear_traces()
+        try:
+            result = func(*args, **kwargs)
+            _, peak = tracemalloc.get_traced_memory()
+            return result, peak
+        finally:
+            tracemalloc.stop()
+
+
+@pytest.fixture
+def tracemalloc_peak() -> TracemallocPeak:
+    return TracemallocPeak()
 
 
 def write_jsonl(path: Path, line_count: int) -> Path:

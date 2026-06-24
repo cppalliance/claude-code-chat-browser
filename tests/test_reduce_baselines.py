@@ -39,7 +39,7 @@ def test_reduce_baselines_writes_gated_groups_only(tmp_path) -> None:
 
     assert output["machine"] == "Linux"
     assert "test_parse_session_medium" in output["groups"]["parse"]
-    assert "test_parse_session_small" not in output["groups"]["parse"]
+    assert "test_parse_session_small" in output["groups"]["parse"]
     assert "cache" not in output["groups"]
 
 
@@ -77,6 +77,26 @@ def test_reduce_baselines_cli_rejects_non_positive_slack(tmp_path) -> None:
     with pytest.raises(SystemExit) as exc_info:
         main([str(raw), str(tmp_path / "out.json"), "--slack", "0"])
     assert exc_info.value.code == 2
+
+
+def test_reduce_baselines_uses_peak_bytes_extra_info(tmp_path) -> None:
+    raw = tmp_path / "raw.json"
+    out = tmp_path / "baselines.json"
+    _write_raw(
+        raw,
+        [
+            {
+                "group": "parse",
+                "name": "test_parse_large_peak_memory",
+                "stats": {"mean": 0.05},
+                "extra_info": {"peak_bytes": 10_000_000},
+            }
+        ],
+    )
+
+    output = reduce_baselines(raw, out)
+
+    assert output["groups"]["parse"]["test_parse_large_peak_memory"] == 10_000_000.0
 
 
 def test_reduce_baselines_machine_info_non_dict(tmp_path) -> None:
