@@ -40,9 +40,7 @@ def benchmark_entry_mean(entry: dict[str, object]) -> float:
     if entry_uses_peak_bytes(entry):
         extra = entry["extra_info"]
         if not isinstance(extra, dict):
-            raise BenchmarkDataError(
-                f"extra_info for {entry.get('name')!r} is not a dict"
-            )
+            raise BenchmarkDataError(f"extra_info for {entry.get('name')!r} is not a dict")
         try:
             return float(extra["peak_bytes"])
         except (KeyError, TypeError, ValueError) as exc:
