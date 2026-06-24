@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import json
+import tracemalloc
+from collections.abc import Callable
 from copy import deepcopy
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any, TypeVar
 
 import pytest
 
@@ -13,14 +17,47 @@ from app import create_app
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 TEMPLATE_LINE = (FIXTURES / "session_with_tools.jsonl").read_text(encoding="utf-8").splitlines()[0]
 
+T = TypeVar("T")
 
-def write_jsonl(path: Path, line_count: int) -> Path:
+_EXPORT_SESSION_BASE = datetime(2026, 6, 12, 0, 0, tzinfo=UTC)
+
+
+def export_session_first_timestamp(index: int) -> str:
+    """Return a unique, valid ISO timestamp for export-corpus session *index*."""
+    return (_EXPORT_SESSION_BASE + timedelta(minutes=index)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+class TracemallocPeak:
+    """Measure peak Python heap bytes for one callable invocation."""
+
+    def measure(self, func: Callable[..., T], /, *args: Any, **kwargs: Any) -> tuple[T, int]:
+        was_tracing = tracemalloc.is_tracing()
+        tracemalloc.start()
+        tracemalloc.clear_traces()
+        try:
+            result = func(*args, **kwargs)
+            _, peak = tracemalloc.get_traced_memory()
+            return result, peak
+        finally:
+            if not was_tracing:
+                tracemalloc.stop()
+
+
+@pytest.fixture
+def tracemalloc_peak() -> TracemallocPeak:
+    return TracemallocPeak()
+
+
+def write_jsonl(path: Path, line_count: int, *, first_timestamp: str | None = None) -> Path:
     """Write a JSONL session file with *line_count* rows derived from the template fixture."""
     template = json.loads(TEMPLATE_LINE)
     with path.open("w", encoding="utf-8") as f:
         for i in range(line_count):
             entry = deepcopy(template)
-            entry["timestamp"] = f"2026-06-12T10:{i % 60:02d}:00Z"
+            if i == 0 and first_timestamp is not None:
+                entry["timestamp"] = first_timestamp
+            else:
+                entry["timestamp"] = f"2026-06-12T10:{i % 60:02d}:00Z"
             if i % 3 == 1:
                 msg = entry.setdefault("message", {})
                 if isinstance(msg, dict) and "content" in msg:
@@ -72,7 +109,9 @@ def export_corpus(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
     project = tmp_path / "bench-project"
     project.mkdir()
     for i in range(count):
-        write_jsonl(project / f"session_{i:04d}.jsonl", 20)
+        # Unique first_timestamp per session so export filenames do not collide in ZIP benches.
+        first_ts = export_session_first_timestamp(i)
+        write_jsonl(project / f"session_{i:04d}.jsonl", 20, first_timestamp=first_ts)
     return project
 
 

@@ -16,3 +16,4 @@ coverage/
 coverage.xml
 benchmark-results.json
 benchmarks/_raw.json
+benchmarks/_ci/

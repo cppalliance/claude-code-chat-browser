@@ -8,10 +8,10 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-try:
-    from scripts.check_benchmark_regression import EXCLUDED_FROM_GATE, BenchmarkDataError
-except ModuleNotFoundError:
-    from check_benchmark_regression import EXCLUDED_FROM_GATE, BenchmarkDataError
+from scripts.check_benchmark_regression import (
+    BenchmarkDataError,
+    benchmark_entry_mean,
+)
 
 GATED_GROUPS = ("parse", "export", "search")
 
@@ -50,24 +50,30 @@ def reduce_baselines(
             raise BenchmarkDataError(f"{path} benchmarks[{index}] must be an object")
         try:
             name = entry["name"]
-            mean = float(entry["stats"]["mean"])
+            mean = benchmark_entry_mean(entry)
+        except BenchmarkDataError:
+            raise
         except (KeyError, TypeError, ValueError) as exc:
             raise BenchmarkDataError(
-                f"{path} benchmarks[{index}] missing 'name' or 'stats.mean'"
+                f"{path} benchmarks[{index}] missing 'name' or measurable value"
             ) from exc
+        bench_name = str(name)
         group = entry.get("group")
         if group not in GATED_GROUPS:
             continue
-        if str(name) in EXCLUDED_FROM_GATE:
-            continue
-        groups[group][str(name)] = mean * slack
+        groups[group][bench_name] = mean * slack
 
+    slack_note = f" Values multiplied by {slack}× slack at generation time." if slack != 1.0 else ""
     machine_info = raw.get("machine_info")
     machine = machine_info.get("system") if isinstance(machine_info, dict) else None
     output: dict[str, object] = {
         "_note": (
-            "Gated means from ubuntu-latest CI (post-cache). "
-            "Excluded from gate: test_parse_session_small, test_search_full_corpus (CI noise)."
+            "Gated means from ubuntu-latest CI benchmark-results.json."
+            f"{slack_note} "
+            "Excluded from gate (recorded for reference): test_parse_session_small, "
+            "test_search_full_corpus (sub-ms CI noise). "
+            "Memory benchmarks use extra_info.peak_bytes (bytes); "
+            "latency uses stats.mean (seconds)."
         ),
         "updated": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "machine": machine,

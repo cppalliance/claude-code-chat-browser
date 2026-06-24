@@ -22,7 +22,43 @@ class BenchmarkDataError(ValueError):
     """Raised when benchmark JSON input is malformed or missing required fields."""
 
 
-def load_results(results_path: str | Path) -> dict[str, float]:
+def entry_uses_peak_bytes(entry: dict[str, object]) -> bool:
+    """True when the gated metric for *entry* is extra_info.peak_bytes."""
+    extra = entry.get("extra_info")
+    return isinstance(extra, dict) and "peak_bytes" in extra
+
+
+def metric_is_bytes(name: str, entry: dict[str, object] | None = None) -> bool:
+    """Shared heuristic for metric kind (bytes vs seconds) in gate and display."""
+    if entry is not None and entry_uses_peak_bytes(entry):
+        return True
+    return "peak_memory" in name
+
+
+def benchmark_entry_mean(entry: dict[str, object]) -> float:
+    """Return gated metric: peak_bytes from extra_info when present, else stats.mean."""
+    if entry_uses_peak_bytes(entry):
+        extra = entry["extra_info"]
+        if not isinstance(extra, dict):
+            raise BenchmarkDataError(f"extra_info for {entry.get('name')!r} is not a dict")
+        try:
+            return float(extra["peak_bytes"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise BenchmarkDataError(
+                f"benchmark {entry.get('name')!r} missing 'stats.mean' or extra_info.peak_bytes"
+            ) from exc
+    try:
+        stats = entry["stats"]
+        return float(stats["mean"])  # type: ignore[index]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise BenchmarkDataError(
+            f"benchmark {entry.get('name')!r} missing 'stats.mean' or extra_info.peak_bytes"
+        ) from exc
+
+
+def load_results(
+    results_path: str | Path,
+) -> tuple[dict[str, float], dict[str, dict[str, object]]]:
     path = Path(results_path)
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -38,21 +74,25 @@ def load_results(results_path: str | Path) -> dict[str, float]:
         raise BenchmarkDataError(f"{path} 'benchmarks' must be an array")
 
     results: dict[str, float] = {}
+    entries_by_name: dict[str, dict[str, object]] = {}
     for index, entry in enumerate(benchmarks):
         if not isinstance(entry, dict):
             raise BenchmarkDataError(f"{path} benchmarks[{index}] must be an object")
         try:
             name = entry["name"]
-            mean = float(entry["stats"]["mean"])
+            mean = benchmark_entry_mean(entry)
+        except BenchmarkDataError:
+            raise
         except (KeyError, TypeError, ValueError) as exc:
             raise BenchmarkDataError(
-                f"{path} benchmarks[{index}] missing 'name' or 'stats.mean'"
+                f"{path} benchmarks[{index}] missing 'name' or measurable value"
             ) from exc
         name = str(name)
         if name in results:
             raise BenchmarkDataError(f"{path} duplicate benchmark name {name!r}")
         results[name] = mean
-    return results
+        entries_by_name[name] = entry
+    return results, entries_by_name
 
 
 def load_baseline_means(baselines_path: str | Path) -> dict[str, float]:
@@ -96,23 +136,29 @@ def check_regression(
     threshold: float = THRESHOLD,
 ) -> int:
     """Return 0 when within threshold; 1 when any gated benchmark regresses."""
-    flat = load_results(results_path)
+    flat, entries_by_name = load_results(results_path)
     baseline_means = load_baseline_means(baselines_path)
 
     failures: list[str] = []
+    missing: list[str] = []
     for name, base in baseline_means.items():
         if name in EXCLUDED_FROM_GATE:
             continue
         cur = flat.get(name)
         if cur is None:
-            print(f"WARN: no current result for baseline {name!r}; skipping")
+            print(f"FAIL: no current result for gated baseline {name!r}")
+            missing.append(name)
             continue
         if base == 0:
             print(f"WARN: baseline for {name!r} is zero; skipping ratio check")
             continue
         ratio = cur / base
         tag = "FAIL" if ratio > threshold else "ok"
-        print(f"[{tag}] {name}: {cur:.6f}s vs {base:.6f}s ({ratio:.2f}x)")
+        entry = entries_by_name.get(name)
+        if metric_is_bytes(name, entry):
+            print(f"[{tag}] {name}: {cur:.0f} bytes vs {base:.0f} bytes ({ratio:.2f}x)")
+        else:
+            print(f"[{tag}] {name}: {cur:.6f}s vs {base:.6f}s ({ratio:.2f}x)")
         if ratio > threshold:
             failures.append(name)
 
@@ -124,6 +170,9 @@ def check_regression(
 
     if failures:
         print(f"\nREGRESSION: {len(failures)} benchmark(s) exceeded {threshold:.0%}")
+    if missing:
+        print(f"\nMISSING: {len(missing)} gated benchmark(s) absent from current results")
+    if failures or missing:
         return 1
     return 0
 
