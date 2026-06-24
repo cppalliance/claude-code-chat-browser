@@ -38,12 +38,14 @@ def test_reduce_baselines_writes_gated_groups_only(tmp_path) -> None:
     output = reduce_baselines(raw, out)
 
     assert output["machine"] == "Linux"
+    assert set(output["groups"].keys()) == {"parse", "export", "search"}
     assert "test_parse_session_medium" in output["groups"]["parse"]
-    assert "test_parse_session_small" not in output["groups"]["parse"]
+    assert "test_parse_session_small" in output["groups"]["parse"]
+    assert output["groups"]["search"] == {}
     assert "cache" not in output["groups"]
 
 
-def test_reduce_baselines_skips_excluded_from_gate(tmp_path) -> None:
+def test_reduce_baselines_includes_search_benchmark(tmp_path) -> None:
     raw = tmp_path / "raw.json"
     out = tmp_path / "baselines.json"
     _write_raw(
@@ -56,8 +58,7 @@ def test_reduce_baselines_skips_excluded_from_gate(tmp_path) -> None:
 
     output = reduce_baselines(raw, out)
 
-    assert "search" not in output["groups"]
-    assert "test_search_full_corpus" not in json.loads(out.read_text(encoding="utf-8"))["groups"]
+    assert output["groups"]["search"]["test_search_full_corpus"] == pytest.approx(0.001)
 
 
 def test_reduce_baselines_applies_slack(tmp_path) -> None:

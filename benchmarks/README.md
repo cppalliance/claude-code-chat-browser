@@ -40,7 +40,7 @@ The `benchmarks` job on **ubuntu-latest** runs pytest-benchmark (`--benchmark-js
 
 **Gated:** parse medium/large + large peak memory; export 10/50/100 session latency + ZIP peak memory.
 
-**Not gated (informational only):** `test_parse_session_small`, `test_search_full_corpus` (sub-ms CI noise), and the `cache` group. These names are omitted from `baselines.json` when using `reduce_baselines.py`. Benchmarks without a baseline entry print a warning and do not fail the gate.
+**Not gated (informational only):** `test_parse_session_small`, `test_search_full_corpus` (sub-ms CI noise), and the `cache` group. These may appear in `baselines.json` for reference but are skipped by `check_benchmark_regression.py`. Benchmarks without a baseline entry print a warning and do not fail the gate.
 
 Missing gated benchmarks (renamed or removed tests still listed in `baselines.json`) fail the gate.
 

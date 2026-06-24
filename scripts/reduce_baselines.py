@@ -9,7 +9,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from scripts.check_benchmark_regression import (
-    EXCLUDED_FROM_GATE,
     BenchmarkDataError,
     benchmark_entry_mean,
 )
@@ -59,15 +58,10 @@ def reduce_baselines(
                 f"{path} benchmarks[{index}] missing 'name' or measurable value"
             ) from exc
         bench_name = str(name)
-        if bench_name in EXCLUDED_FROM_GATE:
-            continue
         group = entry.get("group")
         if group not in GATED_GROUPS:
             continue
         groups[group][bench_name] = mean * slack
-
-    # Drop empty groups (e.g. search when only excluded benchmarks ran).
-    groups = {name: values for name, values in groups.items() if values}
 
     slack_note = f" Values multiplied by {slack}× slack at generation time." if slack != 1.0 else ""
     machine_info = raw.get("machine_info")
@@ -76,8 +70,8 @@ def reduce_baselines(
         "_note": (
             "Gated means from ubuntu-latest CI benchmark-results.json."
             f"{slack_note} "
-            "Excluded from gate (not written here): test_parse_session_small, "
-            "test_search_full_corpus (CI noise). "
+            "Excluded from gate (recorded for reference): test_parse_session_small, "
+            "test_search_full_corpus (sub-ms CI noise). "
             "Memory benchmarks use extra_info.peak_bytes (bytes); "
             "latency uses stats.mean (seconds)."
         ),

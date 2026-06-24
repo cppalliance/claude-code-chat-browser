@@ -102,7 +102,7 @@ def export_corpus(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
     project.mkdir()
     for i in range(count):
         # Unique first_timestamp per session so export filenames do not collide in ZIP benches.
-        first_ts = f"2026-06-12T{i % 24:02d}:{i % 60:02d}:00Z"
+        first_ts = f"2026-06-12T{i // 60:02d}:{i % 60:02d}:00Z"
         write_jsonl(project / f"session_{i:04d}.jsonl", 20, first_timestamp=first_ts)
     return project
 
