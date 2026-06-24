@@ -6,6 +6,7 @@ import json
 import tracemalloc
 from collections.abc import Callable
 from copy import deepcopy
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -17,6 +18,13 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 TEMPLATE_LINE = (FIXTURES / "session_with_tools.jsonl").read_text(encoding="utf-8").splitlines()[0]
 
 T = TypeVar("T")
+
+_EXPORT_SESSION_BASE = datetime(2026, 6, 12, 0, 0, tzinfo=UTC)
+
+
+def export_session_first_timestamp(index: int) -> str:
+    """Return a unique, valid ISO timestamp for export-corpus session *index*."""
+    return (_EXPORT_SESSION_BASE + timedelta(minutes=index)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class TracemallocPeak:
@@ -102,7 +110,7 @@ def export_corpus(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
     project.mkdir()
     for i in range(count):
         # Unique first_timestamp per session so export filenames do not collide in ZIP benches.
-        first_ts = f"2026-06-12T{i // 60:02d}:{i % 60:02d}:00Z"
+        first_ts = export_session_first_timestamp(i)
         write_jsonl(project / f"session_{i:04d}.jsonl", 20, first_timestamp=first_ts)
     return project
 

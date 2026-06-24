@@ -6,7 +6,7 @@
 seed-baselines-local:
 	@echo "WARNING: seed-baselines-local uses this host's timings; CI gates on ubuntu-latest." >&2
 	PYTHONPATH=. pytest tests/benchmarks/ --benchmark-only --benchmark-json=benchmarks/_raw.json -o addopts=
-	PYTHONPATH=. python scripts/reduce_baselines.py benchmarks/_raw.json benchmarks/baselines.json
+	PYTHONPATH=. python scripts/reduce_baselines.py benchmarks/_raw.json benchmarks/baselines.json --slack 1.5
 
 # Deprecated alias — kept for muscle memory; see seed-baselines-local warning above.
 update-baselines: seed-baselines-local

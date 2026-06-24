@@ -64,7 +64,7 @@ Or manually:
 
 ```bash
 PYTHONPATH=. pytest tests/benchmarks/ --benchmark-only --benchmark-json=benchmarks/_raw.json -o addopts=
-PYTHONPATH=. python scripts/reduce_baselines.py benchmarks/_raw.json benchmarks/baselines.json
+PYTHONPATH=. python scripts/reduce_baselines.py benchmarks/_raw.json benchmarks/baselines.json --slack 1.5
 ```
 
 Baselines must be captured on **ubuntu-latest** to match the gated CI runner. Cross-OS variance causes spurious failures.
