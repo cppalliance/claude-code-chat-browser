@@ -39,8 +39,16 @@ def benchmark_entry_mean(entry: dict[str, object]) -> float:
     """Return gated metric: peak_bytes from extra_info when present, else stats.mean."""
     if entry_uses_peak_bytes(entry):
         extra = entry["extra_info"]
-        assert isinstance(extra, dict)
-        return float(extra["peak_bytes"])
+        if not isinstance(extra, dict):
+            raise BenchmarkDataError(
+                f"extra_info for {entry.get('name')!r} is not a dict"
+            )
+        try:
+            return float(extra["peak_bytes"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise BenchmarkDataError(
+                f"benchmark {entry.get('name')!r} missing 'stats.mean' or extra_info.peak_bytes"
+            ) from exc
     try:
         stats = entry["stats"]
         return float(stats["mean"])  # type: ignore[index]
@@ -75,6 +83,8 @@ def load_results(
         try:
             name = entry["name"]
             mean = benchmark_entry_mean(entry)
+        except BenchmarkDataError:
+            raise
         except (KeyError, TypeError, ValueError) as exc:
             raise BenchmarkDataError(
                 f"{path} benchmarks[{index}] missing 'name' or measurable value"
@@ -132,12 +142,14 @@ def check_regression(
     baseline_means = load_baseline_means(baselines_path)
 
     failures: list[str] = []
+    missing: list[str] = []
     for name, base in baseline_means.items():
         if name in EXCLUDED_FROM_GATE:
             continue
         cur = flat.get(name)
         if cur is None:
-            print(f"WARN: no current result for baseline {name!r}; skipping")
+            print(f"FAIL: no current result for gated baseline {name!r}")
+            missing.append(name)
             continue
         if base == 0:
             print(f"WARN: baseline for {name!r} is zero; skipping ratio check")
@@ -160,6 +172,9 @@ def check_regression(
 
     if failures:
         print(f"\nREGRESSION: {len(failures)} benchmark(s) exceeded {threshold:.0%}")
+    if missing:
+        print(f"\nMISSING: {len(missing)} gated benchmark(s) absent from current results")
+    if failures or missing:
         return 1
     return 0
 

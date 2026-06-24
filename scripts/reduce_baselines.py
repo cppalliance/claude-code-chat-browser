@@ -8,10 +8,11 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-try:
-    from scripts.check_benchmark_regression import BenchmarkDataError, benchmark_entry_mean
-except ModuleNotFoundError:
-    from check_benchmark_regression import BenchmarkDataError, benchmark_entry_mean
+from scripts.check_benchmark_regression import (
+    EXCLUDED_FROM_GATE,
+    BenchmarkDataError,
+    benchmark_entry_mean,
+)
 
 GATED_GROUPS = ("parse", "export", "search")
 
@@ -51,21 +52,32 @@ def reduce_baselines(
         try:
             name = entry["name"]
             mean = benchmark_entry_mean(entry)
+        except BenchmarkDataError:
+            raise
         except (KeyError, TypeError, ValueError) as exc:
             raise BenchmarkDataError(
                 f"{path} benchmarks[{index}] missing 'name' or measurable value"
             ) from exc
+        bench_name = str(name)
+        if bench_name in EXCLUDED_FROM_GATE:
+            continue
         group = entry.get("group")
         if group not in GATED_GROUPS:
             continue
-        groups[group][str(name)] = mean * slack
+        groups[group][bench_name] = mean * slack
 
+    # Drop empty groups (e.g. search when only excluded benchmarks ran).
+    groups = {name: values for name, values in groups.items() if values}
+
+    slack_note = f" Values multiplied by {slack}× slack at generation time." if slack != 1.0 else ""
     machine_info = raw.get("machine_info")
     machine = machine_info.get("system") if isinstance(machine_info, dict) else None
     output: dict[str, object] = {
         "_note": (
-            "Gated means from ubuntu-latest CI benchmark-results.json. "
-            "Excluded from gate: test_parse_session_small, test_search_full_corpus (CI noise). "
+            "Gated means from ubuntu-latest CI benchmark-results.json."
+            f"{slack_note} "
+            "Excluded from gate (not written here): test_parse_session_small, "
+            "test_search_full_corpus (CI noise). "
             "Memory benchmarks use extra_info.peak_bytes (bytes); "
             "latency uses stats.mean (seconds)."
         ),

@@ -40,21 +40,31 @@ The `benchmarks` job on **ubuntu-latest** runs pytest-benchmark (`--benchmark-js
 
 **Gated:** parse medium/large + large peak memory; export 10/50/100 session latency + ZIP peak memory.
 
-**Not gated (informational only):** `test_parse_session_small`, `test_search_full_corpus` (sub-ms CI noise), and the `cache` group. Benchmarks without a baseline entry print a warning and do not fail the gate.
+**Not gated (informational only):** `test_parse_session_small`, `test_search_full_corpus` (sub-ms CI noise), and the `cache` group. These names are omitted from `baselines.json` when using `reduce_baselines.py`. Benchmarks without a baseline entry print a warning and do not fail the gate.
+
+Missing gated benchmarks (renamed or removed tests still listed in `baselines.json`) fail the gate.
 
 ## Refresh baselines
 
-After intentional performance work, capture on **ubuntu-latest** (same OS as the gated CI job):
+After intentional performance work, capture on **ubuntu-latest** (same OS as the gated CI job). Download `benchmark-results.json` from a CI artifact when possible:
 
 ```bash
-make update-baselines
+python scripts/reduce_baselines.py benchmark-results.json benchmarks/baselines.json --slack 1.5
 ```
+
+For a quick local snapshot only (may not match CI timings):
+
+```bash
+make seed-baselines-local
+```
+
+`make update-baselines` is a deprecated alias for `seed-baselines-local` and prints a warning. Do not commit baselines from macOS/Windows unless you accept cross-OS gate skew.
 
 Or manually:
 
 ```bash
-pytest tests/benchmarks/ --benchmark-only --benchmark-json=benchmarks/_raw.json -o addopts=
-python scripts/reduce_baselines.py benchmarks/_raw.json benchmarks/baselines.json
+PYTHONPATH=. pytest tests/benchmarks/ --benchmark-only --benchmark-json=benchmarks/_raw.json -o addopts=
+PYTHONPATH=. python scripts/reduce_baselines.py benchmarks/_raw.json benchmarks/baselines.json
 ```
 
-Baselines must be captured on **ubuntu-latest** to match the gated CI runner. Cross-OS variance causes spurious failures. Download `benchmark-results.json` from a CI artifact to seed baselines if needed.
+Baselines must be captured on **ubuntu-latest** to match the gated CI runner. Cross-OS variance causes spurious failures.

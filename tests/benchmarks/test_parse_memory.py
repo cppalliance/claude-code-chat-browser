@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-import tracemalloc
 from pathlib import Path
 
 import pytest
 
-from tests.benchmarks.conftest import TracemallocPeak
 from utils.jsonl_parser import parse_session
 
 
-def test_large_parse_peak_memory_under_ceiling(parse_large_file: Path) -> None:
+def test_large_parse_peak_memory_under_ceiling(
+    parse_large_file: Path,
+    tracemalloc_peak,
+) -> None:
     path = parse_large_file
     file_bytes = path.stat().st_size
     # Issue #7 ceiling: Python heap peak (tracemalloc) vs on-disk JSONL size. Parsed
@@ -19,15 +20,8 @@ def test_large_parse_peak_memory_under_ceiling(parse_large_file: Path) -> None:
     # a comment here if the parser legitimately grows.
     ceiling = file_bytes * 10
 
-    tracemalloc.start()
-    tracemalloc.clear_traces()
-    try:
-        result = parse_session(str(path))
-        assert len(result["messages"]) > 0, "parse_session returned no messages"
-        _, peak = tracemalloc.get_traced_memory()
-    finally:
-        tracemalloc.stop()
-
+    result, peak = tracemalloc_peak.measure(parse_session, str(path))
+    assert len(result["messages"]) > 0, "parse_session returned no messages"
     assert peak < ceiling, f"peak {peak} bytes exceeds 10x file size {file_bytes}"
 
 
@@ -35,7 +29,7 @@ def test_large_parse_peak_memory_under_ceiling(parse_large_file: Path) -> None:
 def test_parse_large_peak_memory(
     benchmark,
     parse_large_file: Path,
-    tracemalloc_peak: TracemallocPeak,
+    tracemalloc_peak,
 ) -> None:
     path = str(parse_large_file)
     peaks: list[int] = []

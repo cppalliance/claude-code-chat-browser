@@ -1,5 +1,5 @@
 {
-  "_note": "Gated means from ubuntu-latest CI benchmark-results.json (PR memory-path benchmarks). Excluded from gate: test_parse_session_small, test_search_full_corpus (CI noise). Memory benchmarks use extra_info.peak_bytes (bytes); latency uses stats.mean (seconds).",
+  "_note": "Gated means from ubuntu-latest CI benchmark-results.json (PR memory-path benchmarks). Values multiplied by 1.5× slack at seeding time. Excluded from gate (not in this file): test_parse_session_small, test_search_full_corpus (CI noise). Memory benchmarks use extra_info.peak_bytes (bytes); latency uses stats.mean (seconds).",
   "updated": "2026-06-25T12:00:00Z",
   "machine": "Linux",
   "groups": {
@@ -15,9 +15,6 @@
       "test_bulk_export_zip_peak_memory[sessions-10]": 350546.0,
       "test_bulk_export_zip_peak_memory[sessions-50]": 503331.0,
       "test_bulk_export_zip_peak_memory[sessions-100]": 686874.0
-    },
-    "search": {
-      "test_search_full_corpus": 0.001091
     }
   }
 }

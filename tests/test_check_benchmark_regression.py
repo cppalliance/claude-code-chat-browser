@@ -39,12 +39,12 @@ def test_missing_baseline_warns_without_failing(
         results,
         [
             {"name": "test_new_bench", "stats": {"mean": 0.01}},
-            {"name": "test_parse_session_small", "stats": {"mean": 0.0001}},
+            {"name": GATED_BENCH, "stats": {"mean": 0.002}},
         ],
     )
     _write_baselines(
         baselines,
-        {"parse": {"test_parse_session_small": 0.0001}},
+        {"parse": {GATED_BENCH: 0.002}},
     )
 
     assert check_regression(results, baselines) == 0
@@ -152,9 +152,7 @@ def test_excluded_benchmark_in_baselines_is_not_gated(
     assert "REGRESSION" not in capsys.readouterr().out
 
 
-def test_missing_current_result_warns_without_failing(
-    tmp_path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_missing_current_result_fails(tmp_path, capsys: pytest.CaptureFixture[str]) -> None:
     results = tmp_path / "results.json"
     baselines = tmp_path / "baselines.json"
     _write_results(results, [])
@@ -163,8 +161,10 @@ def test_missing_current_result_warns_without_failing(
         {"parse": {GATED_BENCH: 0.002}},
     )
 
-    assert check_regression(results, baselines) == 0
-    assert "no current result for baseline" in capsys.readouterr().out
+    assert check_regression(results, baselines) == 1
+    out = capsys.readouterr().out
+    assert "MISSING" in out
+    assert "no current result for gated baseline" in out
 
 
 def test_main_reports_benchmark_data_error(tmp_path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -199,11 +199,11 @@ def test_metric_is_bytes_uses_extra_info_without_name_hint() -> None:
     from scripts.check_benchmark_regression import metric_is_bytes
 
     entry = {
-        "name": "test_custom_memory",
+        "name": "test_export_latency",
         "stats": {"mean": 0.05},
         "extra_info": {"peak_bytes": 1_000_000},
     }
-    assert metric_is_bytes("test_custom_memory", entry)
+    assert metric_is_bytes("test_export_latency", entry)
 
 
 def test_memory_metric_regression_uses_bytes(tmp_path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -228,6 +228,29 @@ def test_memory_metric_regression_uses_bytes(tmp_path, capsys: pytest.CaptureFix
     out = capsys.readouterr().out
     assert "bytes" in out
     assert "REGRESSION" in out
+
+
+def test_benchmark_entry_mean_rejects_non_dict_extra_info() -> None:
+    from scripts.check_benchmark_regression import benchmark_entry_mean
+
+    with pytest.raises(BenchmarkDataError, match="extra_info"):
+        benchmark_entry_mean(
+            {
+                "name": "test_parse_large_peak_memory",
+                "extra_info": "not-a-dict",
+            }
+        )
+
+
+def test_load_results_preserves_benchmark_data_error_message(tmp_path) -> None:
+    path = tmp_path / "results.json"
+    _write_results(
+        path,
+        [{"name": "test_parse_large_peak_memory", "extra_info": {"peak_bytes": "bad"}}],
+    )
+
+    with pytest.raises(BenchmarkDataError, match="extra_info.peak_bytes"):
+        load_results(path)
 
 
 def test_duplicate_baseline_name_raises(tmp_path) -> None:

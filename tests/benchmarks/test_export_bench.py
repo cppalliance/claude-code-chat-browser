@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-from tests.benchmarks.conftest import TracemallocPeak
 from utils.export_engine import BulkExportResult, NoopSink, ZipSink, run_bulk_export
 
 
@@ -56,10 +55,11 @@ def test_bulk_export_session_count(
 def test_bulk_export_zip_peak_memory(
     benchmark,
     export_corpus: Path,
-    tracemalloc_peak: TracemallocPeak,
+    tracemalloc_peak,
 ) -> None:
     projects = _bench_projects(export_corpus)
     peaks: list[int] = []
+    results: list[BulkExportResult] = []
 
     def _run() -> None:
         def _export() -> BulkExportResult:
@@ -78,9 +78,10 @@ def test_bulk_export_zip_peak_memory(
                 )
 
         result, peak = tracemalloc_peak.measure(_export)
-        assert result.exported_session_count > 0
+        results.append(result)
         peaks.append(peak)
 
     benchmark(_run)
+    assert results and results[-1].exported_session_count > 0
     assert peaks, "benchmark produced no peak memory samples"
     benchmark.extra_info["peak_bytes"] = int(sum(peaks) / len(peaks))
