@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from tests.benchmarks.conftest import TracemallocPeak
-from utils.export_engine import NoopSink, ZipSink, run_bulk_export
+from utils.export_engine import BulkExportResult, NoopSink, ZipSink, run_bulk_export
 
 
 def _bench_projects(export_corpus: Path) -> list[dict[str, str]]:
@@ -62,7 +62,7 @@ def test_bulk_export_zip_peak_memory(
     peaks: list[int] = []
 
     def _run() -> None:
-        def _export() -> object:
+        def _export() -> BulkExportResult:
             buf = io.BytesIO()
             with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
                 sink = ZipSink(zf)

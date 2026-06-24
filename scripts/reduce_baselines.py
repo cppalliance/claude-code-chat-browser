@@ -9,17 +9,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 try:
-    from scripts.check_benchmark_regression import (
-        EXCLUDED_FROM_GATE,
-        BenchmarkDataError,
-        benchmark_entry_mean,
-    )
+    from scripts.check_benchmark_regression import BenchmarkDataError, benchmark_entry_mean
 except ModuleNotFoundError:
-    from check_benchmark_regression import (
-        EXCLUDED_FROM_GATE,
-        BenchmarkDataError,
-        benchmark_entry_mean,
-    )
+    from check_benchmark_regression import BenchmarkDataError, benchmark_entry_mean
 
 GATED_GROUPS = ("parse", "export", "search")
 
@@ -72,9 +64,10 @@ def reduce_baselines(
     machine = machine_info.get("system") if isinstance(machine_info, dict) else None
     output: dict[str, object] = {
         "_note": (
-            "Gated means from ubuntu-latest CI (post-cache). "
+            "Gated means from ubuntu-latest CI benchmark-results.json. "
             "Excluded from gate: test_parse_session_small, test_search_full_corpus (CI noise). "
-            "Memory benchmarks use extra_info.peak_bytes (bytes); latency uses stats.mean (seconds)."
+            "Memory benchmarks use extra_info.peak_bytes (bytes); "
+            "latency uses stats.mean (seconds)."
         ),
         "updated": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "machine": machine,

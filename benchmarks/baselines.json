@@ -1,23 +1,23 @@
 {
-  "_note": "Gated means from local reference run with 1.5x slack (Windows dev host). Excluded from gate: test_parse_session_small, test_search_full_corpus (CI noise). Memory benchmarks use peak_bytes; latency uses stats.mean. Refresh from ubuntu-latest CI artifact after first green job.",
-  "updated": "2026-06-25T00:00:00Z",
-  "machine": "Windows",
+  "_note": "Gated means from ubuntu-latest CI benchmark-results.json (PR memory-path benchmarks). Excluded from gate: test_parse_session_small, test_search_full_corpus (CI noise). Memory benchmarks use extra_info.peak_bytes (bytes); latency uses stats.mean (seconds).",
+  "updated": "2026-06-25T12:00:00Z",
+  "machine": "Linux",
   "groups": {
     "parse": {
-      "test_parse_session_medium": 0.0021930547314696017,
-      "test_parse_session_large": 0.022708179059622507,
-      "test_parse_large_peak_memory": 3175761.0
+      "test_parse_session_medium": 0.003037,
+      "test_parse_session_large": 0.030266,
+      "test_parse_large_peak_memory": 2032028.0
     },
     "export": {
-      "test_bulk_export_session_count[sessions-10]": 0.003750986296823886,
-      "test_bulk_export_session_count[sessions-50]": 0.018420866638835933,
-      "test_bulk_export_session_count[sessions-100]": 0.03871899230244498,
-      "test_bulk_export_zip_peak_memory[sessions-10]": 525699.0,
-      "test_bulk_export_zip_peak_memory[sessions-50]": 752907.0,
-      "test_bulk_export_zip_peak_memory[sessions-100]": 1029018.0
+      "test_bulk_export_session_count[sessions-10]": 0.004253,
+      "test_bulk_export_session_count[sessions-50]": 0.021039,
+      "test_bulk_export_session_count[sessions-100]": 0.041709,
+      "test_bulk_export_zip_peak_memory[sessions-10]": 350546.0,
+      "test_bulk_export_zip_peak_memory[sessions-50]": 503331.0,
+      "test_bulk_export_zip_peak_memory[sessions-100]": 686874.0
     },
     "search": {
-      "test_search_full_corpus": 0.0033342776477665584
+      "test_search_full_corpus": 0.001091
     }
   }
 }

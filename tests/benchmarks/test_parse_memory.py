@@ -46,4 +46,5 @@ def test_parse_large_peak_memory(
 
     benchmark(_run)
     assert peaks, "benchmark produced no peak memory samples"
+    # Gate uses extra_info.peak_bytes, not stats.mean (tracemalloc-inflated wall time).
     benchmark.extra_info["peak_bytes"] = int(sum(peaks) / len(peaks))

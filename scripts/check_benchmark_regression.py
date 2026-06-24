@@ -22,10 +22,24 @@ class BenchmarkDataError(ValueError):
     """Raised when benchmark JSON input is malformed or missing required fields."""
 
 
+def entry_uses_peak_bytes(entry: dict[str, object]) -> bool:
+    """True when the gated metric for *entry* is extra_info.peak_bytes."""
+    extra = entry.get("extra_info")
+    return isinstance(extra, dict) and "peak_bytes" in extra
+
+
+def metric_is_bytes(name: str, entry: dict[str, object] | None = None) -> bool:
+    """Shared heuristic for metric kind (bytes vs seconds) in gate and display."""
+    if entry is not None and entry_uses_peak_bytes(entry):
+        return True
+    return "peak_memory" in name
+
+
 def benchmark_entry_mean(entry: dict[str, object]) -> float:
     """Return gated metric: peak_bytes from extra_info when present, else stats.mean."""
-    extra = entry.get("extra_info")
-    if isinstance(extra, dict) and "peak_bytes" in extra:
+    if entry_uses_peak_bytes(entry):
+        extra = entry["extra_info"]
+        assert isinstance(extra, dict)
         return float(extra["peak_bytes"])
     try:
         stats = entry["stats"]
@@ -36,11 +50,9 @@ def benchmark_entry_mean(entry: dict[str, object]) -> float:
         ) from exc
 
 
-def is_memory_metric(name: str) -> bool:
-    return "peak_memory" in name
-
-
-def load_results(results_path: str | Path) -> dict[str, float]:
+def load_results(
+    results_path: str | Path,
+) -> tuple[dict[str, float], dict[str, dict[str, object]]]:
     path = Path(results_path)
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -56,6 +68,7 @@ def load_results(results_path: str | Path) -> dict[str, float]:
         raise BenchmarkDataError(f"{path} 'benchmarks' must be an array")
 
     results: dict[str, float] = {}
+    entries_by_name: dict[str, dict[str, object]] = {}
     for index, entry in enumerate(benchmarks):
         if not isinstance(entry, dict):
             raise BenchmarkDataError(f"{path} benchmarks[{index}] must be an object")
@@ -70,7 +83,8 @@ def load_results(results_path: str | Path) -> dict[str, float]:
         if name in results:
             raise BenchmarkDataError(f"{path} duplicate benchmark name {name!r}")
         results[name] = mean
-    return results
+        entries_by_name[name] = entry
+    return results, entries_by_name
 
 
 def load_baseline_means(baselines_path: str | Path) -> dict[str, float]:
@@ -114,7 +128,7 @@ def check_regression(
     threshold: float = THRESHOLD,
 ) -> int:
     """Return 0 when within threshold; 1 when any gated benchmark regresses."""
-    flat = load_results(results_path)
+    flat, entries_by_name = load_results(results_path)
     baseline_means = load_baseline_means(baselines_path)
 
     failures: list[str] = []
@@ -130,7 +144,8 @@ def check_regression(
             continue
         ratio = cur / base
         tag = "FAIL" if ratio > threshold else "ok"
-        if is_memory_metric(name):
+        entry = entries_by_name.get(name)
+        if metric_is_bytes(name, entry):
             print(f"[{tag}] {name}: {cur:.0f} bytes vs {base:.0f} bytes ({ratio:.2f}x)")
         else:
             print(f"[{tag}] {name}: {cur:.6f}s vs {base:.6f}s ({ratio:.2f}x)")

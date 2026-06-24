@@ -192,7 +192,18 @@ def test_load_results_prefers_peak_bytes_extra_info(tmp_path) -> None:
         ],
     )
 
-    assert load_results(path)["test_parse_large_peak_memory"] == 12_345_678.0
+    assert load_results(path)[0]["test_parse_large_peak_memory"] == 12_345_678.0
+
+
+def test_metric_is_bytes_uses_extra_info_without_name_hint() -> None:
+    from scripts.check_benchmark_regression import metric_is_bytes
+
+    entry = {
+        "name": "test_custom_memory",
+        "stats": {"mean": 0.05},
+        "extra_info": {"peak_bytes": 1_000_000},
+    }
+    assert metric_is_bytes("test_custom_memory", entry)
 
 
 def test_memory_metric_regression_uses_bytes(tmp_path, capsys: pytest.CaptureFixture[str]) -> None:
