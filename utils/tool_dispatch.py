@@ -10,6 +10,10 @@ Notably ``task_message`` is broad (``task_id`` or ``message``) and sits before
 To add a shape: append ``(pred, build)`` at the end, or insert only after
 verifying predicates above would not steal intended matches.
 
+Ordering invariants are enforced structurally by
+``tests/test_tool_dispatch_ordering.py`` — add a ``(before, after, reason)``
+tuple there when a new predicate must sit above another.
+
 Predicates live in ``models.tool_results`` (single source of truth for narrowing).
 """
 
