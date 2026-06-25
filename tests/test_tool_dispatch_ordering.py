@@ -46,7 +46,9 @@ ORDERING_INVARIANTS: list[tuple[Predicate, Predicate, str]] = [
 
 
 def _predicate_index(predicate: Predicate) -> int:
-    for i, (pred, _) in enumerate(_TOOL_RESULT_DISPATCH):
+    for i, entry in enumerate(_TOOL_RESULT_DISPATCH):
+        pred = entry[0]
+        # Identity match: dispatch table must store bare function refs (not wrappers).
         if pred is predicate:
             return i
     raise ValueError(f"predicate {predicate.__name__} not found in _TOOL_RESULT_DISPATCH")
