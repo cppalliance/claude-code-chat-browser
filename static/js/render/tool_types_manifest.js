@@ -1,5 +1,4 @@
 import { TOOL_USE_RENDERERS } from './registry.js';
-import { setManifestToolTypes } from './tool_types_state.js';
 
 const MANIFEST_URL = '/static/tool_types.json';
 const MANIFEST_FETCH_TIMEOUT_MS = 5000;
@@ -20,7 +19,6 @@ export async function initToolTypesManifest() {
         const data = await res.json();
         const types = Array.isArray(data.tool_types) ? data.tool_types : [];
         const manifest = new Set(types.filter((t) => typeof t === 'string'));
-        setManifestToolTypes(manifest);
 
         for (const name of manifest) {
             if (!Object.prototype.hasOwnProperty.call(TOOL_USE_RENDERERS, name)) {

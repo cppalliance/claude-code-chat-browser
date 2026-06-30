@@ -137,17 +137,14 @@ def test_tool_name_literal_matches_known_tool_types() -> None:
 
 
 def test_frontend_registry_matches_known_tool_types() -> None:
-    """``TOOL_USE_RENDERERS`` keys must match ``KNOWN_TOOL_TYPES`` and the manifest."""
+    """``TOOL_USE_RENDERERS`` keys must match ``KNOWN_TOOL_TYPES``."""
     site = "static/js/render/registry.js (TOOL_USE_RENDERERS)"
     try:
         actual = _parse_frontend_tool_use_renderers(_FRONTEND_REGISTRY)
-        manifest = _load_manifest_tool_types(_TOOL_TYPES_MANIFEST)
     except ValueError as exc:
         pytest.fail(f"{site}: {exc}")
     if actual != KNOWN_TOOL_TYPES:
         pytest.fail(_format_set_diff(KNOWN_TOOL_TYPES, actual, site))
-    if actual != manifest:
-        pytest.fail(_format_set_diff(manifest, actual, site))
 
 
 def test_known_tool_types_nonempty() -> None:

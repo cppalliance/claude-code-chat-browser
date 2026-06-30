@@ -1,18 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { initToolTypesManifest } from './tool_types_manifest.js';
-import { getManifestToolTypes, setManifestToolTypes } from './tool_types_state.js';
 import { TOOL_USE_RENDERERS } from './registry.js';
-
-// Registry drift warnings are asserted here (init-time cross-check only; no per-render warn).
 
 describe('initToolTypesManifest', () => {
     beforeEach(() => {
-        setManifestToolTypes(null);
         vi.restoreAllMocks();
     });
 
     afterEach(() => {
-        setManifestToolTypes(null);
+        vi.unstubAllGlobals();
     });
 
     it('cross-checks manifest against TOOL_USE_RENDERERS and warns on drift', async () => {
@@ -28,7 +24,6 @@ describe('initToolTypesManifest', () => {
 
         await initToolTypesManifest();
 
-        expect(getManifestToolTypes()).toEqual(new Set(manifestTypes));
         expect(warn).toHaveBeenCalledWith(
             '[tool registry] Backend tool type "FutureToolXYZ" has no TOOL_USE_RENDERERS entry',
         );
@@ -40,7 +35,6 @@ describe('initToolTypesManifest', () => {
 
         await initToolTypesManifest();
 
-        expect(getManifestToolTypes()).toBeNull();
         expect(warn).toHaveBeenCalledWith(
             '[tool registry] Could not load tool types manifest:',
             expect.any(Error),
@@ -66,7 +60,6 @@ describe('initToolTypesManifest', () => {
             await vi.advanceTimersByTimeAsync(5000);
             await promise;
 
-            expect(getManifestToolTypes()).toBeNull();
             expect(warn).toHaveBeenCalledWith(
                 '[tool registry] Could not load /static/tool_types.json: timed out after 5000ms',
             );
