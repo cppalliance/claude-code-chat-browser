@@ -11,6 +11,9 @@ seed-baselines-local:
 # Deprecated alias — kept for muscle memory; see seed-baselines-local warning above.
 update-baselines: seed-baselines-local
 
+gen-tool-types-manifest:
+	PYTHONPATH=. python scripts/gen_tool_types_manifest.py
+
 check-benchmarks:
 	PYTHONPATH=. pytest tests/benchmarks/ --benchmark-only --benchmark-json=benchmark-results.json -o addopts=
 	PYTHONPATH=. python scripts/check_benchmark_regression.py benchmark-results.json benchmarks/baselines.json

@@ -149,8 +149,9 @@ Claude Code assistant `tool_use` blocks carry a `name` string (e.g. `"Read"`, `"
 2. **`models/tool_results.py`** — add the name to `ToolNameLiteral` and, when the tool has a distinct result payload, add the TypedDict, type guard (`is_*_tool_result`), and union member on `ToolResultUnion`.
 3. **`utils/md_exporter.py`** — add an `elif name == "…"` branch in `_render_tool_use` (sync test parses these branches).
 4. **`static/js/render/registry.js`** — add a `TOOL_USE_RENDERERS` entry (and a `tool_use/*.js` renderer module).
-5. **Optional result UI** — if the backend emits a new `result_type`, add `TOOL_RESULT_RENDERERS` and a `tool_result/*.js` module.
-6. Run `pytest tests/test_tool_dispatch_sync.py -v` — failure names the site missing the new type.
+5. Regenerate **`static/tool_types.json`**: `python scripts/gen_tool_types_manifest.py`
+6. **Optional result UI** — if the backend emits a new `result_type`, add `TOOL_RESULT_RENDERERS` and a `tool_result/*.js` module.
+7. Run `pytest tests/test_tool_dispatch_sync.py -v` — failure names the site missing the new type.
 
 ## Getting help
 

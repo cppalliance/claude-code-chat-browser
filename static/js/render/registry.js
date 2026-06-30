@@ -66,9 +66,10 @@ function getToolUseRenderer(name) {
 }
 
 function getToolResultRenderer(resultType) {
-    return Object.prototype.hasOwnProperty.call(TOOL_RESULT_RENDERERS, resultType)
-        ? TOOL_RESULT_RENDERERS[resultType]
-        : renderToolResultFallback;
+    if (Object.prototype.hasOwnProperty.call(TOOL_RESULT_RENDERERS, resultType)) {
+        return TOOL_RESULT_RENDERERS[resultType];
+    }
+    return renderToolResultFallback;
 }
 
 export function renderToolUse(tool) {
