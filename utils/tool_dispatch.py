@@ -15,9 +15,25 @@ Ordering invariants are enforced structurally by
 tuple there when a new predicate must sit above another.
 
 Predicates live in ``models.tool_results`` (single source of truth for narrowing).
+
+Adding a new Claude Code **tool use** name (e.g. ``"Read"``, ``"Bash"``):
+
+1. Add the name to ``_FILE_ACTIVITY_HANDLERS`` below (``None`` if no file/bash/web
+   side effects); ``KNOWN_TOOL_TYPES`` is derived from its keys.
+2. Add the name to ``ToolNameLiteral`` in ``models/tool_results.py`` and, if the
+   tool has a distinct ``toolUseResult`` JSON shape, add the TypedDict, predicate,
+   and ``(predicate, builder)`` pair in ``_TOOL_RESULT_DISPATCH`` (respect ordering
+   — see notes above and ``tests/test_tool_dispatch_ordering.py``).
+3. Add a Markdown branch in ``utils/md_exporter.py`` ``_render_tool_use``.
+4. Add ``TOOL_USE_RENDERERS`` entry in ``static/js/render/registry.js``.
+5. Run ``pytest tests/test_tool_dispatch_sync.py -v`` — it fails with the
+   missing site if any step was skipped.
+
+See ``CONTRIBUTING.md`` § "Adding a new tool type".
 """
 
-from typing import cast
+from collections.abc import Callable
+from typing import Any, cast
 
 from models.tool_results import (
     ToolResultDict,
@@ -218,6 +234,70 @@ _TOOL_RESULT_DISPATCH = (
     (is_todo_write_tool_result, _tool_result_build_todo_write),
     (is_user_input_tool_result, _tool_result_build_user_input),
 )
+
+# Claude Code assistant tool_use ``name`` values coordinated across parser file
+# activity, Markdown export, and the SPA ``TOOL_USE_RENDERERS`` map.
+# ``_FILE_ACTIVITY_HANDLERS`` is the single registry; ``KNOWN_TOOL_TYPES`` is derived.
+
+
+def _file_activity_read(tool_input: dict[str, Any], metadata: dict[str, Any]) -> None:
+    raw_fp = tool_input.get("file_path", "")
+    fp = raw_fp if isinstance(raw_fp, str) else ""
+    if fp:
+        metadata["files_read"].add(fp)
+
+
+def _file_activity_write(tool_input: dict[str, Any], metadata: dict[str, Any]) -> None:
+    raw_fp = tool_input.get("file_path", "")
+    fp = raw_fp if isinstance(raw_fp, str) else ""
+    if fp:
+        metadata["files_created"].add(fp)
+
+
+def _file_activity_edit(tool_input: dict[str, Any], metadata: dict[str, Any]) -> None:
+    raw_fp = tool_input.get("file_path", "")
+    fp = raw_fp if isinstance(raw_fp, str) else ""
+    if fp:
+        metadata["files_written"].add(fp)
+
+
+def _file_activity_bash(tool_input: dict[str, Any], metadata: dict[str, Any]) -> None:
+    cmd = tool_input.get("command", "")
+    if isinstance(cmd, str) and cmd:
+        metadata["bash_commands"].append(cmd)
+
+
+def _file_activity_web(tool_input: dict[str, Any], metadata: dict[str, Any]) -> None:
+    url_or_query = tool_input.get("url") or tool_input.get("query", "")
+    if isinstance(url_or_query, str) and url_or_query:
+        metadata["web_fetches"].append(url_or_query)
+
+
+_FILE_ACTIVITY_HANDLERS: dict[str, Callable[[dict[str, Any], dict[str, Any]], None] | None] = {
+    "AskUserQuestion": None,
+    "Bash": _file_activity_bash,
+    "Edit": _file_activity_edit,
+    "Glob": None,
+    "Grep": None,
+    "Read": _file_activity_read,
+    "Task": None,
+    "TodoWrite": None,
+    "WebFetch": _file_activity_web,
+    "WebSearch": _file_activity_web,
+    "Write": _file_activity_write,
+}
+KNOWN_TOOL_TYPES: frozenset[str] = frozenset(_FILE_ACTIVITY_HANDLERS)
+
+
+def track_tool_file_activity(
+    tool_name: str, tool_input: dict[str, Any], metadata: dict[str, Any]
+) -> None:
+    """Record file/bash/web side effects for tools listed in ``KNOWN_TOOL_TYPES``."""
+    if tool_name not in KNOWN_TOOL_TYPES:
+        return
+    handler = _FILE_ACTIVITY_HANDLERS[tool_name]
+    if handler is not None:
+        handler(tool_input, metadata)
 
 
 def _parse_tool_result(

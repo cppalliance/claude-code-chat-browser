@@ -220,6 +220,7 @@ def is_user_input_tool_result(tr: ToolResultDict) -> TypeGuard[UserInputToolResu
 
 # Tool names on assistant tool_use blocks — pairs with slug on user tool_result rows.
 ToolNameLiteral = Literal[
+    "AskUserQuestion",
     "Bash",
     "Read",
     "Write",

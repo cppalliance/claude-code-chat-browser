@@ -100,6 +100,7 @@ npm run test:coverage   # optional
 | New `ErrorCode` | Parametrized row in `tests/test_error_codes.py` |
 | Search / limit validation | `tests/test_search.py` |
 | New `_parse_tool_result` dispatch entry | Fixture + assertion in `tests/test_jsonl_parser.py` |
+| New Claude Code tool use name | See **Adding a new tool type** below |
 | CLI behavior | `tests/test_cli_e2e.py` (subprocess) or `tests/test_cli_args.py` (parser only) |
 | Frontend shared module | `static/js/shared/*.test.js` (vitest) |
 | Error response shape | `tests/test_error_propagation.py` regression |
@@ -139,6 +140,17 @@ npm run test:coverage   # optional
 ## Architecture
 
 See [`docs/architecture.md`](docs/architecture.md) for data flow, export state machine, and component diagram.
+
+## Adding a new tool type
+
+Claude Code assistant `tool_use` blocks carry a `name` string (e.g. `"Read"`, `"Bash"`). The browser coordinates that name across four sites; drift is caught by `tests/test_tool_dispatch_sync.py`.
+
+1. **`utils/tool_dispatch.py`** — add the name to `_FILE_ACTIVITY_HANDLERS` (`None` if no file/bash/web side effects); `KNOWN_TOOL_TYPES` is derived from its keys. If the tool has a distinct `toolUseResult` JSON shape, add `(predicate, builder)` to `_TOOL_RESULT_DISPATCH` (respect ordering — see module docstring and `tests/test_tool_dispatch_ordering.py`).
+2. **`models/tool_results.py`** — add the name to `ToolNameLiteral` and, when the tool has a distinct result payload, add the TypedDict, type guard (`is_*_tool_result`), and union member on `ToolResultUnion`.
+3. **`utils/md_exporter.py`** — add an `elif name == "…"` branch in `_render_tool_use` (sync test parses these branches).
+4. **`static/js/render/registry.js`** — add a `TOOL_USE_RENDERERS` entry (and a `tool_use/*.js` renderer module).
+5. **Optional result UI** — if the backend emits a new `result_type`, add `TOOL_RESULT_RENDERERS` and a `tool_result/*.js` module.
+6. Run `pytest tests/test_tool_dispatch_sync.py -v` — failure names the site missing the new type.
 
 ## Getting help
 

@@ -323,7 +323,7 @@ def _render_tool_use(tool: ToolUseDict) -> str:
                     continue
                 lines.append(f">\n> Q: {q.get('question', '')}")
     else:
-        lines.append(f">\n> Input: `{str(inp)}`")
+        lines.append(f">\n> Input (unknown tool type): `{str(inp)}`")
 
     return "\n".join(lines)
 
