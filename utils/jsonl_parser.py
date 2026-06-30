@@ -19,7 +19,7 @@ from utils.jsonl_helpers import (
     normalize_content as _normalize_content,
 )
 from utils.session_peek import quick_session_info
-from utils.tool_dispatch import _parse_tool_result
+from utils.tool_dispatch import _parse_tool_result, track_tool_file_activity
 from utils.validation import validate_session_dict
 
 __all__ = ["parse_session", "quick_session_info"]
@@ -311,7 +311,7 @@ def _process_assistant(
             if isinstance(tool_id, str):
                 tool_use["id"] = tool_id
             tool_uses.append(tool_use)
-            _track_file_activity(tool_name, safe_input, metadata)
+            track_tool_file_activity(tool_name, safe_input, metadata)
 
     messages.append(
         {
@@ -390,24 +390,3 @@ def _process_progress(entry: dict[str, Any], messages: list[MessageDict]) -> Non
     )
 
 
-def _track_file_activity(
-    tool_name: str, tool_input: dict[str, Any], metadata: dict[str, Any]
-) -> None:
-    """Look at what each tool call did and record which files got touched,
-    what commands got run, what URLs got fetched."""
-    raw_fp = tool_input.get("file_path", "")
-    fp = raw_fp if isinstance(raw_fp, str) else ""
-    if tool_name == "Read" and fp:
-        metadata["files_read"].add(fp)
-    elif tool_name == "Write" and fp:
-        metadata["files_created"].add(fp)
-    elif tool_name == "Edit" and fp:
-        metadata["files_written"].add(fp)
-    elif tool_name == "Bash":
-        cmd = tool_input.get("command", "")
-        if isinstance(cmd, str) and cmd:
-            metadata["bash_commands"].append(cmd)
-    elif tool_name in ("WebFetch", "WebSearch"):
-        url_or_query = tool_input.get("url") or tool_input.get("query", "")
-        if isinstance(url_or_query, str) and url_or_query:
-            metadata["web_fetches"].append(url_or_query)

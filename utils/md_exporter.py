@@ -8,6 +8,7 @@ from models.session import MessageDict, SessionDict, ToolUseDict
 from models.stats import SessionStatsDict
 from utils.jsonl_helpers import strip_system_tags
 from utils.session_stats import format_duration
+from utils.tool_dispatch import KNOWN_TOOL_TYPES
 
 
 def session_to_markdown(session: SessionDict, stats: SessionStatsDict | None = None) -> str:
@@ -323,9 +324,27 @@ def _render_tool_use(tool: ToolUseDict) -> str:
                     continue
                 lines.append(f">\n> Q: {q.get('question', '')}")
     else:
-        lines.append(f">\n> Input: `{str(inp)}`")
+        label = "Input" if name in KNOWN_TOOL_TYPES else "Input (unknown tool type)"
+        lines.append(f">\n> {label}: `{str(inp)}`")
 
     return "\n".join(lines)
+
+
+MD_EXPORTER_TOOL_TYPES: frozenset[str] = frozenset(
+    {
+        "AskUserQuestion",
+        "Bash",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Read",
+        "Task",
+        "TodoWrite",
+        "WebFetch",
+        "WebSearch",
+        "Write",
+    }
+)
 
 
 def _render_tool_result(parsed: dict[str, Any]) -> str:

@@ -100,6 +100,7 @@ npm run test:coverage   # optional
 | New `ErrorCode` | Parametrized row in `tests/test_error_codes.py` |
 | Search / limit validation | `tests/test_search.py` |
 | New `_parse_tool_result` dispatch entry | Fixture + assertion in `tests/test_jsonl_parser.py` |
+| New Claude Code tool use name | See **Adding a new tool type** below |
 | CLI behavior | `tests/test_cli_e2e.py` (subprocess) or `tests/test_cli_args.py` (parser only) |
 | Frontend shared module | `static/js/shared/*.test.js` (vitest) |
 | Error response shape | `tests/test_error_propagation.py` regression |
@@ -139,6 +140,16 @@ npm run test:coverage   # optional
 ## Architecture
 
 See [`docs/architecture.md`](docs/architecture.md) for data flow, export state machine, and component diagram.
+
+## Adding a new tool type
+
+Claude Code assistant `tool_use` blocks carry a `name` string (e.g. `"Read"`, `"Bash"`). The browser coordinates that name across four sites; drift is caught by `tests/test_tool_dispatch_sync.py`.
+
+1. **`utils/tool_dispatch.py`** — add the name to `KNOWN_TOOL_TYPE_NAMES` (keep alphabetical). Set `_FILE_ACTIVITY_HANDLERS[name]` to a tracker function or `None`. If the tool has a distinct `toolUseResult` JSON shape, add `(predicate, builder)` to `_TOOL_RESULT_DISPATCH` (respect ordering — see module docstring and `tests/test_tool_dispatch_ordering.py`).
+2. **`utils/md_exporter.py`** — add an `elif name == "…"` branch in `_render_tool_use` and include the name in `MD_EXPORTER_TOOL_TYPES`.
+3. **`static/js/render/registry.js`** — add a `TOOL_USE_RENDERERS` entry (and a `tool_use/*.js` renderer module).
+4. **Optional result UI** — if the backend emits a new `result_type`, add `TOOL_RESULT_RENDERERS` and a `tool_result/*.js` module.
+5. Run `pytest tests/test_tool_dispatch_sync.py -v` — failure names the site missing the new type.
 
 ## Getting help
 
