@@ -323,8 +323,11 @@ def _render_tool_use(tool: ToolUseDict) -> str:
                     continue
                 lines.append(f">\n> Q: {q.get('question', '')}")
     else:
-        # Unknown names, or known types listed in MD_EXPORTER_TOOL_TYPES before an elif exists.
-        lines.append(f">\n> Input (unknown tool type): `{str(inp)}`")
+        if name in MD_EXPORTER_TOOL_TYPES:
+            label = "Input (known tool type; no specialized Markdown renderer)"
+        else:
+            label = "Input (unknown tool type)"
+        lines.append(f">\n> {label}: `{str(inp)}`")
 
     return "\n".join(lines)
 
