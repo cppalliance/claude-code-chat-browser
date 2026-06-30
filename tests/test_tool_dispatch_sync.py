@@ -94,7 +94,13 @@ def _load_manifest_tool_types(path: Path) -> frozenset[str]:
     if not isinstance(raw, list):
         msg = f"Invalid tool_types in {path}: expected a JSON array"
         raise ValueError(msg)
-    return frozenset(str(t) for t in raw)
+    for i, item in enumerate(raw):
+        if not isinstance(item, str):
+            msg = (
+                f"Invalid tool_types[{i}] in {path}: expected string, got {type(item).__name__}"
+            )
+            raise ValueError(msg)
+    return frozenset(raw)
 
 
 def test_tool_types_manifest_matches_known_tool_types() -> None:

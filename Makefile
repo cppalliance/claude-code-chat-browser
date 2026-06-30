@@ -1,4 +1,4 @@
-.PHONY: seed-baselines-local update-baselines check-benchmarks clean-benchmark-artifacts
+.PHONY: seed-baselines-local update-baselines gen-tool-types-manifest check-benchmarks clean-benchmark-artifacts
 
 # WARNING: captures timings on THIS machine. Production baselines must match ubuntu-latest CI.
 # Prefer downloading benchmark-results.json from a CI artifact, then:

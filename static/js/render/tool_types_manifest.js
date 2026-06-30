@@ -2,14 +2,17 @@ import { TOOL_USE_RENDERERS } from './registry.js';
 import { setManifestToolTypes } from './tool_types_state.js';
 
 const MANIFEST_URL = '/static/tool_types.json';
+const MANIFEST_FETCH_TIMEOUT_MS = 5000;
 
 /**
  * Load backend tool-type manifest and cross-check ``TOOL_USE_RENDERERS``.
  * Logs ``console.warn`` when the backend list and frontend registry diverge.
  */
 export async function initToolTypesManifest() {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), MANIFEST_FETCH_TIMEOUT_MS);
     try {
-        const res = await fetch(MANIFEST_URL);
+        const res = await fetch(MANIFEST_URL, { signal: controller.signal });
         if (!res.ok) {
             console.warn(`[tool registry] Could not load ${MANIFEST_URL}: HTTP ${res.status}`);
             return;
@@ -34,6 +37,14 @@ export async function initToolTypesManifest() {
             }
         }
     } catch (err) {
+        if (err?.name === 'AbortError') {
+            console.warn(
+                `[tool registry] Could not load ${MANIFEST_URL}: timed out after ${MANIFEST_FETCH_TIMEOUT_MS}ms`,
+            );
+            return;
+        }
         console.warn('[tool registry] Could not load tool types manifest:', err);
+    } finally {
+        clearTimeout(timeoutId);
     }
 }

@@ -36,7 +36,6 @@ describe('router (app.js)', () => {
         Element.prototype.scrollIntoView = vi.fn();
         await import('./app.js');
         document.dispatchEvent(new Event('DOMContentLoaded'));
-        await Promise.resolve();
     });
 
     afterAll(() => {

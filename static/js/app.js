@@ -49,11 +49,11 @@ function handleRoute() {
 
 // ==================== Bootstrap ====================
 
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     applyTheme(localStorage.getItem('theme') || 'dark');
     const yearEl = document.getElementById('footer-year');
     if (yearEl) yearEl.textContent = new Date().getFullYear();
-    await initToolTypesManifest();
+    void initToolTypesManifest();
     handleRoute();
     window.addEventListener('hashchange', handleRoute);
 

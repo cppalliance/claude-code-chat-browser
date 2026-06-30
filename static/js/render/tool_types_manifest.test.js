@@ -46,4 +46,29 @@ describe('initToolTypesManifest', () => {
             expect.any(Error),
         );
     });
+
+    it('warns when fetch times out', async () => {
+        vi.useFakeTimers();
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((_url, init) =>
+                new Promise((_resolve, reject) => {
+                    init?.signal?.addEventListener('abort', () => {
+                        reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+                    });
+                }),
+            ),
+        );
+
+        const promise = initToolTypesManifest();
+        await vi.advanceTimersByTimeAsync(5000);
+        await promise;
+
+        expect(getManifestToolTypes()).toBeNull();
+        expect(warn).toHaveBeenCalledWith(
+            '[tool registry] Could not load /static/tool_types.json: timed out after 5000ms',
+        );
+        vi.useRealTimers();
+    });
 });
