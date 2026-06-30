@@ -388,5 +388,3 @@ def _process_progress(entry: dict[str, Any], messages: list[MessageDict]) -> Non
             "is_sidechain": entry.get("isSidechain", False),
         }
     )
-
-

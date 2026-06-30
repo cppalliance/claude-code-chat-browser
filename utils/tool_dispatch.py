@@ -18,13 +18,15 @@ Predicates live in ``models.tool_results`` (single source of truth for narrowing
 
 Adding a new Claude Code **tool use** name (e.g. ``"Read"``, ``"Bash"``):
 
-1. Add the name to ``KNOWN_TOOL_TYPE_NAMES`` below (alphabetical order).
-2. Wire ``_FILE_ACTIVITY_HANDLERS`` (``None`` if no file/bash/web side effects).
+1. Add the name to ``_FILE_ACTIVITY_HANDLERS`` below (``None`` if no file/bash/web
+   side effects); ``KNOWN_TOOL_TYPES`` is derived from its keys.
+2. Add the name to ``ToolNameLiteral`` in ``models/tool_results.py`` and, if the
+   tool has a distinct ``toolUseResult`` JSON shape, add the TypedDict, predicate,
+   and ``(predicate, builder)`` pair in ``_TOOL_RESULT_DISPATCH`` (respect ordering
+   — see notes above and ``tests/test_tool_dispatch_ordering.py``).
 3. Add a Markdown branch in ``utils/md_exporter.py`` ``_render_tool_use``.
 4. Add ``TOOL_USE_RENDERERS`` entry in ``static/js/render/registry.js``.
-5. Add ``(predicate, builder)`` to ``_TOOL_RESULT_DISPATCH`` when the tool has a
-   distinct ``toolUseResult`` shape (see ordering notes above).
-6. Run ``pytest tests/test_tool_dispatch_sync.py -v`` — it fails with the
+5. Run ``pytest tests/test_tool_dispatch_sync.py -v`` — it fails with the
    missing site if any step was skipped.
 
 See ``CONTRIBUTING.md`` § "Adding a new tool type".
@@ -235,20 +237,7 @@ _TOOL_RESULT_DISPATCH = (
 
 # Claude Code assistant tool_use ``name`` values coordinated across parser file
 # activity, Markdown export, and the SPA ``TOOL_USE_RENDERERS`` map.
-KNOWN_TOOL_TYPE_NAMES: tuple[str, ...] = (
-    "AskUserQuestion",
-    "Bash",
-    "Edit",
-    "Glob",
-    "Grep",
-    "Read",
-    "Task",
-    "TodoWrite",
-    "WebFetch",
-    "WebSearch",
-    "Write",
-)
-KNOWN_TOOL_TYPES: frozenset[str] = frozenset(KNOWN_TOOL_TYPE_NAMES)
+# ``_FILE_ACTIVITY_HANDLERS`` is the single registry; ``KNOWN_TOOL_TYPES`` is derived.
 
 
 def _file_activity_read(tool_input: dict[str, Any], metadata: dict[str, Any]) -> None:
@@ -284,7 +273,6 @@ def _file_activity_web(tool_input: dict[str, Any], metadata: dict[str, Any]) -> 
         metadata["web_fetches"].append(url_or_query)
 
 
-# Every ``KNOWN_TOOL_TYPES`` entry must appear here (``None`` = no side effects).
 _FILE_ACTIVITY_HANDLERS: dict[str, Callable[[dict[str, Any], dict[str, Any]], None] | None] = {
     "AskUserQuestion": None,
     "Bash": _file_activity_bash,
@@ -298,6 +286,8 @@ _FILE_ACTIVITY_HANDLERS: dict[str, Callable[[dict[str, Any], dict[str, Any]], No
     "WebSearch": _file_activity_web,
     "Write": _file_activity_write,
 }
+KNOWN_TOOL_TYPE_NAMES: tuple[str, ...] = tuple(sorted(_FILE_ACTIVITY_HANDLERS))
+KNOWN_TOOL_TYPES: frozenset[str] = frozenset(_FILE_ACTIVITY_HANDLERS)
 FILE_ACTIVITY_TOOL_TYPES: frozenset[str] = frozenset(_FILE_ACTIVITY_HANDLERS)
 
 

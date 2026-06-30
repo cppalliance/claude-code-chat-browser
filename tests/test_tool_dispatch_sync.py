@@ -51,13 +51,19 @@ def _format_set_diff(expected: frozenset[str], actual: frozenset[str], site: str
     [
         ("utils/tool_dispatch.py (FILE_ACTIVITY_TOOL_TYPES)", FILE_ACTIVITY_TOOL_TYPES),
         ("utils/md_exporter.py (MD_EXPORTER_TOOL_TYPES)", MD_EXPORTER_TOOL_TYPES),
-        (
-            "static/js/render/registry.js (TOOL_USE_RENDERERS)",
-            _parse_frontend_tool_use_renderers(_FRONTEND_REGISTRY),
-        ),
     ],
 )
 def test_tool_type_sets_match_known_registry(site: str, actual: frozenset[str]) -> None:
+    if actual != KNOWN_TOOL_TYPES:
+        pytest.fail(_format_set_diff(KNOWN_TOOL_TYPES, actual, site))
+
+
+def test_frontend_registry_matches_known_tool_types() -> None:
+    site = "static/js/render/registry.js (TOOL_USE_RENDERERS)"
+    try:
+        actual = _parse_frontend_tool_use_renderers(_FRONTEND_REGISTRY)
+    except ValueError as exc:
+        pytest.fail(f"{site}: {exc}")
     if actual != KNOWN_TOOL_TYPES:
         pytest.fail(_format_set_diff(KNOWN_TOOL_TYPES, actual, site))
 

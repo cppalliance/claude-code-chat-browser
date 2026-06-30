@@ -8,7 +8,6 @@ from models.session import MessageDict, SessionDict, ToolUseDict
 from models.stats import SessionStatsDict
 from utils.jsonl_helpers import strip_system_tags
 from utils.session_stats import format_duration
-from utils.tool_dispatch import KNOWN_TOOL_TYPES
 
 
 def session_to_markdown(session: SessionDict, stats: SessionStatsDict | None = None) -> str:
@@ -324,8 +323,8 @@ def _render_tool_use(tool: ToolUseDict) -> str:
                     continue
                 lines.append(f">\n> Q: {q.get('question', '')}")
     else:
-        label = "Input" if name in KNOWN_TOOL_TYPES else "Input (unknown tool type)"
-        lines.append(f">\n> {label}: `{str(inp)}`")
+        # Unknown names, or known types listed in MD_EXPORTER_TOOL_TYPES before an elif exists.
+        lines.append(f">\n> Input (unknown tool type): `{str(inp)}`")
 
     return "\n".join(lines)
 
