@@ -323,30 +323,9 @@ def _render_tool_use(tool: ToolUseDict) -> str:
                     continue
                 lines.append(f">\n> Q: {q.get('question', '')}")
     else:
-        if name in MD_EXPORTER_TOOL_TYPES:
-            label = "Input (known tool type; no specialized Markdown renderer)"
-        else:
-            label = "Input (unknown tool type)"
-        lines.append(f">\n> {label}: `{str(inp)}`")
+        lines.append(f">\n> Input (unknown tool type): `{str(inp)}`")
 
     return "\n".join(lines)
-
-
-MD_EXPORTER_TOOL_TYPES: frozenset[str] = frozenset(
-    {
-        "AskUserQuestion",
-        "Bash",
-        "Edit",
-        "Glob",
-        "Grep",
-        "Read",
-        "Task",
-        "TodoWrite",
-        "WebFetch",
-        "WebSearch",
-        "Write",
-    }
-)
 
 
 def _render_tool_result(parsed: dict[str, Any]) -> str:

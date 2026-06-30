@@ -286,9 +286,7 @@ _FILE_ACTIVITY_HANDLERS: dict[str, Callable[[dict[str, Any], dict[str, Any]], No
     "WebSearch": _file_activity_web,
     "Write": _file_activity_write,
 }
-KNOWN_TOOL_TYPE_NAMES: tuple[str, ...] = tuple(sorted(_FILE_ACTIVITY_HANDLERS))
 KNOWN_TOOL_TYPES: frozenset[str] = frozenset(_FILE_ACTIVITY_HANDLERS)
-FILE_ACTIVITY_TOOL_TYPES: frozenset[str] = frozenset(_FILE_ACTIVITY_HANDLERS)
 
 
 def track_tool_file_activity(
