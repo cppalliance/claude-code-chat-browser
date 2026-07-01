@@ -58,9 +58,7 @@ def _session_frontmatter_dict(session: SessionDict) -> dict[str, Any]:
             sorted(meta["tool_call_counts"].items(), key=lambda item: -item[1])
         )
     if meta.get("stop_reasons"):
-        data["stop_reasons"] = dict(
-            sorted(meta["stop_reasons"].items(), key=lambda item: -item[1])
-        )
+        data["stop_reasons"] = dict(sorted(meta["stop_reasons"].items(), key=lambda item: -item[1]))
     if meta.get("cwd"):
         data["working_directory"] = meta["cwd"]
     if meta.get("git_branch"):
@@ -525,9 +523,10 @@ def _append_yaml_value(lines: list[str], key: str, value: Any, *, indent: int = 
     if not isinstance(value, str):
         raise TypeError(f"unsupported frontmatter value type: {type(value).__name__}")
     if "\n" in value:
-        if all(ch in "\n\r\t" or ch.isprintable() for ch in value):
+        content_lines = value.splitlines()
+        if content_lines and all(ch in "\n\r\t" or ch.isprintable() for ch in value):
             lines.append(f"{prefix}{key}: |-")
-            for line in value.splitlines():
+            for line in content_lines:
                 lines.append(f"{prefix}  {line}")
             return
         lines.append(f"{prefix}{key}: {_escape_yaml(value)}")
