@@ -37,6 +37,23 @@ def _require_value(
     return val
 
 
+def _require_optional_str(path: str, val: Any) -> str | None:
+    if val is None:
+        return None
+    if not isinstance(val, str):
+        raise SessionValidationError(path, f"expected str or null, got {type(val).__name__}")
+    return val
+
+
+def _validate_session_metadata(metadata: dict[str, Any]) -> None:
+    """Enforce SessionMetadataDict required keys at the runtime boundary."""
+    _require_field(metadata, "session_id", str, "str", path="metadata.session_id")
+    _require_field(metadata, "models_used", list, "list", path="metadata.models_used")
+    if "first_timestamp" not in metadata:
+        raise SessionValidationError("metadata.first_timestamp", "missing required field")
+    _require_optional_str("metadata.first_timestamp", metadata["first_timestamp"])
+
+
 def validate_session_dict(data: dict[str, Any]) -> SessionDict:
     """Validate a plain dict matches SessionDict before returning it."""
     # Runtime guard for dynamic callers; mypy already types the parameter as dict.
@@ -46,7 +63,8 @@ def validate_session_dict(data: dict[str, Any]) -> SessionDict:
     _require_field(data, "session_id", str, "str")
     _require_field(data, "title", str, "str")
     messages = _require_field(data, "messages", list, "list")
-    _require_field(data, "metadata", dict, "dict")
+    metadata = _require_field(data, "metadata", dict, "dict")
+    _validate_session_metadata(metadata)
 
     for index, message in enumerate(messages):
         path = f"messages[{index}]"

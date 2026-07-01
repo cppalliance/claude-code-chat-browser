@@ -9,7 +9,14 @@ from datetime import datetime
 from typing import Any, cast, get_args
 
 from models.record_data import RecordDataUnion
-from models.session import MessageDict, RoleLiteral, SessionDict, SessionMetadataDict, ToolUseDict
+from models.session import (
+    SESSION_METADATA_FIELD_NAMES,
+    MessageDict,
+    RoleLiteral,
+    SessionDict,
+    SessionMetadataDict,
+    ToolUseDict,
+)
 from models.tool_results import ToolResultUnion, is_tool_result_dict
 from utils.jsonl_helpers import (
     entry_message as _entry_message,
@@ -70,48 +77,15 @@ def _safe_int(val: Any) -> int:
     return 0
 
 
-def _finalize_session_metadata(raw: dict[str, Any]) -> SessionMetadataDict:
-    """Convert the mutable parse-time metadata builder into a SessionMetadataDict."""
+# Set-backed fields are sorted when finalized; all other builder keys pass through as-is.
+_METADATA_SET_FIELDS = frozenset(
+    {"models_used", "service_tiers", "files_read", "files_written", "files_created"}
+)
+
+
+def _new_session_metadata_builder(session_id: str) -> dict[str, Any]:
+    """Fresh mutable metadata accumulator for ``parse_session()``."""
     return {
-        "session_id": raw["session_id"],
-        "models_used": sorted(raw["models_used"]),
-        "first_timestamp": raw["first_timestamp"],
-        "last_timestamp": raw["last_timestamp"],
-        "total_input_tokens": raw["total_input_tokens"],
-        "total_output_tokens": raw["total_output_tokens"],
-        "total_cache_read_tokens": raw["total_cache_read_tokens"],
-        "total_cache_creation_tokens": raw["total_cache_creation_tokens"],
-        "total_tool_calls": raw["total_tool_calls"],
-        "tool_call_counts": raw["tool_call_counts"],
-        "version": raw["version"],
-        "cwd": raw["cwd"],
-        "git_branch": raw["git_branch"],
-        "permission_mode": raw["permission_mode"],
-        "compactions": raw["compactions"],
-        "total_ephemeral_5m_tokens": raw["total_ephemeral_5m_tokens"],
-        "total_ephemeral_1h_tokens": raw["total_ephemeral_1h_tokens"],
-        "service_tiers": sorted(raw["service_tiers"]),
-        "session_wall_time_seconds": raw["session_wall_time_seconds"],
-        "compact_boundaries": raw["compact_boundaries"],
-        "api_errors": raw["api_errors"],
-        "files_read": sorted(raw["files_read"]),
-        "files_written": sorted(raw["files_written"]),
-        "files_created": sorted(raw["files_created"]),
-        "bash_commands": raw["bash_commands"],
-        "web_fetches": raw["web_fetches"],
-        "sidechain_messages": raw["sidechain_messages"],
-        "stop_reasons": raw["stop_reasons"],
-        "entry_counts": raw["entry_counts"],
-    }
-
-
-def parse_session(filepath: str) -> SessionDict:
-    """Main entry point. Reads every line from a .jsonl file and builds up
-    a session dict with messages, metadata (tokens, models, tool counts),
-    and file/command activity."""
-    session_id = os.path.basename(filepath).replace(".jsonl", "")
-    messages: list[MessageDict] = []
-    metadata: dict[str, Any] = {
         "session_id": session_id,
         "models_used": set(),
         "total_input_tokens": 0,
@@ -127,29 +101,41 @@ def parse_session(filepath: str) -> SessionDict:
         "git_branch": None,
         "permission_mode": None,
         "compactions": 0,
-        # Extended token accounting
         "total_ephemeral_5m_tokens": 0,
         "total_ephemeral_1h_tokens": 0,
         "service_tiers": set(),
-        # Timing
         "session_wall_time_seconds": None,
-        # Compaction details
         "compact_boundaries": [],
-        # Error tracking
         "api_errors": 0,
-        # File activity (from tool_use inputs)
         "files_read": set(),
         "files_written": set(),
         "files_created": set(),
         "bash_commands": [],
         "web_fetches": [],
-        # Sidechain tracking
         "sidechain_messages": 0,
-        # Stop reasons
         "stop_reasons": {},
-        # Entry type counts
         "entry_counts": {},
     }
+
+
+def _finalize_session_metadata(raw: dict[str, Any]) -> SessionMetadataDict:
+    """Convert the mutable parse-time metadata builder into a SessionMetadataDict."""
+    finalized: dict[str, Any] = {}
+    for key in SESSION_METADATA_FIELD_NAMES:
+        val = raw[key]
+        if key in _METADATA_SET_FIELDS:
+            val = sorted(val)
+        finalized[key] = val
+    return cast(SessionMetadataDict, finalized)
+
+
+def parse_session(filepath: str) -> SessionDict:
+    """Main entry point. Reads every line from a .jsonl file and builds up
+    a session dict with messages, metadata (tokens, models, tool counts),
+    and file/command activity."""
+    session_id = os.path.basename(filepath).replace(".jsonl", "")
+    messages: list[MessageDict] = []
+    metadata = _new_session_metadata_builder(session_id)
 
     with open(filepath, "r", encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -172,7 +158,7 @@ def parse_session(filepath: str) -> SessionDict:
                 if isinstance(snap, dict):
                     ts = snap.get("timestamp")
 
-            if ts:
+            if isinstance(ts, str) and ts:
                 if metadata["first_timestamp"] is None:
                     metadata["first_timestamp"] = ts
                 metadata["last_timestamp"] = ts

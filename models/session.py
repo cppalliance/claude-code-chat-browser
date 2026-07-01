@@ -97,6 +97,45 @@ class SessionMetadataDict(TypedDict):
     entry_counts: NotRequired[dict[str, int]]
 
 
+# Canonical metadata field set for parse_session builder / finalize parity.
+# Keep in sync with SessionMetadataDict above.
+SESSION_METADATA_REQUIRED_KEYS = frozenset({"session_id", "models_used", "first_timestamp"})
+
+SESSION_METADATA_FIELD_NAMES = frozenset(
+    {
+        "session_id",
+        "models_used",
+        "first_timestamp",
+        "last_timestamp",
+        "total_input_tokens",
+        "total_output_tokens",
+        "total_cache_read_tokens",
+        "total_cache_creation_tokens",
+        "total_tool_calls",
+        "tool_call_counts",
+        "version",
+        "cwd",
+        "git_branch",
+        "permission_mode",
+        "compactions",
+        "total_ephemeral_5m_tokens",
+        "total_ephemeral_1h_tokens",
+        "service_tiers",
+        "session_wall_time_seconds",
+        "compact_boundaries",
+        "api_errors",
+        "files_read",
+        "files_written",
+        "files_created",
+        "bash_commands",
+        "web_fetches",
+        "sidechain_messages",
+        "stop_reasons",
+        "entry_counts",
+    }
+)
+
+
 class SessionDict(TypedDict):
     session_id: str
     title: str
