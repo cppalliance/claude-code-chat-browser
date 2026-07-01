@@ -9,10 +9,20 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from models.errors import SessionValidationError
-from utils.jsonl_parser import parse_session
+from utils.jsonl_parser import (
+    _finalize_session_metadata,
+    _new_session_metadata_builder,
+    parse_session,
+)
 from utils.validation import validate_session_dict
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
+
+
+def _full_metadata(**overrides: Any) -> dict[str, Any]:
+    raw = _new_session_metadata_builder("abc123")
+    raw.update(overrides)
+    return dict(_finalize_session_metadata(raw))
 
 
 def _valid_payload(**overrides: Any) -> dict[str, Any]:
@@ -20,7 +30,7 @@ def _valid_payload(**overrides: Any) -> dict[str, Any]:
         "session_id": "abc123",
         "title": "Test Session",
         "messages": [{"role": "user", "text": "hello"}],
-        "metadata": {"session_id": "abc123", "models_used": [], "first_timestamp": None},
+        "metadata": _full_metadata(),
     }
     base.update(overrides)
     return base
@@ -61,45 +71,37 @@ class TestValidateSessionDict:
         assert exc_info.value.path == "metadata"
 
     def test_metadata_missing_session_id(self):
+        metadata = _full_metadata()
+        del metadata["session_id"]
         with pytest.raises(SessionValidationError) as exc_info:
-            validate_session_dict(
-                _valid_payload(metadata={"models_used": [], "first_timestamp": None})
-            )
+            validate_session_dict(_valid_payload(metadata=metadata))
         assert exc_info.value.path == "metadata.session_id"
 
     def test_metadata_missing_models_used(self):
+        metadata = _full_metadata()
+        del metadata["models_used"]
         with pytest.raises(SessionValidationError) as exc_info:
-            validate_session_dict(
-                _valid_payload(metadata={"session_id": "abc123", "first_timestamp": None})
-            )
+            validate_session_dict(_valid_payload(metadata=metadata))
         assert exc_info.value.path == "metadata.models_used"
 
     def test_metadata_missing_first_timestamp(self):
+        metadata = _full_metadata()
+        del metadata["first_timestamp"]
         with pytest.raises(SessionValidationError) as exc_info:
-            validate_session_dict(
-                _valid_payload(metadata={"session_id": "abc123", "models_used": []})
-            )
+            validate_session_dict(_valid_payload(metadata=metadata))
         assert exc_info.value.path == "metadata.first_timestamp"
 
     def test_metadata_first_timestamp_null_allowed(self):
         result = validate_session_dict(
-            _valid_payload(
-                metadata={"session_id": "abc123", "models_used": [], "first_timestamp": None}
-            )
+            _valid_payload(metadata=_full_metadata(first_timestamp=None))
         )
         assert result["metadata"]["first_timestamp"] is None
 
     def test_metadata_models_used_requires_string_elements(self):
+        metadata = _full_metadata()
+        metadata["models_used"] = ["claude-sonnet", 42]
         with pytest.raises(SessionValidationError) as exc_info:
-            validate_session_dict(
-                _valid_payload(
-                    metadata={
-                        "session_id": "abc123",
-                        "models_used": ["claude-sonnet", 42],
-                        "first_timestamp": None,
-                    }
-                )
-            )
+            validate_session_dict(_valid_payload(metadata=metadata))
         assert exc_info.value.path == "metadata.models_used[1]"
 
     def test_message_not_dict(self):

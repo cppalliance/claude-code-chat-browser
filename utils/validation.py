@@ -3,7 +3,7 @@
 from typing import Any, cast, get_args
 
 from models.errors import SessionValidationError
-from models.session import RoleLiteral, SessionDict
+from models.session import SESSION_METADATA_REQUIRED_KEYS, RoleLiteral, SessionDict
 
 _VALID_ROLES = frozenset(get_args(RoleLiteral))
 
@@ -58,13 +58,13 @@ def _require_str_list(path: str, val: Any) -> list[str]:
 
 
 def _validate_session_metadata(metadata: dict[str, Any]) -> None:
-    """Enforce SessionMetadataDict required keys at the runtime boundary."""
-    _require_field(metadata, "session_id", str, "str", path="metadata.session_id")
-    if "models_used" not in metadata:
-        raise SessionValidationError("metadata.models_used", "missing required field")
+    """Enforce SessionMetadataDict keys at the runtime boundary."""
+    for key in SESSION_METADATA_REQUIRED_KEYS:
+        if key not in metadata:
+            raise SessionValidationError(f"metadata.{key}", "missing required field")
+
+    _require_value("metadata.session_id", metadata["session_id"], str, "str")
     _require_str_list("metadata.models_used", metadata["models_used"])
-    if "first_timestamp" not in metadata:
-        raise SessionValidationError("metadata.first_timestamp", "missing required field")
     _require_optional_str("metadata.first_timestamp", metadata["first_timestamp"])
 
 
