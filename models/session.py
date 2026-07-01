@@ -52,17 +52,29 @@ class MessageDict(TypedDict):
     parent_tool_use_id: NotRequired[str | None]
 
 
-class SessionMetadataDict(TypedDict, total=False):
+class SessionMetadataDict(TypedDict):
+    """Metadata accumulated while parsing a Claude Code JSONL session.
+
+    ``parse_session()`` always produces every field below via
+    ``_finalize_session_metadata()``; defaults are zeros, empty collections,
+    or ``None`` where noted. Mypy treats the full shape as required so parser
+    and finalize code cannot drop a field silently.
+
+    The three identity/timing keys are also enforced at the runtime validation
+    boundary (``validate_session_dict``) with stricter type checks; remaining
+    keys must be present but are only type-checked lightly there.
+    """
+
     session_id: str
     models_used: list[str]
+    first_timestamp: str | None
+    last_timestamp: str | None
     total_input_tokens: int
     total_output_tokens: int
     total_cache_read_tokens: int
     total_cache_creation_tokens: int
     total_tool_calls: int
     tool_call_counts: dict[str, int]
-    first_timestamp: str | None
-    last_timestamp: str | None
     version: str | None
     cwd: str | None
     git_branch: str | None
@@ -77,6 +89,45 @@ class SessionMetadataDict(TypedDict, total=False):
     files_read: list[str]
     files_written: list[str]
     files_created: list[str]
+    bash_commands: list[Any]
+    web_fetches: list[Any]
+    sidechain_messages: int
+    stop_reasons: dict[str, int]
+    entry_counts: dict[str, int]
+
+
+# Derived from SessionMetadataDict — single source of truth for parity tests.
+SESSION_METADATA_FIELD_NAMES = frozenset(SessionMetadataDict.__annotations__)
+SESSION_METADATA_REQUIRED_KEYS = SessionMetadataDict.__required_keys__
+
+
+class SessionMetadataBuilderDict(TypedDict):
+    """Mutable metadata accumulator during JSONL parsing; sets are sorted at finalize."""
+
+    session_id: str
+    models_used: set[str]
+    first_timestamp: str | None
+    last_timestamp: str | None
+    total_input_tokens: int
+    total_output_tokens: int
+    total_cache_read_tokens: int
+    total_cache_creation_tokens: int
+    total_tool_calls: int
+    tool_call_counts: dict[str, int]
+    version: str | None
+    cwd: str | None
+    git_branch: str | None
+    permission_mode: str | None
+    compactions: int
+    total_ephemeral_5m_tokens: int
+    total_ephemeral_1h_tokens: int
+    service_tiers: set[str]
+    session_wall_time_seconds: float | None
+    compact_boundaries: list[dict[str, Any]]
+    api_errors: int
+    files_read: set[str]
+    files_written: set[str]
+    files_created: set[str]
     bash_commands: list[Any]
     web_fetches: list[Any]
     sidechain_messages: int

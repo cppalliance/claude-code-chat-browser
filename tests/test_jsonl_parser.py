@@ -7,6 +7,7 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from models.session import SESSION_METADATA_FIELD_NAMES
 from utils.jsonl_helpers import (
     extract_images,
     extract_text,
@@ -14,7 +15,12 @@ from utils.jsonl_helpers import (
     normalize_content,
     strip_system_tags,
 )
-from utils.jsonl_parser import parse_session, quick_session_info
+from utils.jsonl_parser import (
+    _finalize_session_metadata,
+    _new_session_metadata_builder,
+    parse_session,
+    quick_session_info,
+)
 from utils.tool_dispatch import _parse_tool_result
 
 # ---------------------------------------------------------------------------
@@ -36,6 +42,18 @@ def _parse_entries(entries: list) -> dict:
         return parse_session(path)
     finally:
         os.unlink(path)
+
+
+class TestSessionMetadataFinalize:
+    def test_builder_keys_match_field_names_constant(self):
+        raw = _new_session_metadata_builder("parity-test")
+        assert set(raw.keys()) == SESSION_METADATA_FIELD_NAMES
+
+    def test_finalize_preserves_all_builder_keys(self):
+        raw = _new_session_metadata_builder("parity-test")
+        finalized = _finalize_session_metadata(raw)
+        assert set(finalized.keys()) == SESSION_METADATA_FIELD_NAMES
+        assert set(finalized.keys()) == set(raw.keys())
 
 
 # ---------------------------------------------------------------------------
@@ -717,6 +735,23 @@ class TestParseSession:
             assert s["metadata"]["first_timestamp"] == "2026-01-02T12:00:00Z"
             assert s["metadata"]["last_timestamp"] == "2026-01-02T12:00:00Z"
             assert len(s["messages"]) == 0
+        finally:
+            os.unlink(path)
+
+    def test_file_history_snapshot_timestamp_falls_back_when_top_level_invalid(self):
+        path = _write_jsonl(
+            [
+                {
+                    "type": "file-history-snapshot",
+                    "timestamp": 1,
+                    "snapshot": {"timestamp": "2026-01-02T12:00:00Z"},
+                },
+            ]
+        )
+        try:
+            s = parse_session(path)
+            assert s["metadata"]["first_timestamp"] == "2026-01-02T12:00:00Z"
+            assert s["metadata"]["last_timestamp"] == "2026-01-02T12:00:00Z"
         finally:
             os.unlink(path)
 

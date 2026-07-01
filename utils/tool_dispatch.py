@@ -35,6 +35,7 @@ See ``CONTRIBUTING.md`` § "Adding a new tool type".
 from collections.abc import Callable
 from typing import Any, cast
 
+from models.session import SessionMetadataBuilderDict
 from models.tool_results import (
     ToolResultDict,
     ToolResultUnion,
@@ -240,40 +241,42 @@ _TOOL_RESULT_DISPATCH = (
 # ``_FILE_ACTIVITY_HANDLERS`` is the single registry; ``KNOWN_TOOL_TYPES`` is derived.
 
 
-def _file_activity_read(tool_input: dict[str, Any], metadata: dict[str, Any]) -> None:
+def _file_activity_read(tool_input: dict[str, Any], metadata: SessionMetadataBuilderDict) -> None:
     raw_fp = tool_input.get("file_path", "")
     fp = raw_fp if isinstance(raw_fp, str) else ""
     if fp:
         metadata["files_read"].add(fp)
 
 
-def _file_activity_write(tool_input: dict[str, Any], metadata: dict[str, Any]) -> None:
+def _file_activity_write(tool_input: dict[str, Any], metadata: SessionMetadataBuilderDict) -> None:
     raw_fp = tool_input.get("file_path", "")
     fp = raw_fp if isinstance(raw_fp, str) else ""
     if fp:
         metadata["files_created"].add(fp)
 
 
-def _file_activity_edit(tool_input: dict[str, Any], metadata: dict[str, Any]) -> None:
+def _file_activity_edit(tool_input: dict[str, Any], metadata: SessionMetadataBuilderDict) -> None:
     raw_fp = tool_input.get("file_path", "")
     fp = raw_fp if isinstance(raw_fp, str) else ""
     if fp:
         metadata["files_written"].add(fp)
 
 
-def _file_activity_bash(tool_input: dict[str, Any], metadata: dict[str, Any]) -> None:
+def _file_activity_bash(tool_input: dict[str, Any], metadata: SessionMetadataBuilderDict) -> None:
     cmd = tool_input.get("command", "")
     if isinstance(cmd, str) and cmd:
         metadata["bash_commands"].append(cmd)
 
 
-def _file_activity_web(tool_input: dict[str, Any], metadata: dict[str, Any]) -> None:
+def _file_activity_web(tool_input: dict[str, Any], metadata: SessionMetadataBuilderDict) -> None:
     url_or_query = tool_input.get("url") or tool_input.get("query", "")
     if isinstance(url_or_query, str) and url_or_query:
         metadata["web_fetches"].append(url_or_query)
 
 
-_FILE_ACTIVITY_HANDLERS: dict[str, Callable[[dict[str, Any], dict[str, Any]], None] | None] = {
+_FILE_ACTIVITY_HANDLERS: dict[
+    str, Callable[[dict[str, Any], SessionMetadataBuilderDict], None] | None
+] = {
     "AskUserQuestion": None,
     "Bash": _file_activity_bash,
     "Edit": _file_activity_edit,
@@ -290,7 +293,7 @@ KNOWN_TOOL_TYPES: frozenset[str] = frozenset(_FILE_ACTIVITY_HANDLERS)
 
 
 def track_tool_file_activity(
-    tool_name: str, tool_input: dict[str, Any], metadata: dict[str, Any]
+    tool_name: str, tool_input: dict[str, Any], metadata: SessionMetadataBuilderDict
 ) -> None:
     """Record file/bash/web side effects for tools listed in ``KNOWN_TOOL_TYPES``."""
     if tool_name not in KNOWN_TOOL_TYPES:

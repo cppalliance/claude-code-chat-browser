@@ -3,7 +3,7 @@
 from typing import Any, cast, get_args
 
 from models.errors import SessionValidationError
-from models.session import RoleLiteral, SessionDict
+from models.session import SESSION_METADATA_REQUIRED_KEYS, RoleLiteral, SessionDict
 
 _VALID_ROLES = frozenset(get_args(RoleLiteral))
 
@@ -37,6 +37,37 @@ def _require_value(
     return val
 
 
+def _require_optional_str(path: str, val: Any) -> str | None:
+    if val is None:
+        return None
+    if not isinstance(val, str):
+        raise SessionValidationError(path, f"expected str or null, got {type(val).__name__}")
+    return val
+
+
+def _require_str_list(path: str, val: Any) -> list[str]:
+    if not isinstance(val, list):
+        raise SessionValidationError(path, f"expected list, got {type(val).__name__}")
+    for index, item in enumerate(val):
+        if not isinstance(item, str):
+            raise SessionValidationError(
+                f"{path}[{index}]",
+                f"expected str, got {type(item).__name__}",
+            )
+    return val
+
+
+def _validate_session_metadata(metadata: dict[str, Any]) -> None:
+    """Enforce SessionMetadataDict keys at the runtime boundary."""
+    for key in SESSION_METADATA_REQUIRED_KEYS:
+        if key not in metadata:
+            raise SessionValidationError(f"metadata.{key}", "missing required field")
+
+    _require_value("metadata.session_id", metadata["session_id"], str, "str")
+    _require_str_list("metadata.models_used", metadata["models_used"])
+    _require_optional_str("metadata.first_timestamp", metadata["first_timestamp"])
+
+
 def validate_session_dict(data: dict[str, Any]) -> SessionDict:
     """Validate a plain dict matches SessionDict before returning it."""
     # Runtime guard for dynamic callers; mypy already types the parameter as dict.
@@ -46,7 +77,8 @@ def validate_session_dict(data: dict[str, Any]) -> SessionDict:
     _require_field(data, "session_id", str, "str")
     _require_field(data, "title", str, "str")
     messages = _require_field(data, "messages", list, "list")
-    _require_field(data, "metadata", dict, "dict")
+    metadata = _require_field(data, "metadata", dict, "dict")
+    _validate_session_metadata(metadata)
 
     for index, message in enumerate(messages):
         path = f"messages[{index}]"
