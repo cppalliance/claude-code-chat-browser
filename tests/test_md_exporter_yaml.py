@@ -79,7 +79,6 @@ class TestYamlFrontmatterRoundtrip:
             },
         )
         md = session_to_markdown(session)
-        assert yaml.safe_load(md.split("---")[1]) == _session_frontmatter_dict(session)
         assert _extract_frontmatter_dict(md) == _session_frontmatter_dict(session)
 
     def test_multiline_title_uses_quoted_scalar(self):
