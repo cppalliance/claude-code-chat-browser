@@ -738,6 +738,23 @@ class TestParseSession:
         finally:
             os.unlink(path)
 
+    def test_file_history_snapshot_timestamp_falls_back_when_top_level_invalid(self):
+        path = _write_jsonl(
+            [
+                {
+                    "type": "file-history-snapshot",
+                    "timestamp": 1,
+                    "snapshot": {"timestamp": "2026-01-02T12:00:00Z"},
+                },
+            ]
+        )
+        try:
+            s = parse_session(path)
+            assert s["metadata"]["first_timestamp"] == "2026-01-02T12:00:00Z"
+            assert s["metadata"]["last_timestamp"] == "2026-01-02T12:00:00Z"
+        finally:
+            os.unlink(path)
+
     def test_summary_entry_type_produces_no_message(self, caplog):
         path = _write_jsonl(
             [

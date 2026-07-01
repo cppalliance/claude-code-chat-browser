@@ -45,10 +45,24 @@ def _require_optional_str(path: str, val: Any) -> str | None:
     return val
 
 
+def _require_str_list(path: str, val: Any) -> list[str]:
+    if not isinstance(val, list):
+        raise SessionValidationError(path, f"expected list, got {type(val).__name__}")
+    for index, item in enumerate(val):
+        if not isinstance(item, str):
+            raise SessionValidationError(
+                f"{path}[{index}]",
+                f"expected str, got {type(item).__name__}",
+            )
+    return val
+
+
 def _validate_session_metadata(metadata: dict[str, Any]) -> None:
     """Enforce SessionMetadataDict required keys at the runtime boundary."""
     _require_field(metadata, "session_id", str, "str", path="metadata.session_id")
-    _require_field(metadata, "models_used", list, "list", path="metadata.models_used")
+    if "models_used" not in metadata:
+        raise SessionValidationError("metadata.models_used", "missing required field")
+    _require_str_list("metadata.models_used", metadata["models_used"])
     if "first_timestamp" not in metadata:
         raise SessionValidationError("metadata.first_timestamp", "missing required field")
     _require_optional_str("metadata.first_timestamp", metadata["first_timestamp"])

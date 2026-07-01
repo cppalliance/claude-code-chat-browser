@@ -136,6 +136,40 @@ SESSION_METADATA_FIELD_NAMES = frozenset(
 )
 
 
+class SessionMetadataBuilderDict(TypedDict):
+    """Mutable metadata accumulator during JSONL parsing; sets are sorted at finalize."""
+
+    session_id: str
+    models_used: set[str]
+    first_timestamp: str | None
+    last_timestamp: str | None
+    total_input_tokens: int
+    total_output_tokens: int
+    total_cache_read_tokens: int
+    total_cache_creation_tokens: int
+    total_tool_calls: int
+    tool_call_counts: dict[str, int]
+    version: str | None
+    cwd: str | None
+    git_branch: str | None
+    permission_mode: str | None
+    compactions: int
+    total_ephemeral_5m_tokens: int
+    total_ephemeral_1h_tokens: int
+    service_tiers: set[str]
+    session_wall_time_seconds: float | None
+    compact_boundaries: list[dict[str, Any]]
+    api_errors: int
+    files_read: set[str]
+    files_written: set[str]
+    files_created: set[str]
+    bash_commands: list[Any]
+    web_fetches: list[Any]
+    sidechain_messages: int
+    stop_reasons: dict[str, int]
+    entry_counts: dict[str, int]
+
+
 class SessionDict(TypedDict):
     session_id: str
     title: str

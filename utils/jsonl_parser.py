@@ -10,10 +10,10 @@ from typing import Any, cast, get_args
 
 from models.record_data import RecordDataUnion
 from models.session import (
-    SESSION_METADATA_FIELD_NAMES,
     MessageDict,
     RoleLiteral,
     SessionDict,
+    SessionMetadataBuilderDict,
     SessionMetadataDict,
     ToolUseDict,
 )
@@ -77,13 +77,7 @@ def _safe_int(val: Any) -> int:
     return 0
 
 
-# Set-backed fields are sorted when finalized; all other builder keys pass through as-is.
-_METADATA_SET_FIELDS = frozenset(
-    {"models_used", "service_tiers", "files_read", "files_written", "files_created"}
-)
-
-
-def _new_session_metadata_builder(session_id: str) -> dict[str, Any]:
+def _new_session_metadata_builder(session_id: str) -> SessionMetadataBuilderDict:
     """Fresh mutable metadata accumulator for ``parse_session()``."""
     return {
         "session_id": session_id,
@@ -118,15 +112,53 @@ def _new_session_metadata_builder(session_id: str) -> dict[str, Any]:
     }
 
 
-def _finalize_session_metadata(raw: dict[str, Any]) -> SessionMetadataDict:
+def _finalize_session_metadata(raw: SessionMetadataBuilderDict) -> SessionMetadataDict:
     """Convert the mutable parse-time metadata builder into a SessionMetadataDict."""
-    finalized: dict[str, Any] = {}
-    for key in SESSION_METADATA_FIELD_NAMES:
-        val = raw[key]
-        if key in _METADATA_SET_FIELDS:
-            val = sorted(val)
-        finalized[key] = val
-    return cast(SessionMetadataDict, finalized)
+    return {
+        "session_id": raw["session_id"],
+        "models_used": sorted(raw["models_used"]),
+        "first_timestamp": raw["first_timestamp"],
+        "last_timestamp": raw["last_timestamp"],
+        "total_input_tokens": raw["total_input_tokens"],
+        "total_output_tokens": raw["total_output_tokens"],
+        "total_cache_read_tokens": raw["total_cache_read_tokens"],
+        "total_cache_creation_tokens": raw["total_cache_creation_tokens"],
+        "total_tool_calls": raw["total_tool_calls"],
+        "tool_call_counts": raw["tool_call_counts"],
+        "version": raw["version"],
+        "cwd": raw["cwd"],
+        "git_branch": raw["git_branch"],
+        "permission_mode": raw["permission_mode"],
+        "compactions": raw["compactions"],
+        "total_ephemeral_5m_tokens": raw["total_ephemeral_5m_tokens"],
+        "total_ephemeral_1h_tokens": raw["total_ephemeral_1h_tokens"],
+        "service_tiers": sorted(raw["service_tiers"]),
+        "session_wall_time_seconds": raw["session_wall_time_seconds"],
+        "compact_boundaries": raw["compact_boundaries"],
+        "api_errors": raw["api_errors"],
+        "files_read": sorted(raw["files_read"]),
+        "files_written": sorted(raw["files_written"]),
+        "files_created": sorted(raw["files_created"]),
+        "bash_commands": raw["bash_commands"],
+        "web_fetches": raw["web_fetches"],
+        "sidechain_messages": raw["sidechain_messages"],
+        "stop_reasons": raw["stop_reasons"],
+        "entry_counts": raw["entry_counts"],
+    }
+
+
+def _entry_timestamp(entry: dict[str, Any]) -> str | None:
+    """Return a usable ISO timestamp string from an entry, or None."""
+    ts = entry.get("timestamp")
+    if isinstance(ts, str) and ts:
+        return ts
+    if entry.get("type") == "file-history-snapshot":
+        snap = entry.get("snapshot")
+        if isinstance(snap, dict):
+            snap_ts = snap.get("timestamp")
+            if isinstance(snap_ts, str) and snap_ts:
+                return snap_ts
+    return None
 
 
 def parse_session(filepath: str) -> SessionDict:
@@ -151,14 +183,9 @@ def parse_session(filepath: str) -> SessionDict:
                 continue
 
             entry_type = entry.get("type")
-            ts = entry.get("timestamp")
-            # file-history-snapshot stores timestamp inside snapshot
-            if not ts and entry_type == "file-history-snapshot":
-                snap = entry.get("snapshot")
-                if isinstance(snap, dict):
-                    ts = snap.get("timestamp")
+            ts = _entry_timestamp(entry)
 
-            if isinstance(ts, str) and ts:
+            if ts:
                 if metadata["first_timestamp"] is None:
                     metadata["first_timestamp"] = ts
                 metadata["last_timestamp"] = ts
@@ -210,7 +237,7 @@ def parse_session(filepath: str) -> SessionDict:
 
 
 def _process_user(
-    entry: dict[str, Any], messages: list[MessageDict], metadata: dict[str, Any]
+    entry: dict[str, Any], messages: list[MessageDict], metadata: SessionMetadataBuilderDict
 ) -> None:
     """Pull out text, tool results, and session-level metadata (cwd, version, etc.)
     from a user entry."""
@@ -257,7 +284,7 @@ def _process_user(
 
 
 def _process_assistant(
-    entry: dict[str, Any], messages: list[MessageDict], metadata: dict[str, Any]
+    entry: dict[str, Any], messages: list[MessageDict], metadata: SessionMetadataBuilderDict
 ) -> None:
     """Handle assistant responses -- splits content into text, thinking blocks,
     and tool_use calls, and accumulates token/model/tool stats."""
@@ -353,7 +380,7 @@ def _process_assistant(
 
 
 def _process_system(
-    entry: dict[str, Any], messages: list[MessageDict], metadata: dict[str, Any]
+    entry: dict[str, Any], messages: list[MessageDict], metadata: SessionMetadataBuilderDict
 ) -> None:
     """Handle system entries (mostly compact_boundary markers from context
     compaction)."""

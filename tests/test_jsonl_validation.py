@@ -89,6 +89,19 @@ class TestValidateSessionDict:
         )
         assert result["metadata"]["first_timestamp"] is None
 
+    def test_metadata_models_used_requires_string_elements(self):
+        with pytest.raises(SessionValidationError) as exc_info:
+            validate_session_dict(
+                _valid_payload(
+                    metadata={
+                        "session_id": "abc123",
+                        "models_used": ["claude-sonnet", 42],
+                        "first_timestamp": None,
+                    }
+                )
+            )
+        assert exc_info.value.path == "metadata.models_used[1]"
+
     def test_message_not_dict(self):
         with pytest.raises(SessionValidationError) as exc_info:
             validate_session_dict(_valid_payload(messages=["not-a-dict"]))
