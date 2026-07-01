@@ -478,7 +478,7 @@ def _yaml_mapping_key(key: str) -> str:
 
 
 def _escape_yaml(s: str) -> str:
-    """Return a YAML double-quoted scalar for a single-line string value."""
+    """Return a YAML double-quoted scalar for any string (including embedded newlines)."""
     parts: list[str] = []
     for ch in s:
         if ch == "\\":
@@ -522,15 +522,6 @@ def _append_yaml_value(lines: list[str], key: str, value: Any, *, indent: int = 
         return
     if not isinstance(value, str):
         raise TypeError(f"unsupported frontmatter value type: {type(value).__name__}")
-    if "\n" in value:
-        content_lines = value.splitlines()
-        if content_lines and all(ch in "\n\r\t" or ch.isprintable() for ch in value):
-            lines.append(f"{prefix}{key}: |-")
-            for line in content_lines:
-                lines.append(f"{prefix}  {line}")
-            return
-        lines.append(f"{prefix}{key}: {_escape_yaml(value)}")
-        return
     lines.append(f"{prefix}{key}: {_escape_yaml(value)}")
 
 

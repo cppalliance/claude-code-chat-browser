@@ -82,10 +82,10 @@ class TestYamlFrontmatterRoundtrip:
         assert yaml.safe_load(md.split("---")[1]) == _session_frontmatter_dict(session)
         assert _extract_frontmatter_dict(md) == _session_frontmatter_dict(session)
 
-    def test_multiline_title_uses_block_scalar(self):
+    def test_multiline_title_uses_quoted_scalar(self):
         session = _base_session(title="line one\nline two")
         md = session_to_markdown(session)
-        assert "title: |-" in md.split("---")[1]
+        assert 'title: "line one\\nline two"' in md.split("---")[1]
         assert _extract_frontmatter_dict(md)["title"] == "line one\nline two"
 
     def test_tab_and_hash_in_title(self):
@@ -97,9 +97,7 @@ class TestYamlFrontmatterRoundtrip:
 @FUZZ_SETTINGS
 @given(st.text())
 def test_escape_yaml_roundtrip(s: str) -> None:
-    """Double-quoted scalars round-trip for arbitrary single-line text."""
-    if "\n" in s or "\r" in s:
-        return
+    """Double-quoted scalars round-trip for arbitrary text."""
     loaded = yaml.safe_load(f"key: {_escape_yaml(s)}")
     assert loaded["key"] == s
 
