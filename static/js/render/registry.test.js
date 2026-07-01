@@ -133,12 +133,13 @@ describe('getToolSummary', () => {
 });
 
 describe('renderToolUse fallback', () => {
-    it('uses JSON fallback for unknown tools', () => {
+    it('uses JSON fallback for unknown tools with raw type name', () => {
         const html = renderToolUse({
             name: 'UnknownToolXYZ',
             input: { foo: 'bar' },
         });
         expect(html).toContain('tool-call');
+        expect(html).toContain('Unknown tool: UnknownToolXYZ');
         expect(html).toContain('&quot;foo&quot;');
         expect(TOOL_USE_RENDERERS.UnknownToolXYZ).toBeUndefined();
     });
@@ -188,15 +189,20 @@ describe('renderTodoWriteResult', () => {
 });
 
 describe('renderToolResult fallback', () => {
-    it('renders summary-only for unknown result types', () => {
-        const html = renderToolResult({ result_type: 'custom_type' });
-        expect(html).toContain('Tool result (custom_type)');
+    it('renders raw result type and JSON payload for unknown result types', () => {
+        const html = renderToolResult({
+            result_type: 'custom_type',
+            payload: { answer: 42 },
+        });
+        expect(html).toContain('Unknown tool result: custom_type');
         expect(html).toContain('tool-result');
+        expect(html).toContain('&quot;answer&quot;');
+        expect(html).toContain('42');
     });
 
     it('uses fallback when result_type is an inherited property (e.g. constructor)', () => {
         const html = renderToolResult({ result_type: 'constructor' });
-        expect(html).toContain('Tool result (constructor)');
+        expect(html).toContain('Unknown tool result: constructor');
         expect(html).toContain('tool-result');
         expect(Object.prototype.hasOwnProperty.call(TOOL_RESULT_RENDERERS, 'constructor')).toBe(false);
     });

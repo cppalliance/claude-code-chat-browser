@@ -8,6 +8,7 @@ import { HLJS_THEME_SHEETS, applyTheme, toggleTheme } from './shared/theme.js';
 import { showProjects } from './projects.js';
 import { showWorkspace, loadSession } from './sessions.js';
 import { showSearchPage } from './search.js';
+import { initToolTypesManifest } from './render/tool_types_manifest.js';
 
 // ==================== Router ====================
 
@@ -52,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
     applyTheme(localStorage.getItem('theme') || 'dark');
     const yearEl = document.getElementById('footer-year');
     if (yearEl) yearEl.textContent = new Date().getFullYear();
+    void initToolTypesManifest();
     handleRoute();
     window.addEventListener('hashchange', handleRoute);
 

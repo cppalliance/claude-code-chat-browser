@@ -1,6 +1,7 @@
 """Contract test: ``KNOWN_TOOL_TYPES`` must match all four dispatch sites.
 
 Sites (each compared to ``KNOWN_TOOL_TYPES`` in ``utils/tool_dispatch.py``):
+- ``static/tool_types.json`` — generated manifest
 - ``utils/md_exporter.py`` — ``_render_tool_use`` if/elif branches (parsed)
 - ``models/tool_results.py`` — ``ToolNameLiteral``
 - ``static/js/render/registry.js`` — ``TOOL_USE_RENDERERS`` keys (parsed)
@@ -8,6 +9,7 @@ Sites (each compared to ``KNOWN_TOOL_TYPES`` in ``utils/tool_dispatch.py``):
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import get_args
@@ -15,11 +17,13 @@ from typing import get_args
 import pytest
 
 from models.tool_results import ToolNameLiteral
+from scripts.gen_tool_types_manifest import write_tool_types_manifest
 from utils.tool_dispatch import KNOWN_TOOL_TYPES
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _FRONTEND_REGISTRY = _REPO_ROOT / "static" / "js" / "render" / "registry.js"
 _MD_EXPORTER = _REPO_ROOT / "utils" / "md_exporter.py"
+_TOOL_TYPES_MANIFEST = _REPO_ROOT / "static" / "tool_types.json"
 
 
 def _format_set_diff(expected: frozenset[str], actual: frozenset[str], site: str) -> str:
@@ -81,6 +85,40 @@ def _parse_md_exporter_tool_use_handlers(path: Path) -> frozenset[str]:
     return frozenset(names)
 
 
+def _load_manifest_tool_types(path: Path) -> frozenset[str]:
+    if not path.is_file():
+        msg = f"Missing manifest: {path} (run python scripts/gen_tool_types_manifest.py)"
+        raise ValueError(msg)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    raw = data.get("tool_types")
+    if not isinstance(raw, list):
+        msg = f"Invalid tool_types in {path}: expected a JSON array"
+        raise ValueError(msg)
+    for i, item in enumerate(raw):
+        if not isinstance(item, str):
+            msg = f"Invalid tool_types[{i}] in {path}: expected string, got {type(item).__name__}"
+            raise ValueError(msg)
+    return frozenset(raw)
+
+
+def test_tool_types_manifest_matches_known_tool_types() -> None:
+    site = "static/tool_types.json"
+    try:
+        actual = _load_manifest_tool_types(_TOOL_TYPES_MANIFEST)
+    except ValueError as exc:
+        pytest.fail(f"{site}: {exc}")
+    if actual != KNOWN_TOOL_TYPES:
+        pytest.fail(_format_set_diff(KNOWN_TOOL_TYPES, actual, site))
+
+
+def test_tool_types_manifest_is_committed_and_current(tmp_path: Path) -> None:
+    """Regenerating the manifest must match the committed file."""
+    expected = tmp_path / "tool_types.json"
+    write_tool_types_manifest(expected)
+    committed = _TOOL_TYPES_MANIFEST.read_text(encoding="utf-8")
+    assert expected.read_text(encoding="utf-8") == committed
+
+
 def test_md_exporter_handlers_match_known_tool_types() -> None:
     site = "utils/md_exporter.py (_render_tool_use branches)"
     try:
@@ -99,6 +137,7 @@ def test_tool_name_literal_matches_known_tool_types() -> None:
 
 
 def test_frontend_registry_matches_known_tool_types() -> None:
+    """``TOOL_USE_RENDERERS`` keys must match ``KNOWN_TOOL_TYPES``."""
     site = "static/js/render/registry.js (TOOL_USE_RENDERERS)"
     try:
         actual = _parse_frontend_tool_use_renderers(_FRONTEND_REGISTRY)

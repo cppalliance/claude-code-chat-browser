@@ -23,6 +23,9 @@ vi.mock('./shared/theme.js', () => ({
     toggleTheme,
     setWorkspaceMode: vi.fn(),
 }));
+vi.mock('./render/tool_types_manifest.js', () => ({
+    initToolTypesManifest: vi.fn().mockResolvedValue(undefined),
+}));
 
 describe('router (app.js)', () => {
     const origScrollTo = window.scrollTo;

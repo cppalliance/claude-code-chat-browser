@@ -1,4 +1,4 @@
-.PHONY: seed-baselines-local update-baselines check-benchmarks clean-benchmark-artifacts
+.PHONY: seed-baselines-local update-baselines gen-tool-types-manifest check-benchmarks clean-benchmark-artifacts
 
 # WARNING: captures timings on THIS machine. Production baselines must match ubuntu-latest CI.
 # Prefer downloading benchmark-results.json from a CI artifact, then:
@@ -10,6 +10,9 @@ seed-baselines-local:
 
 # Deprecated alias — kept for muscle memory; see seed-baselines-local warning above.
 update-baselines: seed-baselines-local
+
+gen-tool-types-manifest:
+	PYTHONPATH=. python scripts/gen_tool_types_manifest.py
 
 check-benchmarks:
 	PYTHONPATH=. pytest tests/benchmarks/ --benchmark-only --benchmark-json=benchmark-results.json -o addopts=
