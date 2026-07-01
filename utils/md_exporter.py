@@ -50,7 +50,7 @@ def _session_frontmatter_dict(session: SessionDict) -> dict[str, Any]:
     if meta.get("last_timestamp"):
         data["updated"] = meta["last_timestamp"]
     if meta.get("models_used"):
-        data["models_used"] = ", ".join(meta["models_used"])
+        data["models_used"] = list(meta["models_used"])
     if meta.get("total_cache_creation_tokens", 0) > 0:
         data["total_cache_creation_tokens"] = meta["total_cache_creation_tokens"]
     if meta.get("tool_call_counts"):
@@ -68,7 +68,7 @@ def _session_frontmatter_dict(session: SessionDict) -> dict[str, Any]:
     if meta.get("permission_mode"):
         data["permission_mode"] = meta["permission_mode"]
     if meta.get("service_tiers"):
-        data["service_tiers"] = ", ".join(meta["service_tiers"])
+        data["service_tiers"] = list(meta["service_tiers"])
     if meta.get("compactions", 0) > 0:
         data["compactions"] = meta["compactions"]
     if meta.get("api_errors", 0) > 0:
@@ -516,6 +516,18 @@ def _append_yaml_value(lines: list[str], key: str, value: Any, *, indent: int = 
                 nested_value,
                 indent=indent + 1,
             )
+        return
+    if isinstance(value, list):
+        lines.append(f"{prefix}{key}:")
+        for item in value:
+            if isinstance(item, str):
+                lines.append(f"{prefix}  - {_escape_yaml(item)}")
+            elif isinstance(item, int):
+                lines.append(f"{prefix}  - {item}")
+            else:
+                raise TypeError(
+                    f"unsupported frontmatter sequence item type: {type(item).__name__}"
+                )
         return
     if isinstance(value, int):
         lines.append(f"{prefix}{key}: {value}")

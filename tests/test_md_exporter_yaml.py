@@ -92,6 +92,16 @@ class TestYamlFrontmatterRoundtrip:
         md = session_to_markdown(session)
         assert _extract_frontmatter_dict(md)["title"] == "tab\there # not a comment"
 
+    def test_models_used_serializes_as_yaml_sequence(self):
+        session = _base_session(
+            metadata={"models_used": ["claude-sonnet-4", "claude-opus-4"]},
+        )
+        md = session_to_markdown(session)
+        frontmatter = _extract_frontmatter_dict(md)
+        assert frontmatter["models_used"] == ["claude-sonnet-4", "claude-opus-4"]
+        assert "models_used:\n" in md.split("---")[1] or "models_used:" in md.split("---")[1]
+        assert '  - "claude-sonnet-4"' in md.split("---")[1]
+
 
 @FUZZ_SETTINGS
 @given(st.text())
