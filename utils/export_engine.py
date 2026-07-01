@@ -176,7 +176,7 @@ class ZipSink:
 
 def _resolve_first_timestamp(meta: SessionMetadataDict, sess_info: SessionListItemDict) -> str:
     """Return first_timestamp from metadata, or synthesise from mtime without mutating *meta*."""
-    ts = (meta.get("first_timestamp") or "").strip()
+    ts = (meta["first_timestamp"] or "").strip()
     if not ts:
         ts = datetime.fromtimestamp(sess_info["modified"], tz=timezone.utc).strftime(
             "%Y-%m-%dT%H:%M:%S"

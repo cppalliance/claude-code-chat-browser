@@ -45,7 +45,11 @@ def _session(
 ) -> dict:
     return {
         "title": title,
-        "metadata": {"models_used": models or []},
+        "metadata": {
+            "session_id": "stub",
+            "models_used": models or [],
+            "first_timestamp": None,
+        },
         "messages": messages or [],
     }
 

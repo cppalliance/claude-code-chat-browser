@@ -52,36 +52,49 @@ class MessageDict(TypedDict):
     parent_tool_use_id: NotRequired[str | None]
 
 
-class SessionMetadataDict(TypedDict, total=False):
+class SessionMetadataDict(TypedDict):
+    """Metadata accumulated while parsing a Claude Code JSONL session.
+
+    Required keys are always present after ``parse_session()``:
+
+    - ``session_id`` — derived from the ``.jsonl`` filename (stable identity).
+    - ``models_used`` — model names from assistant messages (empty list when none).
+    - ``first_timestamp`` — ISO timestamp of the earliest entry, or ``None`` when
+      the file has no timestamps.
+
+    Remaining fields are optional in partial or stub data (tests, export filters)
+    but are populated with defaults by the parser for full sessions.
+    """
+
     session_id: str
     models_used: list[str]
-    total_input_tokens: int
-    total_output_tokens: int
-    total_cache_read_tokens: int
-    total_cache_creation_tokens: int
-    total_tool_calls: int
-    tool_call_counts: dict[str, int]
     first_timestamp: str | None
-    last_timestamp: str | None
-    version: str | None
-    cwd: str | None
-    git_branch: str | None
-    permission_mode: str | None
-    compactions: int
-    total_ephemeral_5m_tokens: int
-    total_ephemeral_1h_tokens: int
-    service_tiers: list[str]
-    session_wall_time_seconds: float | None
-    compact_boundaries: list[dict[str, Any]]
-    api_errors: int
-    files_read: list[str]
-    files_written: list[str]
-    files_created: list[str]
-    bash_commands: list[Any]
-    web_fetches: list[Any]
-    sidechain_messages: int
-    stop_reasons: dict[str, int]
-    entry_counts: dict[str, int]
+    last_timestamp: NotRequired[str | None]
+    total_input_tokens: NotRequired[int]
+    total_output_tokens: NotRequired[int]
+    total_cache_read_tokens: NotRequired[int]
+    total_cache_creation_tokens: NotRequired[int]
+    total_tool_calls: NotRequired[int]
+    tool_call_counts: NotRequired[dict[str, int]]
+    version: NotRequired[str | None]
+    cwd: NotRequired[str | None]
+    git_branch: NotRequired[str | None]
+    permission_mode: NotRequired[str | None]
+    compactions: NotRequired[int]
+    total_ephemeral_5m_tokens: NotRequired[int]
+    total_ephemeral_1h_tokens: NotRequired[int]
+    service_tiers: NotRequired[list[str]]
+    session_wall_time_seconds: NotRequired[float | None]
+    compact_boundaries: NotRequired[list[dict[str, Any]]]
+    api_errors: NotRequired[int]
+    files_read: NotRequired[list[str]]
+    files_written: NotRequired[list[str]]
+    files_created: NotRequired[list[str]]
+    bash_commands: NotRequired[list[Any]]
+    web_fetches: NotRequired[list[Any]]
+    sidechain_messages: NotRequired[int]
+    stop_reasons: NotRequired[dict[str, int]]
+    entry_counts: NotRequired[dict[str, int]]
 
 
 class SessionDict(TypedDict):

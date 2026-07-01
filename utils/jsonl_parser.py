@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any, cast, get_args
 
 from models.record_data import RecordDataUnion
-from models.session import MessageDict, RoleLiteral, SessionDict, ToolUseDict
+from models.session import MessageDict, RoleLiteral, SessionDict, SessionMetadataDict, ToolUseDict
 from models.tool_results import ToolResultUnion, is_tool_result_dict
 from utils.jsonl_helpers import (
     entry_message as _entry_message,
@@ -68,6 +68,41 @@ def _safe_int(val: Any) -> int:
     if isinstance(val, float):
         return max(0, int(val)) if math.isfinite(val) else 0
     return 0
+
+
+def _finalize_session_metadata(raw: dict[str, Any]) -> SessionMetadataDict:
+    """Convert the mutable parse-time metadata builder into a SessionMetadataDict."""
+    return {
+        "session_id": raw["session_id"],
+        "models_used": sorted(raw["models_used"]),
+        "first_timestamp": raw["first_timestamp"],
+        "last_timestamp": raw["last_timestamp"],
+        "total_input_tokens": raw["total_input_tokens"],
+        "total_output_tokens": raw["total_output_tokens"],
+        "total_cache_read_tokens": raw["total_cache_read_tokens"],
+        "total_cache_creation_tokens": raw["total_cache_creation_tokens"],
+        "total_tool_calls": raw["total_tool_calls"],
+        "tool_call_counts": raw["tool_call_counts"],
+        "version": raw["version"],
+        "cwd": raw["cwd"],
+        "git_branch": raw["git_branch"],
+        "permission_mode": raw["permission_mode"],
+        "compactions": raw["compactions"],
+        "total_ephemeral_5m_tokens": raw["total_ephemeral_5m_tokens"],
+        "total_ephemeral_1h_tokens": raw["total_ephemeral_1h_tokens"],
+        "service_tiers": sorted(raw["service_tiers"]),
+        "session_wall_time_seconds": raw["session_wall_time_seconds"],
+        "compact_boundaries": raw["compact_boundaries"],
+        "api_errors": raw["api_errors"],
+        "files_read": sorted(raw["files_read"]),
+        "files_written": sorted(raw["files_written"]),
+        "files_created": sorted(raw["files_created"]),
+        "bash_commands": raw["bash_commands"],
+        "web_fetches": raw["web_fetches"],
+        "sidechain_messages": raw["sidechain_messages"],
+        "stop_reasons": raw["stop_reasons"],
+        "entry_counts": raw["entry_counts"],
+    }
 
 
 def parse_session(filepath: str) -> SessionDict:
@@ -165,12 +200,6 @@ def parse_session(filepath: str) -> SessionDict:
                 if type_str not in _SKIP_ENTRY_TYPES:
                     messages.append(_fallback_message(entry, _coerce_role(type_str)))
 
-    metadata["models_used"] = sorted(metadata["models_used"])
-    metadata["service_tiers"] = sorted(metadata["service_tiers"])
-    metadata["files_read"] = sorted(metadata["files_read"])
-    metadata["files_written"] = sorted(metadata["files_written"])
-    metadata["files_created"] = sorted(metadata["files_created"])
-
     # Compute wall clock time
     first_ts = metadata["first_timestamp"]
     last_ts = metadata["last_timestamp"]
@@ -189,7 +218,7 @@ def parse_session(filepath: str) -> SessionDict:
             "session_id": session_id,
             "title": title,
             "messages": messages,
-            "metadata": metadata,
+            "metadata": _finalize_session_metadata(metadata),
         }
     )
 

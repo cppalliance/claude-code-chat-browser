@@ -20,7 +20,7 @@ def _valid_payload(**overrides: Any) -> dict[str, Any]:
         "session_id": "abc123",
         "title": "Test Session",
         "messages": [{"role": "user", "text": "hello"}],
-        "metadata": {"session_id": "abc123"},
+        "metadata": {"session_id": "abc123", "models_used": [], "first_timestamp": None},
     }
     base.update(overrides)
     return base
