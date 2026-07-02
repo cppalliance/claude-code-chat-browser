@@ -175,7 +175,11 @@ def parse_session(filepath: str) -> SessionDict:
     messages: list[MessageDict] = []
     metadata = _new_session_metadata_builder(session_id)
     observed_field_paths: set[str] = set()
-    schema_samples_remaining = schema_drift_sample_limit() if is_schema_drift_enabled() else 0
+    if is_schema_drift_enabled():
+        sample_limit = schema_drift_sample_limit()
+        schema_samples_remaining: int | None = None if sample_limit == 0 else sample_limit
+    else:
+        schema_samples_remaining = -1
 
     with open(filepath, "r", encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -190,9 +194,12 @@ def parse_session(filepath: str) -> SessionDict:
             if not isinstance(entry, dict):
                 continue
 
-            if schema_samples_remaining > 0:
+            if schema_samples_remaining != -1 and (
+                schema_samples_remaining is None or schema_samples_remaining > 0
+            ):
                 observed_field_paths |= collect_field_paths(entry)
-                schema_samples_remaining -= 1
+                if schema_samples_remaining is not None:
+                    schema_samples_remaining -= 1
 
             entry_type = entry.get("type")
             ts = _entry_timestamp(entry)

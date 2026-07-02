@@ -41,7 +41,7 @@ def is_schema_drift_enabled() -> bool:
 
 
 def schema_drift_sample_limit() -> int:
-    """Max JSONL records per session to fingerprint (default 3). Set 0 to disable sampling cap."""
+    """Max JSONL records per session to fingerprint (default 3). 0 means no cap (all records)."""
     raw = os.environ.get("CLAUDE_CODE_CHAT_BROWSER_SCHEMA_DRIFT_SAMPLE", "3").strip()
     try:
         return max(0, int(raw))
@@ -75,6 +75,8 @@ def _load_baseline() -> tuple[frozenset[str], frozenset[str]]:
         return _baseline_cache
     try:
         raw = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError("schema_baseline.json: root must be an object")
         fields = raw.get("fields", {})
         if not isinstance(fields, dict):
             raise ValueError("schema_baseline.json: 'fields' must be an object")
@@ -122,30 +124,31 @@ def record_parse_drift(observed_paths: set[str]) -> SchemaDriftReport | None:
     except (OSError, json.JSONDecodeError, ValueError, TypeError):
         return None
 
+    genuinely_new: list[str] = []
+    missing_fields: list[str] = []
     with _lock:
         global _last_report
         prior_new = set(_last_report["new_fields"])
         genuinely_new = sorted(set(report["new_fields"]) - prior_new)
         merged_new = sorted(prior_new | set(report["new_fields"]))
+        missing_fields = list(report["missing_fields"])
+        _last_report = {
+            "known_fields": report["known_fields"],
+            "new_fields": merged_new,
+            "missing_fields": missing_fields,
+            "has_drift": bool(merged_new or missing_fields),
+        }
 
     if genuinely_new:
         _log.warning(
             "schema drift: new JSONL field paths not in baseline: %s",
             genuinely_new,
         )
-    if report["missing_fields"]:
+    if missing_fields:
         _log.warning(
             "schema drift: missing required JSONL field paths in sampled records: %s",
-            report["missing_fields"],
+            missing_fields,
         )
-
-    with _lock:
-        _last_report = {
-            "known_fields": report["known_fields"],
-            "new_fields": merged_new,
-            "missing_fields": list(report["missing_fields"]),
-            "has_drift": bool(merged_new or report["missing_fields"]),
-        }
     return report
 
 

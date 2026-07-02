@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 
 import pytest
@@ -168,3 +169,46 @@ class TestRecordParseDrift:
         monkeypatch.setenv("CLAUDE_CODE_CHAT_BROWSER_SCHEMA_DRIFT", "0")
         parse_session(str(UNKNOWN_FIELD_FIXTURE))
         assert get_schema_report()["has_drift"] is False
+
+    def test_sample_limit_one_skips_later_records(self, monkeypatch):
+        monkeypatch.setenv("CLAUDE_CODE_CHAT_BROWSER_SCHEMA_DRIFT_SAMPLE", "1")
+        parse_session(str(UNKNOWN_FIELD_FIXTURE))
+        report = get_schema_report()
+        assert "tool" not in report["new_fields"]
+
+    def test_sample_limit_zero_fingerprints_all_records(self, monkeypatch):
+        monkeypatch.setenv("CLAUDE_CODE_CHAT_BROWSER_SCHEMA_DRIFT_SAMPLE", "0")
+        parse_session(str(UNKNOWN_FIELD_FIXTURE))
+        report = get_schema_report()
+        assert "tool" in report["new_fields"]
+
+    def test_non_object_baseline_root_is_non_fatal(self, tmp_path, monkeypatch):
+        bad_baseline = tmp_path / "schema_baseline.json"
+        bad_baseline.write_text('["not", "an", "object"]', encoding="utf-8")
+        monkeypatch.setattr("utils.schema_drift.BASELINE_PATH", bad_baseline)
+        clear_baseline_cache()
+        assert record_parse_drift({"type"}) is None
+
+    def test_concurrent_record_parse_drift_merges_all_fields(self):
+        start = threading.Barrier(10)
+        errors: list[BaseException] = []
+
+        def worker(field: str) -> None:
+            try:
+                start.wait(timeout=5)
+                record_parse_drift({"type", field})
+            except BaseException as exc:
+                errors.append(exc)
+
+        threads = [
+            threading.Thread(target=worker, args=(f"concurrent_field_{i}",)) for i in range(10)
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert errors == []
+        report = get_schema_report()
+        for i in range(10):
+            assert f"concurrent_field_{i}" in report["new_fields"]
