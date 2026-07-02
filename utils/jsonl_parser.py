@@ -25,6 +25,7 @@ from utils.jsonl_helpers import (
     infer_title as _infer_title,
     normalize_content as _normalize_content,
 )
+from utils.schema_drift import collect_field_paths, record_parse_drift
 from utils.session_peek import quick_session_info
 from utils.tool_dispatch import _parse_tool_result, track_tool_file_activity
 from utils.validation import validate_session_dict
@@ -35,6 +36,11 @@ __all__ = ["parse_session", "quick_session_info"]
 _SKIP_ENTRY_TYPES = frozenset({"file-history-snapshot", "summary"})
 _VALID_ROLES = frozenset(get_args(RoleLiteral))
 _log = logging.getLogger(__name__)
+
+
+def _collect_field_paths(record: dict[str, Any]) -> set[str]:
+    """Recursive JSON path fingerprinting for schema drift detection."""
+    return collect_field_paths(record)
 
 
 def _coerce_role(raw: str) -> RoleLiteral:
@@ -168,6 +174,7 @@ def parse_session(filepath: str) -> SessionDict:
     session_id = os.path.basename(filepath).replace(".jsonl", "")
     messages: list[MessageDict] = []
     metadata = _new_session_metadata_builder(session_id)
+    observed_field_paths: set[str] = set()
 
     with open(filepath, "r", encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -181,6 +188,8 @@ def parse_session(filepath: str) -> SessionDict:
 
             if not isinstance(entry, dict):
                 continue
+
+            observed_field_paths |= _collect_field_paths(entry)
 
             entry_type = entry.get("type")
             ts = _entry_timestamp(entry)
@@ -225,6 +234,8 @@ def parse_session(filepath: str) -> SessionDict:
             pass
 
     title = _infer_title(messages)
+
+    record_parse_drift(observed_field_paths)
 
     return validate_session_dict(
         {

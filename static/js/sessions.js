@@ -8,6 +8,62 @@ import { downloadSession } from './export.js';
 import { showProjects } from './projects.js';
 import { renderToolUse, renderToolResult, toolResultHasBody } from './render/registry.js';
 
+// ==================== Schema drift banner ====================
+
+const SCHEMA_DRIFT_DISMISS_KEY = 'schema-drift-banner-dismissed';
+
+function schemaDriftFingerprint(report) {
+    const parts = [
+        ...(report.new_fields || []),
+        ...(report.missing_fields || []),
+    ].sort();
+    return parts.join('|');
+}
+
+async function fetchSchemaDriftBannerHtml() {
+    try {
+        const res = await fetch('/api/schema-report');
+        if (!res.ok) return '';
+        const report = await res.json();
+        if (!report.has_drift) return '';
+
+        const fingerprint = schemaDriftFingerprint(report);
+        if (sessionStorage.getItem(SCHEMA_DRIFT_DISMISS_KEY) === fingerprint) return '';
+
+        const newFields = (report.new_fields || []).slice(0, 5);
+        const missingFields = (report.missing_fields || []).slice(0, 5);
+        let detail = '';
+        if (newFields.length) {
+            detail += `<div class="text-sm" style="margin-top:0.35rem">New fields: ${esc(newFields.join(', '))}${(report.new_fields || []).length > 5 ? '…' : ''}</div>`;
+        }
+        if (missingFields.length) {
+            detail += `<div class="text-sm" style="margin-top:0.35rem">Missing required fields: ${esc(missingFields.join(', '))}${(report.missing_fields || []).length > 5 ? '…' : ''}</div>`;
+        }
+
+        return `<div class="alert alert-warning" id="schema-drift-banner" data-drift-fingerprint="${esc(fingerprint)}">
+            <div class="alert-warning__body">
+                <strong>Upstream JSONL schema drift detected</strong>
+                <div class="text-sm" style="margin-top:0.25rem">Claude Code may have changed its session format. Parsing continues, but some data may be incomplete.</div>
+                ${detail}
+            </div>
+            <button type="button" class="alert-warning__dismiss" id="schema-drift-dismiss" aria-label="Dismiss">×</button>
+        </div>`;
+    } catch {
+        return '';
+    }
+}
+
+function bindSchemaDriftBanner(root) {
+    const banner = root.querySelector('#schema-drift-banner');
+    const dismiss = root.querySelector('#schema-drift-dismiss');
+    if (!banner || !dismiss) return;
+    dismiss.addEventListener('click', () => {
+        const fingerprint = banner.getAttribute('data-drift-fingerprint') || '';
+        sessionStorage.setItem(SCHEMA_DRIFT_DISMISS_KEY, fingerprint);
+        banner.remove();
+    });
+}
+
 // ==================== Workspace (split layout) ====================
 
 export async function showWorkspace(projectName, selectedSessionId) {
@@ -25,6 +81,8 @@ export async function showWorkspace(projectName, selectedSessionId) {
             for (const p of projects) state.projectDisplayNames[p.name] = p.display_name || p.name;
         }
         const prettyName = state.projectDisplayNames[projectName] || projectName;
+
+        const schemaBannerHtml = await fetchSchemaDriftBannerHtml();
 
         const res = await fetch(`/api/projects/${encodeURIComponent(projectName)}/sessions`);
         state.cachedSessions = await res.json();
@@ -66,7 +124,7 @@ export async function showWorkspace(projectName, selectedSessionId) {
         }
         sidebar += '</div>';
 
-        let html = `<div class="workspace-top-bar">
+        let html = `${schemaBannerHtml}<div class="workspace-top-bar">
             <a class="btn btn-ghost btn-sm back-link" href="#" id="ws-back-link">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
                 Back to Projects
@@ -85,6 +143,7 @@ export async function showWorkspace(projectName, selectedSessionId) {
         </div>`;
         smoothSet(content, html);
         bindSidebarSessionClicks();
+        bindSchemaDriftBanner(content);
         content.querySelector('#ws-back-link')?.addEventListener('click', (e) => {
             e.preventDefault();
             showProjects();
