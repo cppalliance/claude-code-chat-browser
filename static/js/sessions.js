@@ -82,9 +82,9 @@ export async function showWorkspace(projectName, selectedSessionId) {
         }
         const prettyName = state.projectDisplayNames[projectName] || projectName;
 
+        const schemaBannerPromise = fetchSchemaDriftBannerHtml();
         const res = await fetch(`/api/projects/${encodeURIComponent(projectName)}/sessions`);
         state.cachedSessions = await res.json();
-        const schemaBannerHtml = await fetchSchemaDriftBannerHtml();
 
         state.cachedSessions.sort((a, b) => {
             const ta = a.last_timestamp || a.first_timestamp || '';
@@ -123,7 +123,7 @@ export async function showWorkspace(projectName, selectedSessionId) {
         }
         sidebar += '</div>';
 
-        let html = `${schemaBannerHtml}<div class="workspace-top-bar">
+        let html = `<div class="workspace-top-bar">
             <a class="btn btn-ghost btn-sm back-link" href="#" id="ws-back-link">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
                 Back to Projects
@@ -142,7 +142,13 @@ export async function showWorkspace(projectName, selectedSessionId) {
         </div>`;
         smoothSet(content, html);
         bindSidebarSessionClicks();
-        bindSchemaDriftBanner(content);
+        void schemaBannerPromise.then((schemaBannerHtml) => {
+            if (!schemaBannerHtml) return;
+            const root = document.getElementById('content');
+            if (!root) return;
+            root.insertAdjacentHTML('afterbegin', schemaBannerHtml);
+            bindSchemaDriftBanner(root);
+        });
         content.querySelector('#ws-back-link')?.addEventListener('click', (e) => {
             e.preventDefault();
             showProjects();

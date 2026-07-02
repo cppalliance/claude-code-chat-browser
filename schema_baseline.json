@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Known Claude Code JSONL field paths as of 2026-07-03. Update deliberately when upstream format changes.",
+  "description": "Known Claude Code JSONL field paths as of 2026-07-03. Drift detection compares path presence only (added/removed paths); expected_type is documentary metadata for baseline updates, not checked at runtime. Mark required:true only for paths present on every record (currently: type). Update deliberately when upstream format changes.",
   "fields": {
     "_futureSchemaVersion": {
       "expected_type": "int",

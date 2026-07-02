@@ -143,22 +143,27 @@ describe('sessions workspace', () => {
         expect(active.id).toBe('sidebar-sess-2');
     });
 
-    it('showWorkspace fetches schema report after sessions load', async () => {
+    it('showWorkspace starts schema report fetch with sessions without blocking render', async () => {
         const callOrder = mockWorkspaceFetch();
         await showWorkspace('alpha');
 
         const sessionsIdx = callOrder.indexOf('/api/projects/alpha/sessions');
         const schemaIdx = callOrder.indexOf('/api/schema-report');
         expect(sessionsIdx).toBeGreaterThanOrEqual(0);
-        expect(schemaIdx).toBeGreaterThan(sessionsIdx);
+        expect(schemaIdx).toBeGreaterThanOrEqual(0);
+        expect(schemaIdx).toBeLessThan(sessionsIdx + 2);
+        expect(document.getElementById('sidebar')).not.toBeNull();
+        expect(document.getElementById('schema-drift-banner')).toBeNull();
     });
 
     it('showWorkspace renders schema drift banner when report has drift', async () => {
         mockWorkspaceFetch({ schemaReport: DRIFT_REPORT });
         await showWorkspace('alpha');
 
+        await vi.waitFor(() => {
+            expect(document.getElementById('schema-drift-banner')).not.toBeNull();
+        });
         const banner = document.getElementById('schema-drift-banner');
-        expect(banner).not.toBeNull();
         expect(banner.textContent).toContain('Upstream JSONL schema drift detected');
         expect(banner.textContent).toContain('tool');
     });

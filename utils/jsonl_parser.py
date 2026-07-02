@@ -25,7 +25,12 @@ from utils.jsonl_helpers import (
     infer_title as _infer_title,
     normalize_content as _normalize_content,
 )
-from utils.schema_drift import collect_field_paths, record_parse_drift
+from utils.schema_drift import (
+    collect_field_paths,
+    is_schema_drift_enabled,
+    record_parse_drift,
+    schema_drift_sample_limit,
+)
 from utils.session_peek import quick_session_info
 from utils.tool_dispatch import _parse_tool_result, track_tool_file_activity
 from utils.validation import validate_session_dict
@@ -36,11 +41,6 @@ __all__ = ["parse_session", "quick_session_info"]
 _SKIP_ENTRY_TYPES = frozenset({"file-history-snapshot", "summary"})
 _VALID_ROLES = frozenset(get_args(RoleLiteral))
 _log = logging.getLogger(__name__)
-
-
-def _collect_field_paths(record: dict[str, Any]) -> set[str]:
-    """Recursive JSON path fingerprinting for schema drift detection."""
-    return collect_field_paths(record)
 
 
 def _coerce_role(raw: str) -> RoleLiteral:
@@ -175,6 +175,7 @@ def parse_session(filepath: str) -> SessionDict:
     messages: list[MessageDict] = []
     metadata = _new_session_metadata_builder(session_id)
     observed_field_paths: set[str] = set()
+    schema_samples_remaining = schema_drift_sample_limit() if is_schema_drift_enabled() else 0
 
     with open(filepath, "r", encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -189,7 +190,9 @@ def parse_session(filepath: str) -> SessionDict:
             if not isinstance(entry, dict):
                 continue
 
-            observed_field_paths |= _collect_field_paths(entry)
+            if schema_samples_remaining > 0:
+                observed_field_paths |= collect_field_paths(entry)
+                schema_samples_remaining -= 1
 
             entry_type = entry.get("type")
             ts = _entry_timestamp(entry)
@@ -235,7 +238,8 @@ def parse_session(filepath: str) -> SessionDict:
 
     title = _infer_title(messages)
 
-    record_parse_drift(observed_field_paths)
+    if is_schema_drift_enabled() and observed_field_paths:
+        record_parse_drift(observed_field_paths)
 
     return validate_session_dict(
         {

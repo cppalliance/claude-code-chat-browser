@@ -149,4 +149,22 @@ class TestRecordParseDrift:
             session = parse_session(str(FIXTURES / "session_minimal.jsonl"))
 
         assert session["session_id"]
-        assert any("schema drift tracking skipped" in r.message for r in caplog.records)
+        assert any("baseline load failed" in r.message for r in caplog.records)
+
+    def test_duplicate_new_fields_log_once(self, caplog: pytest.LogCaptureFixture):
+        with caplog.at_level(logging.WARNING, logger="claude_code_chat_browser.schema_drift"):
+            parse_session(str(UNKNOWN_FIELD_FIXTURE))
+            parse_session(str(UNKNOWN_FIELD_FIXTURE))
+
+        new_field_warnings = [
+            r
+            for r in caplog.records
+            if r.name == "claude_code_chat_browser.schema_drift"
+            and "new JSONL field paths" in r.message
+        ]
+        assert len(new_field_warnings) == 1
+
+    def test_schema_drift_disabled_skips_fingerprint(self, monkeypatch):
+        monkeypatch.setenv("CLAUDE_CODE_CHAT_BROWSER_SCHEMA_DRIFT", "0")
+        parse_session(str(UNKNOWN_FIELD_FIXTURE))
+        assert get_schema_report()["has_drift"] is False
