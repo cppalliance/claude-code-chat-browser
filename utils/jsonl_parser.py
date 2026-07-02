@@ -25,6 +25,12 @@ from utils.jsonl_helpers import (
     infer_title as _infer_title,
     normalize_content as _normalize_content,
 )
+from utils.schema_drift import (
+    collect_field_paths,
+    is_schema_drift_enabled,
+    record_parse_drift,
+    schema_drift_sample_limit,
+)
 from utils.session_peek import quick_session_info
 from utils.tool_dispatch import _parse_tool_result, track_tool_file_activity
 from utils.validation import validate_session_dict
@@ -168,6 +174,12 @@ def parse_session(filepath: str) -> SessionDict:
     session_id = os.path.basename(filepath).replace(".jsonl", "")
     messages: list[MessageDict] = []
     metadata = _new_session_metadata_builder(session_id)
+    observed_field_paths: set[str] = set()
+    if is_schema_drift_enabled():
+        sample_limit = schema_drift_sample_limit()
+        schema_samples_remaining: int | None = None if sample_limit == 0 else sample_limit
+    else:
+        schema_samples_remaining = -1
 
     with open(filepath, "r", encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -181,6 +193,13 @@ def parse_session(filepath: str) -> SessionDict:
 
             if not isinstance(entry, dict):
                 continue
+
+            if schema_samples_remaining != -1 and (
+                schema_samples_remaining is None or schema_samples_remaining > 0
+            ):
+                observed_field_paths |= collect_field_paths(entry)
+                if schema_samples_remaining is not None:
+                    schema_samples_remaining -= 1
 
             entry_type = entry.get("type")
             ts = _entry_timestamp(entry)
@@ -225,6 +244,9 @@ def parse_session(filepath: str) -> SessionDict:
             pass
 
     title = _infer_title(messages)
+
+    if is_schema_drift_enabled() and observed_field_paths:
+        record_parse_drift(observed_field_paths)
 
     return validate_session_dict(
         {

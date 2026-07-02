@@ -50,13 +50,32 @@ const SESSION_DETAIL = {
     },
 };
 
-function mockWorkspaceFetch() {
+const NO_DRIFT_REPORT = {
+    known_fields: ['type'],
+    new_fields: [],
+    missing_fields: [],
+    has_drift: false,
+};
+
+const DRIFT_REPORT = {
+    known_fields: ['type'],
+    new_fields: ['tool', 'tool.type'],
+    missing_fields: [],
+    has_drift: true,
+};
+
+function mockWorkspaceFetch({ schemaReport = NO_DRIFT_REPORT } = {}) {
+    const callOrder = [];
     fetch.mockImplementation((url) => {
+        callOrder.push(url);
         if (url === '/api/projects') {
             return Promise.resolve({
                 ok: true,
                 json: () => Promise.resolve([{ name: 'alpha', display_name: 'Alpha' }]),
             });
+        }
+        if (url === '/api/schema-report') {
+            return Promise.resolve({ ok: true, json: () => Promise.resolve(schemaReport) });
         }
         if (url === '/api/projects/alpha/sessions') {
             return Promise.resolve({ ok: true, json: () => Promise.resolve(SESSION_LIST) });
@@ -75,6 +94,7 @@ function mockWorkspaceFetch() {
         }
         return Promise.reject(new Error(`unexpected fetch: ${url}`));
     });
+    return callOrder;
 }
 
 describe('sessions workspace', () => {
@@ -87,6 +107,7 @@ describe('sessions workspace', () => {
         state.projectDisplayNames = {};
         vi.stubGlobal('fetch', vi.fn());
         window.location.hash = '';
+        sessionStorage.clear();
     });
 
     afterEach(() => {
@@ -120,6 +141,31 @@ describe('sessions workspace', () => {
         const active = document.querySelector('.sidebar-item.active');
         expect(active).not.toBeNull();
         expect(active.id).toBe('sidebar-sess-2');
+    });
+
+    it('showWorkspace starts schema report fetch with sessions without blocking render', async () => {
+        const callOrder = mockWorkspaceFetch();
+        await showWorkspace('alpha');
+
+        const sessionsIdx = callOrder.indexOf('/api/projects/alpha/sessions');
+        const schemaIdx = callOrder.indexOf('/api/schema-report');
+        expect(sessionsIdx).toBeGreaterThanOrEqual(0);
+        expect(schemaIdx).toBeGreaterThanOrEqual(0);
+        expect(schemaIdx).toBeLessThan(sessionsIdx + 2);
+        expect(document.getElementById('sidebar')).not.toBeNull();
+        expect(document.getElementById('schema-drift-banner')).toBeNull();
+    });
+
+    it('showWorkspace renders schema drift banner when report has drift', async () => {
+        mockWorkspaceFetch({ schemaReport: DRIFT_REPORT });
+        await showWorkspace('alpha');
+
+        await vi.waitFor(() => {
+            expect(document.getElementById('schema-drift-banner')).not.toBeNull();
+        });
+        const banner = document.getElementById('schema-drift-banner');
+        expect(banner.textContent).toContain('Upstream JSONL schema drift detected');
+        expect(banner.textContent).toContain('tool');
     });
 
     it('loadSession renders messages in the main panel', async () => {

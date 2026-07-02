@@ -1,0 +1,300 @@
+{
+  "version": 1,
+  "description": "Known Claude Code JSONL field paths as of 2026-07-03. Drift detection compares path presence only (added/removed paths); type changes are not detected. Mark required:true only for paths present on every record (currently: type). Update deliberately when upstream format changes.",
+  "fields": {
+    "_futureSchemaVersion": {
+      "required": false
+    },
+    "compactMetadata": {
+      "required": false
+    },
+    "compactMetadata.preTokens": {
+      "required": false
+    },
+    "compactMetadata.trigger": {
+      "required": false
+    },
+    "content": {
+      "required": false
+    },
+    "cwd": {
+      "required": false
+    },
+    "data": {
+      "required": false
+    },
+    "data.output": {
+      "required": false
+    },
+    "data.type": {
+      "required": false
+    },
+    "experimentalFlag": {
+      "required": false
+    },
+    "gitBranch": {
+      "required": false
+    },
+    "isApiErrorMessage": {
+      "required": false
+    },
+    "isSidechain": {
+      "required": false
+    },
+    "message": {
+      "required": false
+    },
+    "message.content": {
+      "required": false
+    },
+    "message.content[]": {
+      "required": false
+    },
+    "message.content[].id": {
+      "required": false
+    },
+    "message.content[].input": {
+      "required": false
+    },
+    "message.content[].input.command": {
+      "required": false
+    },
+    "message.content[].input.description": {
+      "required": false
+    },
+    "message.content[].input.file_path": {
+      "required": false
+    },
+    "message.content[].name": {
+      "required": false
+    },
+    "message.content[].text": {
+      "required": false
+    },
+    "message.content[].thinking": {
+      "required": false
+    },
+    "message.content[].type": {
+      "required": false
+    },
+    "message.model": {
+      "required": false
+    },
+    "message.stop_reason": {
+      "required": false
+    },
+    "message.usage": {
+      "required": false
+    },
+    "message.usage.cache_creation": {
+      "required": false
+    },
+    "message.usage.cache_creation.ephemeral_1h_input_tokens": {
+      "required": false
+    },
+    "message.usage.cache_creation.ephemeral_5m_input_tokens": {
+      "required": false
+    },
+    "message.usage.cache_creation_input_tokens": {
+      "required": false
+    },
+    "message.usage.cache_read_input_tokens": {
+      "required": false
+    },
+    "message.usage.input_tokens": {
+      "required": false
+    },
+    "message.usage.output_tokens": {
+      "required": false
+    },
+    "message.usage.service_tier": {
+      "required": false
+    },
+    "parentToolUseID": {
+      "required": false
+    },
+    "parentUuid": {
+      "required": false
+    },
+    "permissionMode": {
+      "required": false
+    },
+    "sessionId": {
+      "required": false
+    },
+    "slug": {
+      "required": false
+    },
+    "snapshot": {
+      "required": false
+    },
+    "snapshot.timestamp": {
+      "required": false
+    },
+    "subtype": {
+      "required": false
+    },
+    "timestamp": {
+      "required": false
+    },
+    "toolUseID": {
+      "required": false
+    },
+    "toolUseResult": {
+      "required": false
+    },
+    "toolUseResult._unknownToolMeta": {
+      "required": false
+    },
+    "toolUseResult._unknownToolMeta.vendor": {
+      "required": false
+    },
+    "toolUseResult.agentId": {
+      "required": false
+    },
+    "toolUseResult.answers": {
+      "required": false
+    },
+    "toolUseResult.answers.q1": {
+      "required": false
+    },
+    "toolUseResult.code": {
+      "required": false
+    },
+    "toolUseResult.content": {
+      "required": false
+    },
+    "toolUseResult.description": {
+      "required": false
+    },
+    "toolUseResult.durationMs": {
+      "required": false
+    },
+    "toolUseResult.exitCode": {
+      "required": false
+    },
+    "toolUseResult.file": {
+      "required": false
+    },
+    "toolUseResult.file.content": {
+      "required": false
+    },
+    "toolUseResult.file.filePath": {
+      "required": false
+    },
+    "toolUseResult.file.numLines": {
+      "required": false
+    },
+    "toolUseResult.filePath": {
+      "required": false
+    },
+    "toolUseResult.filenames": {
+      "required": false
+    },
+    "toolUseResult.filenames[]": {
+      "required": false
+    },
+    "toolUseResult.isAsync": {
+      "required": false
+    },
+    "toolUseResult.message": {
+      "required": false
+    },
+    "toolUseResult.mode": {
+      "required": false
+    },
+    "toolUseResult.newTodos": {
+      "required": false
+    },
+    "toolUseResult.newTodos[]": {
+      "required": false
+    },
+    "toolUseResult.newTodos[].content": {
+      "required": false
+    },
+    "toolUseResult.newTodos[].id": {
+      "required": false
+    },
+    "toolUseResult.numFiles": {
+      "required": false
+    },
+    "toolUseResult.numLines": {
+      "required": false
+    },
+    "toolUseResult.plan": {
+      "required": false
+    },
+    "toolUseResult.plan[]": {
+      "required": false
+    },
+    "toolUseResult.query": {
+      "required": false
+    },
+    "toolUseResult.questions": {
+      "required": false
+    },
+    "toolUseResult.questions[]": {
+      "required": false
+    },
+    "toolUseResult.questions[].id": {
+      "required": false
+    },
+    "toolUseResult.results": {
+      "required": false
+    },
+    "toolUseResult.results[]": {
+      "required": false
+    },
+    "toolUseResult.results[].url": {
+      "required": false
+    },
+    "toolUseResult.retrieval_status": {
+      "required": false
+    },
+    "toolUseResult.status": {
+      "required": false
+    },
+    "toolUseResult.stderr": {
+      "required": false
+    },
+    "toolUseResult.stdout": {
+      "required": false
+    },
+    "toolUseResult.structuredPatch": {
+      "required": false
+    },
+    "toolUseResult.task": {
+      "required": false
+    },
+    "toolUseResult.task.description": {
+      "required": false
+    },
+    "toolUseResult.task.task_id": {
+      "required": false
+    },
+    "toolUseResult.task_id": {
+      "required": false
+    },
+    "toolUseResult.task_type": {
+      "required": false
+    },
+    "toolUseResult.totalDurationMs": {
+      "required": false
+    },
+    "toolUseResult.truncated": {
+      "required": false
+    },
+    "toolUseResult.url": {
+      "required": false
+    },
+    "type": {
+      "required": true
+    },
+    "uuid": {
+      "required": false
+    },
+    "version": {
+      "required": false
+    }
+  }
+}

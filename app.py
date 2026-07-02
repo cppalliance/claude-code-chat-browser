@@ -9,6 +9,7 @@ from flask import Flask
 
 from api.export_api import export_bp
 from api.projects import projects_bp
+from api.schema_report import schema_report_bp
 from api.search import search_bp
 from api.sessions import sessions_bp
 from utils.exclusion_rules import load_rules, resolve_exclusion_rules_path
@@ -101,6 +102,7 @@ def create_app(
     app.register_blueprint(sessions_bp)
     app.register_blueprint(search_bp)
     app.register_blueprint(export_bp)
+    app.register_blueprint(schema_report_bp)
 
     @app.after_request
     def set_security_headers(response):
