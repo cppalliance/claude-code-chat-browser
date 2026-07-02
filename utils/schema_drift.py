@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import threading
@@ -13,17 +14,14 @@ _log = logging.getLogger("claude_code_chat_browser.schema_drift")
 BASELINE_PATH = Path(__file__).resolve().parent.parent / "schema_baseline.json"
 
 _lock = threading.Lock()
+# Accumulated drift from parse_session() runs in this process; cleared only via
+# reset_schema_report() (tests) or server restart.
 _last_report: SchemaDriftReport = {
     "known_fields": [],
     "new_fields": [],
     "missing_fields": [],
     "has_drift": False,
 }
-
-
-class SchemaFieldSpec(TypedDict):
-    expected_type: str
-    required: bool
 
 
 class SchemaDriftReport(TypedDict):
@@ -50,69 +48,36 @@ def collect_field_paths(record: dict[str, Any], prefix: str = "") -> set[str]:
     return paths
 
 
-def _type_name(value: Any) -> str:
-    if value is None:
-        return "null"
-    if isinstance(value, bool):
-        return "bool"
-    if isinstance(value, int) and not isinstance(value, bool):
-        return "int"
-    if isinstance(value, float):
-        return "float"
-    if isinstance(value, str):
-        return "str"
-    if isinstance(value, list):
-        return "list"
-    if isinstance(value, dict):
-        return "dict"
-    return type(value).__name__
-
-
-def collect_field_paths_with_types(
-    record: dict[str, Any], prefix: str = ""
-) -> dict[str, str]:
-    """Like :func:`collect_field_paths` but also records the observed JSON type."""
-    paths: dict[str, str] = {}
-    for key, value in record.items():
-        path = f"{prefix}.{key}" if prefix else key
-        paths[path] = _type_name(value)
-        if isinstance(value, dict):
-            paths.update(collect_field_paths_with_types(value, path))
-        elif isinstance(value, list):
-            list_path = f"{path}[]"
-            paths[list_path] = "list"
-            for item in value:
-                if isinstance(item, dict):
-                    paths.update(collect_field_paths_with_types(item, list_path))
-    return paths
-
-
-def load_baseline_fields() -> dict[str, SchemaFieldSpec]:
-    """Load ``schema_baseline.json`` field specs keyed by dotted path."""
+@functools.lru_cache(maxsize=1)
+def _cached_baseline() -> tuple[frozenset[str], frozenset[str]]:
+    """Load and cache known/required field paths from ``schema_baseline.json``."""
     raw = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
     fields = raw.get("fields", {})
     if not isinstance(fields, dict):
         raise ValueError("schema_baseline.json: 'fields' must be an object")
-    result: dict[str, SchemaFieldSpec] = {}
+    known_paths: set[str] = set()
+    required_paths: set[str] = set()
     for path, spec in fields.items():
-        if not isinstance(spec, dict):
+        if not isinstance(path, str):
             continue
-        expected_type = spec.get("expected_type", "unknown")
-        required = bool(spec.get("required", False))
-        if not isinstance(expected_type, str):
-            expected_type = "unknown"
-        result[path] = {"expected_type": expected_type, "required": required}
-    return result
+        known_paths.add(path)
+        if isinstance(spec, dict) and spec.get("required"):
+            required_paths.add(path)
+    return frozenset(known_paths), frozenset(required_paths)
+
+
+def load_baseline_fields() -> dict[str, bool]:
+    """Return baseline field paths mapped to whether each path is required."""
+    known_paths, required_paths = _cached_baseline()
+    return {path: path in required_paths for path in known_paths}
 
 
 def diff_against_baseline(observed_paths: set[str]) -> SchemaDriftReport:
     """Compare observed session field paths to the committed baseline."""
-    baseline = load_baseline_fields()
-    known_fields = sorted(baseline.keys())
-    new_fields = sorted(observed_paths - set(known_fields))
-    missing_fields = sorted(
-        path for path, spec in baseline.items() if spec["required"] and path not in observed_paths
-    )
+    known_paths, required_paths = _cached_baseline()
+    known_fields = sorted(known_paths)
+    new_fields = sorted(observed_paths - known_paths)
+    missing_fields = sorted(required_paths - observed_paths)
     return {
         "known_fields": known_fields,
         "new_fields": new_fields,
@@ -121,9 +86,14 @@ def diff_against_baseline(observed_paths: set[str]) -> SchemaDriftReport:
     }
 
 
-def record_parse_drift(observed_paths: set[str]) -> SchemaDriftReport:
+def record_parse_drift(observed_paths: set[str]) -> SchemaDriftReport | None:
     """Diff *observed_paths*, log warnings, and merge into the process-wide report."""
-    report = diff_against_baseline(observed_paths)
+    try:
+        report = diff_against_baseline(observed_paths)
+    except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
+        _log.warning("schema drift tracking skipped: %s", exc)
+        return None
+
     if report["new_fields"]:
         _log.warning(
             "schema drift: new JSONL field paths not in baseline: %s",
@@ -137,9 +107,7 @@ def record_parse_drift(observed_paths: set[str]) -> SchemaDriftReport:
     with _lock:
         global _last_report
         merged_new = sorted(set(_last_report["new_fields"]) | set(report["new_fields"]))
-        merged_missing = sorted(
-            set(_last_report["missing_fields"]) | set(report["missing_fields"])
-        )
+        merged_missing = sorted(set(_last_report["missing_fields"]) | set(report["missing_fields"]))
         _last_report = {
             "known_fields": report["known_fields"],
             "new_fields": merged_new,
@@ -170,3 +138,8 @@ def reset_schema_report() -> None:
             "missing_fields": [],
             "has_drift": False,
         }
+
+
+def clear_baseline_cache() -> None:
+    """Clear the cached baseline (for tests)."""
+    _cached_baseline.cache_clear()

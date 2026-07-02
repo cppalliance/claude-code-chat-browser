@@ -7,8 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from utils.jsonl_parser import _collect_field_paths, parse_session
+from utils.jsonl_parser import parse_session
 from utils.schema_drift import (
+    clear_baseline_cache,
     collect_field_paths,
     diff_against_baseline,
     get_schema_report,
@@ -24,8 +25,10 @@ UNKNOWN_FIELD_FIXTURE = FIXTURES / "jsonl" / "unknown_field.jsonl"
 @pytest.fixture(autouse=True)
 def _clear_schema_report():
     reset_schema_report()
+    clear_baseline_cache()
     yield
     reset_schema_report()
+    clear_baseline_cache()
 
 
 class TestCollectFieldPaths:
@@ -42,22 +45,15 @@ class TestCollectFieldPaths:
         assert "message.content[].type" in paths
         assert "message.content[].text" in paths
 
-    def test_jsonl_parser_wrapper_matches_helper(self):
-        record = {"type": "user", "cwd": "/tmp"}
-        assert _collect_field_paths(record) == collect_field_paths(record)
-
 
 class TestSchemaBaseline:
     def test_baseline_is_committed_and_loads(self):
         fields = load_baseline_fields()
         assert len(fields) > 0
-        assert fields["type"]["required"] is True
-        assert fields["type"]["expected_type"] == "str"
+        assert fields["type"] is True
 
     def test_minimal_fixture_has_no_drift(self):
-        report = diff_against_baseline(
-            _collect_field_paths_from_fixture("session_minimal.jsonl")
-        )
+        report = diff_against_baseline(_collect_field_paths_from_fixture("session_minimal.jsonl"))
         assert report["new_fields"] == []
         assert report["missing_fields"] == []
 
@@ -133,3 +129,24 @@ class TestRecordParseDrift:
         record_parse_drift({"type", "tool"})
         report = get_schema_report()
         assert "tool" in report["new_fields"]
+
+    def test_malformed_baseline_is_non_fatal(self, tmp_path, monkeypatch):
+        bad_baseline = tmp_path / "schema_baseline.json"
+        bad_baseline.write_text("{not json", encoding="utf-8")
+        monkeypatch.setattr("utils.schema_drift.BASELINE_PATH", bad_baseline)
+        clear_baseline_cache()
+        assert record_parse_drift({"type"}) is None
+
+    def test_parse_session_survives_malformed_baseline(
+        self, tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture
+    ):
+        bad_baseline = tmp_path / "schema_baseline.json"
+        bad_baseline.write_text("{not json", encoding="utf-8")
+        monkeypatch.setattr("utils.schema_drift.BASELINE_PATH", bad_baseline)
+        clear_baseline_cache()
+
+        with caplog.at_level(logging.WARNING, logger="claude_code_chat_browser.schema_drift"):
+            session = parse_session(str(FIXTURES / "session_minimal.jsonl"))
+
+        assert session["session_id"]
+        assert any("schema drift tracking skipped" in r.message for r in caplog.records)

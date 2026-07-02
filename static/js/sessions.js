@@ -82,10 +82,9 @@ export async function showWorkspace(projectName, selectedSessionId) {
         }
         const prettyName = state.projectDisplayNames[projectName] || projectName;
 
-        const schemaBannerHtml = await fetchSchemaDriftBannerHtml();
-
         const res = await fetch(`/api/projects/${encodeURIComponent(projectName)}/sessions`);
         state.cachedSessions = await res.json();
+        const schemaBannerHtml = await fetchSchemaDriftBannerHtml();
 
         state.cachedSessions.sort((a, b) => {
             const ta = a.last_timestamp || a.first_timestamp || '';
