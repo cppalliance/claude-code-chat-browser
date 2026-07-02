@@ -1,397 +1,299 @@
 {
   "version": 1,
-  "description": "Known Claude Code JSONL field paths as of 2026-07-03. Drift detection compares path presence only (added/removed paths); expected_type is documentary metadata for baseline updates, not checked at runtime. Mark required:true only for paths present on every record (currently: type). Update deliberately when upstream format changes.",
+  "description": "Known Claude Code JSONL field paths as of 2026-07-03. Drift detection compares path presence only (added/removed paths); type changes are not detected. Mark required:true only for paths present on every record (currently: type). Update deliberately when upstream format changes.",
   "fields": {
     "_futureSchemaVersion": {
-      "expected_type": "int",
       "required": false
     },
     "compactMetadata": {
-      "expected_type": "dict",
       "required": false
     },
     "compactMetadata.preTokens": {
-      "expected_type": "int",
       "required": false
     },
     "compactMetadata.trigger": {
-      "expected_type": "str",
       "required": false
     },
     "content": {
-      "expected_type": "str",
       "required": false
     },
     "cwd": {
-      "expected_type": "str",
       "required": false
     },
     "data": {
-      "expected_type": "dict",
       "required": false
     },
     "data.output": {
-      "expected_type": "str",
       "required": false
     },
     "data.type": {
-      "expected_type": "str",
       "required": false
     },
     "experimentalFlag": {
-      "expected_type": "bool",
       "required": false
     },
     "gitBranch": {
-      "expected_type": "str",
       "required": false
     },
     "isApiErrorMessage": {
-      "expected_type": "bool",
       "required": false
     },
     "isSidechain": {
-      "expected_type": "bool",
       "required": false
     },
     "message": {
-      "expected_type": "dict",
       "required": false
     },
     "message.content": {
-      "expected_type": "list",
       "required": false
     },
     "message.content[]": {
-      "expected_type": "list",
       "required": false
     },
     "message.content[].id": {
-      "expected_type": "str",
       "required": false
     },
     "message.content[].input": {
-      "expected_type": "dict",
       "required": false
     },
     "message.content[].input.command": {
-      "expected_type": "str",
       "required": false
     },
     "message.content[].input.description": {
-      "expected_type": "str",
       "required": false
     },
     "message.content[].input.file_path": {
-      "expected_type": "str",
       "required": false
     },
     "message.content[].name": {
-      "expected_type": "str",
       "required": false
     },
     "message.content[].text": {
-      "expected_type": "str",
       "required": false
     },
     "message.content[].thinking": {
-      "expected_type": "str",
       "required": false
     },
     "message.content[].type": {
-      "expected_type": "str",
       "required": false
     },
     "message.model": {
-      "expected_type": "str",
       "required": false
     },
     "message.stop_reason": {
-      "expected_type": "str",
       "required": false
     },
     "message.usage": {
-      "expected_type": "dict",
       "required": false
     },
     "message.usage.cache_creation": {
-      "expected_type": "dict",
       "required": false
     },
     "message.usage.cache_creation.ephemeral_1h_input_tokens": {
-      "expected_type": "int",
       "required": false
     },
     "message.usage.cache_creation.ephemeral_5m_input_tokens": {
-      "expected_type": "int",
       "required": false
     },
     "message.usage.cache_creation_input_tokens": {
-      "expected_type": "int",
       "required": false
     },
     "message.usage.cache_read_input_tokens": {
-      "expected_type": "int",
       "required": false
     },
     "message.usage.input_tokens": {
-      "expected_type": "int",
       "required": false
     },
     "message.usage.output_tokens": {
-      "expected_type": "int",
       "required": false
     },
     "message.usage.service_tier": {
-      "expected_type": "str",
       "required": false
     },
     "parentToolUseID": {
-      "expected_type": "str",
       "required": false
     },
     "parentUuid": {
-      "expected_type": "str",
       "required": false
     },
     "permissionMode": {
-      "expected_type": "str",
       "required": false
     },
     "sessionId": {
-      "expected_type": "str",
       "required": false
     },
     "slug": {
-      "expected_type": "str",
       "required": false
     },
     "snapshot": {
-      "expected_type": "dict",
       "required": false
     },
     "snapshot.timestamp": {
-      "expected_type": "str",
       "required": false
     },
     "subtype": {
-      "expected_type": "str",
       "required": false
     },
     "timestamp": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseID": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult": {
-      "expected_type": "dict",
       "required": false
     },
     "toolUseResult._unknownToolMeta": {
-      "expected_type": "dict",
       "required": false
     },
     "toolUseResult._unknownToolMeta.vendor": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.agentId": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.answers": {
-      "expected_type": "dict",
       "required": false
     },
     "toolUseResult.answers.q1": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.code": {
-      "expected_type": "int",
       "required": false
     },
     "toolUseResult.content": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.description": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.durationMs": {
-      "expected_type": "int",
       "required": false
     },
     "toolUseResult.exitCode": {
-      "expected_type": "int",
       "required": false
     },
     "toolUseResult.file": {
-      "expected_type": "dict",
       "required": false
     },
     "toolUseResult.file.content": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.file.filePath": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.file.numLines": {
-      "expected_type": "int",
       "required": false
     },
     "toolUseResult.filePath": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.filenames": {
-      "expected_type": "list",
       "required": false
     },
     "toolUseResult.filenames[]": {
-      "expected_type": "list",
       "required": false
     },
     "toolUseResult.isAsync": {
-      "expected_type": "bool",
       "required": false
     },
     "toolUseResult.message": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.mode": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.newTodos": {
-      "expected_type": "list",
       "required": false
     },
     "toolUseResult.newTodos[]": {
-      "expected_type": "list",
       "required": false
     },
     "toolUseResult.newTodos[].content": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.newTodos[].id": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.numFiles": {
-      "expected_type": "int",
       "required": false
     },
     "toolUseResult.numLines": {
-      "expected_type": "int",
       "required": false
     },
     "toolUseResult.plan": {
-      "expected_type": "list",
       "required": false
     },
     "toolUseResult.plan[]": {
-      "expected_type": "list",
       "required": false
     },
     "toolUseResult.query": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.questions": {
-      "expected_type": "list",
       "required": false
     },
     "toolUseResult.questions[]": {
-      "expected_type": "list",
       "required": false
     },
     "toolUseResult.questions[].id": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.results": {
-      "expected_type": "list",
       "required": false
     },
     "toolUseResult.results[]": {
-      "expected_type": "list",
       "required": false
     },
     "toolUseResult.results[].url": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.retrieval_status": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.status": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.stderr": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.stdout": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.structuredPatch": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.task": {
-      "expected_type": "dict",
       "required": false
     },
     "toolUseResult.task.description": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.task.task_id": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.task_id": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.task_type": {
-      "expected_type": "str",
       "required": false
     },
     "toolUseResult.totalDurationMs": {
-      "expected_type": "int",
       "required": false
     },
     "toolUseResult.truncated": {
-      "expected_type": "bool",
       "required": false
     },
     "toolUseResult.url": {
-      "expected_type": "str",
       "required": false
     },
     "type": {
-      "expected_type": "str",
       "required": true
     },
     "uuid": {
-      "expected_type": "str",
       "required": false
     },
     "version": {
-      "expected_type": "str",
       "required": false
     }
   }
