@@ -16,6 +16,15 @@ from models.session import QuickSessionInfoDict, SessionDict
 
 DEFAULT_MAX_ROWS = 2000
 
+
+def max_cache_rows() -> int:
+    """Return LRU capacity (override via CLAUDE_CODE_CHAT_BROWSER_SUMMARY_CACHE_MAX_ROWS)."""
+    raw = os.environ.get("CLAUDE_CODE_CHAT_BROWSER_SUMMARY_CACHE_MAX_ROWS", "").strip()
+    if not raw:
+        return DEFAULT_MAX_ROWS
+    return max(1, int(raw))
+
+
 _lock = threading.Lock()
 _conn: sqlite3.Connection | None = None
 
@@ -54,7 +63,9 @@ def _ensure_connection() -> sqlite3.Connection:
         return _conn
     path = cache_db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(path), check_same_thread=False)
+    conn = sqlite3.connect(str(path), check_same_thread=False, timeout=30.0)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS summary_cache (
@@ -102,15 +113,6 @@ def get_summary(path: str, mtime: float, rules_fingerprint: str) -> SummaryCache
         ).fetchone()
         if row is None:
             return None
-        now = time.time()
-        conn.execute(
-            (
-                "UPDATE summary_cache SET accessed_at = ? "
-                "WHERE path = ? AND mtime = ? AND rules_fp = ?"
-            ),
-            (now, abspath, mtime, rules_fingerprint),
-        )
-        conn.commit()
         return _payload_to_row(str(row[0]))
 
 
@@ -127,6 +129,10 @@ def put_summary(
     with _lock:
         conn = _ensure_connection()
         conn.execute(
+            "DELETE FROM summary_cache WHERE path = ? AND rules_fp = ? AND mtime != ?",
+            (abspath, rules_fingerprint, mtime),
+        )
+        conn.execute(
             """
             INSERT INTO summary_cache (path, mtime, rules_fp, payload, accessed_at)
             VALUES (?, ?, ?, ?, ?)
@@ -137,7 +143,8 @@ def put_summary(
             (abspath, mtime, rules_fingerprint, payload, now),
         )
         count = conn.execute("SELECT COUNT(*) FROM summary_cache").fetchone()
-        if count is not None and int(count[0]) > DEFAULT_MAX_ROWS:
+        limit = max_cache_rows()
+        if count is not None and int(count[0]) > limit:
             conn.execute(
                 """
                 DELETE FROM summary_cache
@@ -147,7 +154,7 @@ def put_summary(
                     LIMIT ?
                 )
                 """,
-                (int(count[0]) - DEFAULT_MAX_ROWS,),
+                (int(count[0]) - limit,),
             )
         conn.commit()
 

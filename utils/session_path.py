@@ -41,12 +41,9 @@ def clear_display_name_cache() -> None:
         _display_name_cache.clear()
 
 
-def _project_jsonl_max_mtime(project_dir: str, jsonl_files: list[str]) -> float:
-    return max(os.path.getmtime(os.path.join(project_dir, jf)) for jf in jsonl_files)
-
-
-def _resolve_display_name(project_dir: str, jsonl_files: list[str], fallback: str) -> str:
-    max_mtime = _project_jsonl_max_mtime(project_dir, jsonl_files)
+def _resolve_display_name(
+    project_dir: str, jsonl_files: list[str], fallback: str, max_mtime: float
+) -> str:
     with _display_name_lock:
         hit = _display_name_cache.get(project_dir)
         if hit is not None and hit[0] == max_mtime:
@@ -83,7 +80,7 @@ def list_projects(base_dir: str | None = None) -> list[ProjectDict]:
             from datetime import datetime, timezone
 
             last_modified = datetime.fromtimestamp(latest_mtime, tz=timezone.utc).isoformat()
-            display_name = _resolve_display_name(project_dir, jsonl_files, name)
+            display_name = _resolve_display_name(project_dir, jsonl_files, name, latest_mtime)
             projects.append(
                 {
                     "name": name,

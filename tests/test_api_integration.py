@@ -148,9 +148,7 @@ def test_project_session_count_matches_list(client, summary_cache_db):
     assert project["session_count"] == len(sessions)
 
 
-def test_project_sessions_uses_disk_cache_on_second_request(
-    client, summary_cache_db, monkeypatch
-):
+def test_project_sessions_uses_disk_cache_on_second_request(client, summary_cache_db, monkeypatch):
     client.get("/api/projects/test-project/sessions")
     calls = 0
 
@@ -164,4 +162,3 @@ def test_project_sessions_uses_disk_cache_on_second_request(
     monkeypatch.setattr("api.projects.get_cached_session", counting_get_cached)
     client.get("/api/projects/test-project/sessions")
     assert calls == 0
-

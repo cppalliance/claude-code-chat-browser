@@ -5,7 +5,6 @@ from flask import Blueprint, current_app
 from api._flask_types import FlaskReturn, json_response
 from api.error_codes import ErrorCode, error_response
 from models.project import ProjectSessionRowDict, SessionListItemDict
-from models.session import SessionDict
 from utils.exclusion_rules import is_session_excluded
 from utils.jsonl_parser import quick_session_info
 from utils.session_cache import get_cached_session
@@ -21,23 +20,6 @@ from utils.session_summary_cache import (
 )
 
 projects_bp = Blueprint("projects", __name__)
-
-
-def _session_row_ok(s: SessionListItemDict, parsed: SessionDict) -> ProjectSessionRowDict:
-    meta = parsed["metadata"]
-    models = meta.get("models_used", [])
-    return {
-        "id": s["id"],
-        "path": s["path"],
-        "size_bytes": s["size_bytes"],
-        "modified": s["modified"],
-        "title": parsed["title"],
-        "models": sorted(models) if isinstance(models, set) else list(models),
-        "tokens": meta["total_input_tokens"] + meta["total_output_tokens"],
-        "tool_calls": meta["total_tool_calls"],
-        "first_timestamp": meta["first_timestamp"],
-        "last_timestamp": meta["last_timestamp"],
-    }
 
 
 def _session_row_error(s: SessionListItemDict) -> ProjectSessionRowDict:
@@ -85,6 +67,10 @@ def get_projects() -> FlaskReturn:
                 if ts and (latest_ts is None or ts > latest_ts):
                     latest_ts = ts
             except Exception:
+                current_app.logger.exception(
+                    "Failed to peek session summary for project %s",
+                    project["name"],
+                )
                 titled_count += 1
         project["session_count"] = titled_count
         if latest_ts:
@@ -119,7 +105,7 @@ def get_project_sessions(project_name: str) -> FlaskReturn:
             put_summary(s["path"], s["modified"], rules_fp, row)
             if row["is_untitled"] or excluded:
                 continue
-            result.append(_session_row_ok(s, parsed))
+            result.append(session_row_from_summary(s, row))
         except Exception:
             current_app.logger.exception("Failed to parse session %s", s["id"])
             result.append(_session_row_error(s))
