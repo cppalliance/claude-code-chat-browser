@@ -5,29 +5,21 @@ from flask import Blueprint, current_app
 from api._flask_types import FlaskReturn, json_response
 from api.error_codes import ErrorCode, error_response
 from models.project import ProjectSessionRowDict, SessionListItemDict
-from models.session import SessionDict
 from utils.exclusion_rules import is_session_excluded
+from utils.jsonl_parser import quick_session_info
 from utils.session_cache import get_cached_session
 from utils.session_path import get_claude_projects_dir, list_projects, list_sessions, safe_join
+from utils.session_summary_cache import (
+    SummaryCacheRowDict,
+    get_summary,
+    put_summary,
+    rules_fingerprint,
+    session_row_from_summary,
+    summary_from_peek,
+    summary_from_session,
+)
 
 projects_bp = Blueprint("projects", __name__)
-
-
-def _session_row_ok(s: SessionListItemDict, parsed: SessionDict) -> ProjectSessionRowDict:
-    meta = parsed["metadata"]
-    models = meta.get("models_used", [])
-    return {
-        "id": s["id"],
-        "path": s["path"],
-        "size_bytes": s["size_bytes"],
-        "modified": s["modified"],
-        "title": parsed["title"],
-        "models": sorted(models) if isinstance(models, set) else list(models),
-        "tokens": meta["total_input_tokens"] + meta["total_output_tokens"],
-        "tool_calls": meta["total_tool_calls"],
-        "first_timestamp": meta["first_timestamp"],
-        "last_timestamp": meta["last_timestamp"],
-    }
 
 
 def _session_row_error(s: SessionListItemDict) -> ProjectSessionRowDict:
@@ -41,15 +33,32 @@ def _session_row_error(s: SessionListItemDict) -> ProjectSessionRowDict:
     }
 
 
+def _peek_or_cache_summary(path: str, mtime: float, rules_fp: str) -> SummaryCacheRowDict:
+    """Return a cached summary row (any completeness) or peek the file and store a partial row.
+
+    Used by get_projects for fast landing-page counts. Partial rows (is_complete=False)
+    are acceptable here — is_untitled is derived from the same first-user-text peek that
+    quick_session_info uses; peek and full-parse agree for the vast majority of sessions
+    (first user message within the first 80 lines). The session list path always upgrades
+    to a complete row via get_cached_session, so session_count and list count align after
+    the first session-list visit. With no exclusion rules the counts are identical on first
+    visit too, because is_excluded is always False for both paths.
+    """
+    cached = get_summary(path, mtime, rules_fp)
+    if cached is not None:
+        return cached
+    info = quick_session_info(path)
+    row = summary_from_peek(info)
+    put_summary(path, mtime, rules_fp, row)
+    return row
+
+
 @projects_bp.route("/api/projects")
 def get_projects() -> FlaskReturn:
     base = current_app.config.get("CLAUDE_PROJECTS_DIR") or get_claude_projects_dir()
     projects = list_projects(base)
-
-    # Enrich each project with accurate titled-session count and latest timestamp
-    # so the landing page matches what the workspace page shows.
-    # Uses quick_session_info() which peeks at files without full parsing.
-    from utils.jsonl_parser import quick_session_info
+    rules = current_app.config.get("EXCLUSION_RULES") or []
+    rules_fp = rules_fingerprint(rules)
 
     for project in projects:
         sessions = list_sessions(project["path"])
@@ -57,14 +66,20 @@ def get_projects() -> FlaskReturn:
         latest_ts = None
         for s in sessions:
             try:
-                info = quick_session_info(s["path"])
-                if info["title"] == "Untitled Session":
+                row = _peek_or_cache_summary(s["path"], s["modified"], rules_fp)
+                if row["is_untitled"]:
+                    continue
+                if row["is_complete"] and row["is_excluded"]:
                     continue
                 titled_count += 1
-                ts = info.get("last_timestamp") or info.get("first_timestamp")
+                ts = row.get("last_timestamp") or row.get("first_timestamp")
                 if ts and (latest_ts is None or ts > latest_ts):
                     latest_ts = ts
             except Exception:
+                current_app.logger.exception(
+                    "Failed to peek session summary for project %s",
+                    project["name"],
+                )
                 titled_count += 1
         project["session_count"] = titled_count
         if latest_ts:
@@ -82,21 +97,25 @@ def get_project_sessions(project_name: str) -> FlaskReturn:
         return error_response(ErrorCode.INVALID_PATH, "Invalid path", 400)
     sessions = list_sessions(project_dir)
     rules = current_app.config.get("EXCLUSION_RULES") or []
+    rules_fp = rules_fingerprint(rules)
     result: list[ProjectSessionRowDict] = []
     for s in sessions:
         try:
+            cached = get_summary(s["path"], s["modified"], rules_fp)
+            if cached is not None and cached["is_complete"]:
+                if cached["is_untitled"] or cached["is_excluded"]:
+                    continue
+                result.append(session_row_from_summary(s, cached))
+                continue
+
             parsed = get_cached_session(s["path"])
-            # Skip untitled sessions (no real conversation)
-            if parsed["title"] == "Untitled Session":
+            excluded = is_session_excluded(rules, parsed, project_name)
+            row = summary_from_session(parsed, is_excluded=excluded)
+            put_summary(s["path"], s["modified"], rules_fp, row)
+            if row["is_untitled"] or excluded:
                 continue
-            if is_session_excluded(rules, parsed, project_name):
-                continue
-            result.append(_session_row_ok(s, parsed))
+            result.append(session_row_from_summary(s, row))
         except Exception:
-            # Full detail (class, message, traceback) to the server log via
-            # logger.exception. The per-session card carries only `error: True`
-            # — the class-name+message string was a leak (issue #25). The
-            # operator looks at the server log for triage.
             current_app.logger.exception("Failed to parse session %s", s["id"])
             result.append(_session_row_error(s))
     return json_response(result)

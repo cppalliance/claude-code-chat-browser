@@ -5,10 +5,14 @@ import json
 import logging
 import os
 import platform
+import threading
 
 from models.project import ProjectDict, SessionListItemDict
 
 _logger = logging.getLogger(__name__)
+
+_display_name_cache: dict[str, tuple[float, str]] = {}
+_display_name_lock = threading.Lock()
 
 
 def safe_join(base: str, *parts: str) -> str:
@@ -29,6 +33,30 @@ def get_claude_projects_dir() -> str:
     else:
         home = os.path.expanduser("~")
     return os.path.join(home, ".claude", "projects")
+
+
+def clear_display_name_cache() -> None:
+    """Clear the in-memory display-name cache (for tests)."""
+    with _display_name_lock:
+        _display_name_cache.clear()
+
+
+def _resolve_display_name(
+    project_dir: str, jsonl_files: list[str], fallback: str, max_mtime: float
+) -> str:
+    with _display_name_lock:
+        hit = _display_name_cache.get(project_dir)
+        if hit is not None and hit[0] == max_mtime:
+            return hit[1]
+    display_name = fallback
+    for jf in jsonl_files:
+        candidate = _get_display_name(os.path.join(project_dir, jf), None)
+        if candidate is not None:
+            display_name = candidate
+            break
+    with _display_name_lock:
+        _display_name_cache[project_dir] = (max_mtime, display_name)
+    return display_name
 
 
 def list_projects(base_dir: str | None = None) -> list[ProjectDict]:
@@ -52,13 +80,7 @@ def list_projects(base_dir: str | None = None) -> list[ProjectDict]:
             from datetime import datetime, timezone
 
             last_modified = datetime.fromtimestamp(latest_mtime, tz=timezone.utc).isoformat()
-            # Read cwd from sessions to get the real project path
-            display_name = name
-            for jf in jsonl_files:
-                candidate = _get_display_name(os.path.join(project_dir, jf), None)
-                if candidate is not None:
-                    display_name = candidate
-                    break
+            display_name = _resolve_display_name(project_dir, jsonl_files, name, latest_mtime)
             projects.append(
                 {
                     "name": name,

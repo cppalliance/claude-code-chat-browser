@@ -9,6 +9,8 @@ Fixtures (`client`, `client_empty`, `client_thinking`) live in tests/conftest.py
 
 from __future__ import annotations
 
+import pytest
+
 from app import CSP_POLICY
 from tests.conftest import assert_error_response as _assert_error_shape
 
@@ -124,3 +126,46 @@ def test_search_valid_limit(client):
     results = resp.get_json()
     assert isinstance(results, list)
     assert len(results) <= 5
+
+
+# --- session summary cache (disk) ---
+
+
+@pytest.fixture
+def summary_cache_db(tmp_path, monkeypatch):
+    from utils.session_summary_cache import clear_cache, reset_connection_for_tests
+
+    db = tmp_path / "session_summary_cache.sqlite"
+    reset_connection_for_tests(db)
+    yield db
+    clear_cache()
+
+
+def test_project_session_count_matches_list(client, summary_cache_db):
+    """Card count and session list agree when no exclusion rules are active.
+
+    get_projects uses peek (partial row); get_project_sessions uses full parse.
+    Both filter on is_untitled, and with no rules is_excluded is always False,
+    so counts align — this is the alignment guarantee from issue #109.
+    """
+    # Hit session list first so disk cache is warm with complete rows.
+    sessions = client.get("/api/projects/test-project/sessions").get_json()
+    projects = client.get("/api/projects").get_json()
+    project = next(p for p in projects if p["name"] == "test-project")
+    assert project["session_count"] == len(sessions)
+
+
+def test_project_sessions_uses_disk_cache_on_second_request(client, summary_cache_db, monkeypatch):
+    client.get("/api/projects/test-project/sessions")
+    calls = 0
+
+    def counting_get_cached(path: str):
+        nonlocal calls
+        calls += 1
+        from utils.session_cache import get_cached_session as real_get
+
+        return real_get(path)
+
+    monkeypatch.setattr("api.projects.get_cached_session", counting_get_cached)
+    client.get("/api/projects/test-project/sessions")
+    assert calls == 0
