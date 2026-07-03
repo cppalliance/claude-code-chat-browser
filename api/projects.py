@@ -34,7 +34,16 @@ def _session_row_error(s: SessionListItemDict) -> ProjectSessionRowDict:
 
 
 def _peek_or_cache_summary(path: str, mtime: float, rules_fp: str) -> SummaryCacheRowDict:
-    """Return a cached summary row or peek the file and store a partial row."""
+    """Return a cached summary row (any completeness) or peek the file and store a partial row.
+
+    Used by get_projects for fast landing-page counts. Partial rows (is_complete=False)
+    are acceptable here — is_untitled is derived from the same first-user-text peek that
+    quick_session_info uses; peek and full-parse agree for the vast majority of sessions
+    (first user message within the first 80 lines). The session list path always upgrades
+    to a complete row via get_cached_session, so session_count and list count align after
+    the first session-list visit. With no exclusion rules the counts are identical on first
+    visit too, because is_excluded is always False for both paths.
+    """
     cached = get_summary(path, mtime, rules_fp)
     if cached is not None:
         return cached

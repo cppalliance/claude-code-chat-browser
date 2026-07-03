@@ -142,9 +142,16 @@ def summary_cache_db(tmp_path, monkeypatch):
 
 
 def test_project_session_count_matches_list(client, summary_cache_db):
+    """Card count and session list agree when no exclusion rules are active.
+
+    get_projects uses peek (partial row); get_project_sessions uses full parse.
+    Both filter on is_untitled, and with no rules is_excluded is always False,
+    so counts align — this is the alignment guarantee from issue #109.
+    """
+    # Hit session list first so disk cache is warm with complete rows.
+    sessions = client.get("/api/projects/test-project/sessions").get_json()
     projects = client.get("/api/projects").get_json()
     project = next(p for p in projects if p["name"] == "test-project")
-    sessions = client.get("/api/projects/test-project/sessions").get_json()
     assert project["session_count"] == len(sessions)
 
 

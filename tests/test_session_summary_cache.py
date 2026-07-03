@@ -124,6 +124,14 @@ def test_lru_eviction(
     sample_session: Path, cache_db: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("utils.session_summary_cache.DEFAULT_MAX_ROWS", 2)
+    clock = {"t": 100.0}
+
+    def fake_time() -> float:
+        clock["t"] += 100.0
+        return clock["t"]
+
+    monkeypatch.setattr("utils.session_summary_cache.time.time", fake_time)
+
     content = sample_session.read_text(encoding="utf-8")
     paths = []
     for name in ("a.jsonl", "b.jsonl", "c.jsonl"):
@@ -140,6 +148,10 @@ def test_lru_eviction(
             summary_from_peek(quick_session_info(str(p))),
         )
 
+    first = paths[0]
+    first_mtime = first.stat().st_mtime
+    assert get_summary(str(first), first_mtime, "none") is not None
+
     third = paths[2]
     third_mtime = third.stat().st_mtime
     put_summary(
@@ -149,8 +161,9 @@ def test_lru_eviction(
         summary_from_peek(quick_session_info(str(third))),
     )
 
-    first = paths[0]
-    assert get_summary(str(first), first.stat().st_mtime, "none") is None
+    second = paths[1]
+    assert get_summary(str(second), second.stat().st_mtime, "none") is None
+    assert get_summary(str(first), first_mtime, "none") is not None
     assert get_summary(str(third), third_mtime, "none") is not None
 
 

@@ -116,6 +116,15 @@ def get_summary(path: str, mtime: float, rules_fingerprint: str) -> SummaryCache
         ).fetchone()
         if row is None:
             return None
+        conn.execute(
+            """
+            UPDATE summary_cache
+            SET accessed_at = ?
+            WHERE path = ? AND mtime = ? AND rules_fp = ?
+            """,
+            (time.time(), abspath, mtime, rules_fingerprint),
+        )
+        conn.commit()
         return _payload_to_row(str(row[0]))
 
 
@@ -174,7 +183,16 @@ def clear_cache() -> None:
 
 
 def summary_from_peek(info: QuickSessionInfoDict) -> SummaryCacheRowDict:
-    """Build a partial summary row from a lightweight JSONL peek."""
+    """Build a partial summary row from a lightweight JSONL peek.
+
+    ``is_excluded`` is hard-coded ``False`` because peek cannot evaluate exclusion
+    rules without reading full message bodies. Callers that need accurate exclusion
+    (``get_project_sessions``) must check ``is_complete`` and fall back to a full
+    parse. ``get_projects`` uses partial rows for fast card counts: with no
+    exclusion rules the value is correct; with rules active, excluded sessions may
+    be counted until the session list upgrades the row to a complete entry — this
+    is an accepted trade-off documented in issue #109.
+    """
     title = info["title"]
     return SummaryCacheRowDict(
         title=title,
