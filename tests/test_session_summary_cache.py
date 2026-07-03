@@ -43,6 +43,24 @@ def test_rules_fingerprint_empty() -> None:
     assert rules_fingerprint([]) == "none"
 
 
+def test_max_cache_rows_invalid_env_falls_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_CODE_CHAT_BROWSER_SUMMARY_CACHE_MAX_ROWS", "not-a-number")
+    from utils.session_summary_cache import DEFAULT_MAX_ROWS, max_cache_rows
+
+    assert max_cache_rows() == DEFAULT_MAX_ROWS
+
+
+def test_max_cache_rows_valid_env_enforces_minimum(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_CODE_CHAT_BROWSER_SUMMARY_CACHE_MAX_ROWS", "0")
+    from utils.session_summary_cache import max_cache_rows
+
+    assert max_cache_rows() == 1
+
+
 def test_rules_fingerprint_stable() -> None:
     rules = [[("word", "secret")]]
     assert rules_fingerprint(rules) == rules_fingerprint(rules)

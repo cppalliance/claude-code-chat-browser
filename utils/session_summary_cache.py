@@ -22,7 +22,10 @@ def max_cache_rows() -> int:
     raw = os.environ.get("CLAUDE_CODE_CHAT_BROWSER_SUMMARY_CACHE_MAX_ROWS", "").strip()
     if not raw:
         return DEFAULT_MAX_ROWS
-    return max(1, int(raw))
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return DEFAULT_MAX_ROWS
 
 
 _lock = threading.Lock()
