@@ -19,6 +19,7 @@ def benchmark_regression_limit(name: str, threshold: float = THRESHOLD) -> float
         return SEARCH_BENCHMARK_THRESHOLD
     return threshold
 
+
 # Sub-ms timings are too noisy for a fixed 20% gate on ubuntu CI.
 EXCLUDED_FROM_GATE = frozenset(
     {
@@ -185,8 +186,7 @@ def check_regression(
             print(f"\nREGRESSION: {len(failures)} benchmark(s) exceeded {limit:.0%}")
         else:
             details = ", ".join(
-                f"{name} ({benchmark_regression_limit(name, threshold):.0%})"
-                for name in failures
+                f"{name} ({benchmark_regression_limit(name, threshold):.0%})" for name in failures
             )
             print(f"\nREGRESSION: {len(failures)} benchmark(s) exceeded limit: {details}")
     if missing:
