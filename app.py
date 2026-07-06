@@ -113,9 +113,7 @@ def create_app(
             projects_dir = base_dir or get_claude_projects_dir()
             start_search_index_background(projects_dir, app.config["EXCLUSION_RULES"])
         except Exception:
-            logging.getLogger(__name__).exception(
-                "Failed to start search index background worker"
-            )
+            logging.getLogger(__name__).exception("Failed to start search index background worker")
 
     @app.after_request
     def set_security_headers(response):

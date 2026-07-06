@@ -32,14 +32,7 @@ def _write_session(path: Path, lines: list[dict[str, object]]) -> None:
 
 
 def _index_patches(cache_root: Path):
-    return (
-        patch("utils.search_index.cache_dir", return_value=cache_root),
-        patch(
-            "utils.search_index.SEARCH_INDEX_POINTER_FILE",
-            cache_root / "search_index.active",
-        ),
-        patch("utils.search_index.SEARCH_INDEX_FILE", cache_root / "search_index.sqlite"),
-    )
+    return (patch("utils.search_index.cache_dir", return_value=cache_root),)
 
 
 @pytest.fixture
@@ -73,7 +66,7 @@ def indexed_tree(tmp_path, monkeypatch):
     reset_background_for_tests()
 
     patches = _index_patches(cache_root)
-    with patches[0], patches[1], patches[2]:
+    with patches[0]:
         built = build_search_index(str(projects), [], force=True)
         assert built is True
         pointer = cache_root / "search_index.active"
@@ -104,12 +97,12 @@ class TestSearchIndexBuild:
 
     def test_index_is_usable_after_build(self, indexed_tree):
         patches = _index_patches(indexed_tree["cache_root"])
-        with patches[0], patches[1], patches[2]:
+        with patches[0]:
             assert index_is_usable(indexed_tree["projects"], []) is True
 
     def test_fts_finds_term(self, indexed_tree):
         patches = _index_patches(indexed_tree["cache_root"])
-        with patches[0], patches[1], patches[2]:
+        with patches[0]:
             result = query_index_hits(indexed_tree["term"], since_ms=None, max_results=10)
             assert result["query_ok"] is True
             assert len(result["hits"]) == 1
@@ -124,7 +117,7 @@ class TestSearchIndexBuild:
 
     def test_rebuild_when_manifest_changes(self, indexed_tree):
         patches = _index_patches(indexed_tree["cache_root"])
-        with patches[0], patches[1], patches[2]:
+        with patches[0]:
             assert build_search_index(indexed_tree["projects"], [], force=False) is False
             new_session = Path(indexed_tree["projects"]) / "demo-proj" / "session_beta.jsonl"
             _write_session(
@@ -161,7 +154,7 @@ class TestToolResultIndexing:
         )
         monkeypatch.setenv("CLAUDE_CODE_CHAT_BROWSER_SEARCH_INDEX_DIR", str(cache_root))
         patches = _index_patches(cache_root)
-        with patches[0], patches[1], patches[2]:
+        with patches[0]:
             assert build_search_index(str(projects), [], force=True) is True
             hits = query_index_hits(sentinel, since_ms=None, max_results=5)
             assert hits["query_ok"] is True
@@ -191,7 +184,7 @@ class TestSearchWindow:
         )
         monkeypatch.setenv("CLAUDE_CODE_CHAT_BROWSER_SEARCH_INDEX_DIR", str(cache_root))
         patches = _index_patches(cache_root)
-        with patches[0], patches[1], patches[2]:
+        with patches[0]:
             build_search_index(str(projects), [], force=True)
             since_ms = resolve_search_since_ms(all_history=False)
             hits = query_index_hits("window-old-sentinel", since_ms=since_ms, max_results=5)
@@ -215,7 +208,7 @@ class TestSearchWindow:
         )
         monkeypatch.setenv("CLAUDE_CODE_CHAT_BROWSER_SEARCH_INDEX_DIR", str(cache_root))
         patches = _index_patches(cache_root)
-        with patches[0], patches[1], patches[2]:
+        with patches[0]:
             build_search_index(str(projects), [], force=True)
             hits = query_index_hits("history-old-sentinel", since_ms=None, max_results=5)
             assert hits["query_ok"] is True
@@ -236,7 +229,7 @@ class TestSearchWindow:
         )
         monkeypatch.setenv("CLAUDE_CODE_CHAT_BROWSER_SEARCH_INDEX_DIR", str(cache_root))
         patches = _index_patches(cache_root)
-        with patches[0], patches[1], patches[2]:
+        with patches[0]:
             build_search_index(str(projects), [], force=True)
             since_ms = resolve_search_since_ms(all_history=False)
             hits = query_index_hits("undated-window-sentinel", since_ms=since_ms, max_results=5)
@@ -258,9 +251,12 @@ class TestQueryIndexHits:
             yield _Conn()
 
         patches = _index_patches(indexed_tree["cache_root"])
-        with patches[0], patches[1], patches[2], patch(
-            "utils.search_index._index_db_conn",
-            _broken_conn,
+        with (
+            patches[0],
+            patch(
+                "utils.search_index._index_db_conn",
+                _broken_conn,
+            ),
         ):
             result = query_index_hits(indexed_tree["term"], since_ms=None, max_results=5)
             assert result["query_ok"] is False
@@ -271,7 +267,7 @@ class TestBypassAndBackground:
     def test_no_search_index_env_disables_index(self, indexed_tree, monkeypatch):
         monkeypatch.setenv("CLAUDE_CODE_CHAT_BROWSER_NO_SEARCH_INDEX", "1")
         patches = _index_patches(indexed_tree["cache_root"])
-        with patches[0], patches[1], patches[2]:
+        with patches[0]:
             assert index_search_enabled() is False
             result = query_index_hits(indexed_tree["term"], since_ms=None, max_results=5)
             assert result["query_ok"] is False
@@ -284,9 +280,10 @@ class TestBypassAndBackground:
         )
         reset_background_for_tests()
         patches = _index_patches(indexed_tree["cache_root"])
-        with patches[0], patches[1], patches[2], patch(
-            "utils.search_index.threading.Thread"
-        ) as mock_thread:
+        with (
+            patches[0],
+            patch("utils.search_index.threading.Thread") as mock_thread,
+        ):
             start_search_index_background(indexed_tree["projects"], [])
             start_search_index_background(indexed_tree["projects"], [])
             assert mock_thread.call_count == 1

@@ -74,6 +74,8 @@ class IndexMessageHitDict(TypedDict):
 class IndexQueryResult(TypedDict):
     hits: list[IndexMessageHitDict]
     query_ok: bool
+    sql_rows_fetched: int
+    sql_exhausted: bool
 
 
 def cache_dir() -> Path:
@@ -82,10 +84,6 @@ def cache_dir() -> Path:
     if override:
         return Path(override)
     return Path.home() / ".claude-code-chat-browser"
-
-
-SEARCH_INDEX_POINTER_FILE = cache_dir() / "search_index.active"  # test override hook
-SEARCH_INDEX_FILE = cache_dir() / "search_index.sqlite"  # legacy; test override hook
 
 
 def index_search_enabled() -> bool:
@@ -221,8 +219,11 @@ def _projects_fingerprint(projects_dir: str, rules: list[Any]) -> dict[str, Any]
     manifest: list[list[Any]] = []
     for project in list_projects(projects_dir):
         for sess in list_sessions(project["path"]):
-            rel = os.path.relpath(sess["path"], projects_dir)
-            stat = os.stat(sess["path"])
+            try:
+                rel = os.path.relpath(sess["path"], projects_dir)
+                stat = os.stat(sess["path"])
+            except OSError:
+                continue
             manifest.append([rel, stat.st_mtime_ns, stat.st_size])
     manifest.sort()
     return {
@@ -268,9 +269,7 @@ def _index_db_conn(*, readonly: bool = True) -> Iterator[sqlite3.Connection | No
 
 def _read_stored_fingerprint(conn: sqlite3.Connection) -> dict[str, Any] | None:
     try:
-        row = conn.execute(
-            "SELECT value FROM index_meta WHERE key = 'fingerprint'"
-        ).fetchone()
+        row = conn.execute("SELECT value FROM index_meta WHERE key = 'fingerprint'").fetchone()
         if not row or not row[0]:
             return None
         data = json.loads(row[0])
@@ -457,8 +456,8 @@ def build_search_index(
                 for project in list_projects(projects_dir):
                     for sess in list_sessions(project["path"]):
                         try:
-                            session_id, title, first_ms, last_ms, mtime, texts = (
-                                _scan_session_file(sess["path"])
+                            session_id, title, first_ms, last_ms, mtime, texts = _scan_session_file(
+                                sess["path"]
                             )
                         except OSError as exc:
                             _logger.warning(
@@ -613,19 +612,26 @@ def query_index_hits(
     *,
     since_ms: int | None,
     max_results: int,
+    sql_offset: int = 0,
 ) -> IndexQueryResult:
     """Return message hits from the FTS index (pre-exclusion, pre-snippet)."""
-    empty: IndexQueryResult = {"hits": [], "query_ok": True}
+    empty: IndexQueryResult = {
+        "hits": [],
+        "query_ok": True,
+        "sql_rows_fetched": 0,
+        "sql_exhausted": True,
+    }
     if not query_lower or not index_search_enabled():
-        return {"hits": [], "query_ok": False}
+        return {"hits": [], "query_ok": False, "sql_rows_fetched": 0, "sql_exhausted": True}
 
     fts_q = _fts_match_query(query_lower)
     if not fts_q:
         return empty
 
+    sql_limit = max(max_results * 20, max_results)
     with _index_db_conn(readonly=True) as conn:
         if conn is None:
-            return {"hits": [], "query_ok": False}
+            return {"hits": [], "query_ok": False, "sql_rows_fetched": 0, "sql_exhausted": True}
         try:
             rows = conn.execute(
                 "SELECT m.session_id, m.project_name, m.role, m.timestamp_ms, m.text,"
@@ -634,12 +640,12 @@ def query_index_hits(
                 " JOIN sessions s"
                 " ON s.session_id = m.session_id AND s.project_name = m.project_name"
                 " WHERE messages_fts MATCH ?"
-                " LIMIT ?",
-                (fts_q, max(max_results * 20, max_results)),
+                " LIMIT ? OFFSET ?",
+                (fts_q, sql_limit, sql_offset),
             ).fetchall()
         except sqlite3.Error as exc:
             _logger.debug("FTS query failed (%s); index may be rebuilding", exc)
-            return {"hits": [], "query_ok": False}
+            return {"hits": [], "query_ok": False, "sql_rows_fetched": 0, "sql_exhausted": True}
 
     hits: list[IndexMessageHitDict] = []
     for row in rows:
@@ -663,7 +669,12 @@ def query_index_hits(
         )
         if len(hits) >= max_results:
             break
-    return {"hits": hits, "query_ok": True}
+    return {
+        "hits": hits,
+        "query_ok": True,
+        "sql_rows_fetched": len(rows),
+        "sql_exhausted": len(rows) < sql_limit,
+    }
 
 
 def reset_background_for_tests() -> None:

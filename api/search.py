@@ -54,9 +54,9 @@ def _parse_since_days(raw: str | None) -> int | None:
         days = int(str(raw).strip())
     except ValueError:
         return None
-    if days <= 0 or days > _MAX_SEARCH_SINCE_DAYS:
+    if days <= 0:
         return None
-    return days
+    return min(days, _MAX_SEARCH_SINCE_DAYS)
 
 
 def _message_searchable_text(msg: MessageDict) -> str:
@@ -109,32 +109,46 @@ def _search_via_index(
         return None
 
     rules_fp = rules_fingerprint(rules)
-    indexed = query_index_hits(query_lower, since_ms=since_ms, max_results=max_results)
-    if not indexed["query_ok"]:
-        return None
-
     results: list[SearchHitDict] = []
-    for hit in indexed["hits"]:
-        if len(results) >= max_results:
-            break
-        if _index_hit_excluded(
-            rules,
-            rules_fp,
-            project_name=hit["project_name"],
-            file_path=hit["file_path"],
-            mtime=hit["mtime"],
-        ):
-            continue
-        results.append(
-            {
-                "project": hit["project_name"],
-                "session_id": hit["session_id"],
-                "title": hit["title"],
-                "role": hit["role"],
-                "timestamp": hit["timestamp"],
-                "snippet": search_snippet(hit["text"], query),
-            }
+    sql_offset = 0
+    while len(results) < max_results:
+        need = max_results - len(results)
+        indexed = query_index_hits(
+            query_lower,
+            since_ms=since_ms,
+            max_results=need,
+            sql_offset=sql_offset,
         )
+        if not indexed["query_ok"]:
+            return None
+        if indexed["sql_rows_fetched"] == 0:
+            break
+
+        for hit in indexed["hits"]:
+            if len(results) >= max_results:
+                break
+            if _index_hit_excluded(
+                rules,
+                rules_fp,
+                project_name=hit["project_name"],
+                file_path=hit["file_path"],
+                mtime=hit["mtime"],
+            ):
+                continue
+            results.append(
+                {
+                    "project": hit["project_name"],
+                    "session_id": hit["session_id"],
+                    "title": hit["title"],
+                    "role": hit["role"],
+                    "timestamp": hit["timestamp"],
+                    "snippet": search_snippet(hit["text"], query),
+                }
+            )
+
+        sql_offset += indexed["sql_rows_fetched"]
+        if indexed["sql_exhausted"]:
+            break
     return results
 
 

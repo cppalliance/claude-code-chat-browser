@@ -87,14 +87,7 @@ def test_empty_query(client_single):
 
 
 def _index_patches(cache_root: Path):
-    return (
-        patch("utils.search_index.cache_dir", return_value=cache_root),
-        patch(
-            "utils.search_index.SEARCH_INDEX_POINTER_FILE",
-            cache_root / "search_index.active",
-        ),
-        patch("utils.search_index.SEARCH_INDEX_FILE", cache_root / "search_index.sqlite"),
-    )
+    return (patch("utils.search_index.cache_dir", return_value=cache_root),)
 
 
 def _seed_indexed_client(tmp_path, monkeypatch, *, timestamp: str):
@@ -115,7 +108,7 @@ def _seed_indexed_client(tmp_path, monkeypatch, *, timestamp: str):
     reset_background_for_tests()
 
     patches = _index_patches(cache_root)
-    with patches[0], patches[1], patches[2]:
+    with patches[0]:
         assert build_search_index(str(tmp_path / "projects"), [], force=True) is True
 
     app = create_app(base_dir=str(tmp_path / "projects"))
