@@ -1,5 +1,5 @@
 {
-  "_note": "Gated means from ubuntu-latest CI benchmark-results.json. PR #108 (schema drift): parse/export latency baselines raised for per-entry field-path fingerprinting. Excluded from gate (recorded for reference): test_parse_session_small, test_search_full_corpus (sub-ms CI noise). Memory benchmarks use extra_info.peak_bytes (bytes); latency uses stats.mean (seconds).",
+  "_note": "Gated means from ubuntu-latest CI benchmark-results.json. PR #108 (schema drift): parse/export latency baselines raised for per-entry field-path fingerprinting. Excluded from gate (recorded for reference): test_parse_session_small (sub-ms CI noise). Memory benchmarks use extra_info.peak_bytes (bytes); latency uses stats.mean (seconds).",
   "updated": "2026-07-03T00:00:00Z",
   "machine": "Linux",
   "groups": {

@@ -38,9 +38,9 @@ The memory ceiling test (`test_large_parse_peak_memory_under_ceiling`) runs in t
 
 The `benchmarks` job on **ubuntu-latest** runs pytest-benchmark (`--benchmark-json=benchmark-results.json`), then `scripts/check_benchmark_regression.py benchmark-results.json benchmarks/baselines.json`. CI fails when any **gated** benchmark mean exceeds its baseline by more than **20%**.
 
-**Gated:** parse medium/large + large peak memory; export 10/50/100 session latency + ZIP peak memory.
+**Gated:** parse medium/large + large peak memory; export 10/50/100 session latency + ZIP peak memory; `test_search_full_corpus` (relaxed **2.0×** threshold vs 1.2× for other gates — sub-ms search timings are noisy on ubuntu CI).
 
-**Not gated (informational only):** `test_parse_session_small`, `test_search_full_corpus` (sub-ms CI noise), and the `cache` group. These may appear in `baselines.json` for reference but are skipped by `check_benchmark_regression.py`. Benchmarks without a baseline entry print a warning and do not fail the gate.
+**Not gated (informational only):** `test_parse_session_small` and the `cache` group.
 
 Missing gated benchmarks (renamed or removed tests still listed in `baselines.json`) fail the gate.
 
