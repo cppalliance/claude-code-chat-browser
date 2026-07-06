@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import sqlite3
+import sys
 import threading
 import time
 import uuid
@@ -55,6 +56,7 @@ _SKIP_ENTRY_TYPES = frozenset({"file-history-snapshot", "summary"})
 _index_lock = threading.Lock()
 _index_build_lock = threading.Lock()
 _background_started = False
+_background_lock_fd: int | None = None
 _usability_cache: dict[tuple[str, str], tuple[bool, float]] = {}
 _usability_cache_lock = threading.Lock()
 _USABILITY_CACHE_TTL_SECONDS = 30.0
@@ -557,6 +559,31 @@ def ensure_search_index(projects_dir: str, rules: list[Any]) -> None:
             build_search_index(projects_dir, rules)
 
 
+def _try_acquire_cross_process_background_lock() -> bool:
+    """Return True when this process should own the background index worker."""
+    global _background_lock_fd
+    if _background_lock_fd is not None:
+        return True
+    root = cache_dir()
+    root.mkdir(parents=True, exist_ok=True)
+    lock_path = root / "search_index.background.lock"
+    fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR)
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (OSError, BlockingIOError):
+        os.close(fd)
+        return False
+    _background_lock_fd = fd
+    return True
+
+
 def start_search_index_background(
     projects_dir: str,
     rules: list[Any],
@@ -569,6 +596,8 @@ def start_search_index_background(
         return
     with _index_lock:
         if _background_started:
+            return
+        if not _try_acquire_cross_process_background_lock():
             return
         _background_started = True
 
@@ -617,13 +646,6 @@ def query_index_hits(
     sql_offset: int = 0,
 ) -> IndexQueryResult:
     """Return message hits from the FTS index (pre-exclusion, pre-snippet)."""
-    empty: IndexQueryResult = {
-        "hits": [],
-        "query_ok": True,
-        "sql_rows_fetched": 0,
-        "sql_exhausted": True,
-        "index_locked": False,
-    }
     if not query_lower or not index_search_enabled():
         return {
             "hits": [],
@@ -635,7 +657,13 @@ def query_index_hits(
 
     fts_q = _fts_match_query(query_lower)
     if not fts_q:
-        return empty
+        return {
+            "hits": [],
+            "query_ok": False,
+            "sql_rows_fetched": 0,
+            "sql_exhausted": True,
+            "index_locked": False,
+        }
 
     sql_limit = max(max_results, _FTS_BATCH_SIZE)
     with _index_db_conn(readonly=True) as conn:
@@ -713,7 +741,13 @@ def query_index_hits(
 
 def reset_background_for_tests() -> None:
     """Allow tests to restart the background worker."""
-    global _background_started
+    global _background_started, _background_lock_fd
     with _index_lock:
         _background_started = False
+        if _background_lock_fd is not None:
+            try:
+                os.close(_background_lock_fd)
+            except OSError:
+                pass
+            _background_lock_fd = None
     _clear_usability_cache()

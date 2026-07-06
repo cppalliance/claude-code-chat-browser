@@ -56,6 +56,16 @@ describe('search page', () => {
         expect(document.getElementById('content').innerHTML).toContain('30 days');
     });
 
+    it('doSearch prompts when query is empty', async () => {
+        showSearchPage();
+        document.getElementById('search-input').value = '   ';
+
+        await doSearch();
+
+        expect(document.getElementById('search-results').innerHTML).toContain('Enter a search term');
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
     it('doSearch renders results with highlighted snippet text', async () => {
         showSearchPage();
         fetch.mockResolvedValue({

@@ -77,14 +77,15 @@ def _rank_search_hits(results: list[SearchHitDict]) -> list[SearchHitDict]:
     )
 
 
-def _projects_dir_available(projects_dir: str) -> bool:
+def _projects_dir_inaccessible(projects_dir: str) -> bool:
+    """True when the projects path exists but cannot be listed (503 case)."""
     try:
         if not os.path.isdir(projects_dir):
             return False
         os.listdir(projects_dir)
-        return True
-    except OSError:
         return False
+    except OSError:
+        return True
 
 
 def _message_searchable_text(msg: MessageDict) -> str:
@@ -120,7 +121,7 @@ def _index_hit_excluded(
             file_path,
             exc_info=True,
         )
-        return False
+        return True
     return is_session_excluded(rules, session, project_name)
 
 
@@ -276,7 +277,7 @@ def search() -> FlaskReturn:
     )
 
     base = current_app.config.get("CLAUDE_PROJECTS_DIR") or get_claude_projects_dir()
-    if not _projects_dir_available(base):
+    if _projects_dir_inaccessible(base):
         return error_response(
             ErrorCode.SEARCH_PROJECTS_UNAVAILABLE,
             "Claude projects directory is not accessible",

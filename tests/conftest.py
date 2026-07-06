@@ -41,8 +41,7 @@ def _make_test_client(tmp_path, session_files: Mapping[str, str] | None = None):
         project_dir.mkdir(parents=True)
         for dest_name, fixture_name in session_files.items():
             shutil.copy(FIXTURES / fixture_name, project_dir / dest_name)
-    app = create_app(base_dir=str(tmp_path))
-    app.config["TESTING"] = True
+    app = create_app(base_dir=str(tmp_path), testing=True)
     return app.test_client()
 
 

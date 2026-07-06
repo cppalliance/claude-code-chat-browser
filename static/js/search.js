@@ -13,17 +13,24 @@ let lastSearchRequestId = 0;
 export function highlightSnippet(snippet, query) {
     if (!snippet) return '';
     if (!query) return esc(snippet);
-    const hay = snippet.toLowerCase();
-    const needle = query.toLowerCase();
-    const idx = hay.indexOf(needle);
-    if (idx < 0) return esc(snippet);
-    return (
-        esc(snippet.slice(0, idx))
-        + '<mark>'
-        + esc(snippet.slice(idx, idx + query.length))
-        + '</mark>'
-        + esc(snippet.slice(idx + query.length))
-    );
+    const chars = [...snippet];
+    const needle = [...query].map((ch) => ch.toLowerCase());
+    const hay = chars.map((ch) => ch.toLowerCase());
+    for (let i = 0; i <= hay.length - needle.length; i += 1) {
+        let matched = true;
+        for (let j = 0; j < needle.length; j += 1) {
+            if (hay[i + j] !== needle[j]) {
+                matched = false;
+                break;
+            }
+        }
+        if (!matched) continue;
+        const before = chars.slice(0, i).join('');
+        const match = chars.slice(i, i + needle.length).join('');
+        const after = chars.slice(i + needle.length).join('');
+        return esc(before) + '<mark>' + esc(match) + '</mark>' + esc(after);
+    }
+    return esc(snippet);
 }
 
 export function showSearchPage() {
@@ -77,11 +84,14 @@ export async function doSearch() {
     const localRequestId = ++lastSearchRequestId;
     const input = document.getElementById('search-input');
     if (!input) { showSearchPage(); return; }
+    const container = document.getElementById('search-results');
     const query = input.value.trim();
-    if (!query) return;
+    if (!query) {
+        container.innerHTML = '<p class="search-error">Enter a search term.</p>';
+        return;
+    }
 
     const allHistory = document.getElementById('search-all-history')?.checked;
-    const container = document.getElementById('search-results');
     container.innerHTML = '<div class="search-loading">Searching...</div>';
 
     const params = new URLSearchParams({

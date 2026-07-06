@@ -59,7 +59,7 @@ Extra fields may appear for specific codes (for example `since` on invalid bulk-
 | `SEARCH_EMPTY_QUERY` | 400 | `GET /api/search` | Query param `q` is empty or whitespace |
 | `SEARCH_QUERY_TOO_LONG` | 400 | `GET /api/search` | Query param `q` exceeds 500 characters |
 | `SEARCH_INVALID_SINCE_DAYS` | 400 | `GET /api/search` | Query param `since_days` is not a positive integer |
-| `SEARCH_PROJECTS_UNAVAILABLE` | 503 | `GET /api/search` | Claude projects directory is missing or not readable |
+| `SEARCH_PROJECTS_UNAVAILABLE` | 503 | `GET /api/search` | Claude projects directory exists but is not readable |
 | `SEARCH_INDEX_UNAVAILABLE` | 503 | `GET /api/search` | FTS index is locked during rebuild |
 | `INVALID_PATH` | 400 | Session, stats, export session | Path traversal or rejected URL segment |
 | `SESSION_NOT_FOUND` | 404 | Session, stats, export session | File missing on disk or session excluded by rules |
@@ -319,7 +319,7 @@ By default, messages older than 30 days are excluded. Sessions without a parseab
 | 400 | `SEARCH_QUERY_TOO_LONG` | `q` exceeds 500 characters |
 | 400 | `SEARCH_INVALID_LIMIT` | `limit` not a positive integer (e.g. `abc`, `0`, `1.5`) |
 | 400 | `SEARCH_INVALID_SINCE_DAYS` | `since_days` not a positive integer |
-| 503 | `SEARCH_PROJECTS_UNAVAILABLE` | Projects directory missing or not readable |
+| 503 | `SEARCH_PROJECTS_UNAVAILABLE` | Projects directory exists but is not readable |
 | 503 | `SEARCH_INDEX_UNAVAILABLE` | FTS index locked during rebuild |
 | 500 | `INTERNAL_ERROR` | Unexpected server failure |
 

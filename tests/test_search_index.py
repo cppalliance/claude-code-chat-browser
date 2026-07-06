@@ -350,6 +350,13 @@ class TestQueryIndexHits:
             assert result["query_ok"] is False
             assert result["hits"] == []
 
+    def test_tokenless_query_is_not_index_ok(self, indexed_tree):
+        patches = _index_patches(indexed_tree["cache_root"])
+        with patches[0]:
+            result = query_index_hits("!!!", since_ms=None, max_results=5)
+            assert result["query_ok"] is False
+            assert result["hits"] == []
+
 
 class TestBypassAndBackground:
     def test_no_search_index_env_disables_index(self, indexed_tree, monkeypatch):

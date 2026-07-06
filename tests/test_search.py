@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
+from api.search import _index_hit_excluded
 from app import create_app
 from tests.conftest import FIXTURES, assert_error_response
 from utils.search_index import build_search_index, reset_background_for_tests
@@ -105,10 +106,16 @@ def test_invalid_since_days_zero(client_single):
 
 
 def test_projects_unavailable(client_single, monkeypatch):
-    monkeypatch.setattr("api.search._projects_dir_available", lambda _path: False)
+    monkeypatch.setattr("api.search._projects_dir_inaccessible", lambda _path: True)
     resp = client_single.get("/api/search?q=Hello")
     assert resp.status_code == 503
     assert_error_response(resp, expected_code="SEARCH_PROJECTS_UNAVAILABLE")
+
+
+def test_missing_projects_dir_is_not_unavailable(client_single, monkeypatch):
+    monkeypatch.setattr("api.search._projects_dir_inaccessible", lambda _path: False)
+    resp = client_single.get("/api/search?q=Hello")
+    assert resp.status_code == 200
 
 
 def test_index_unavailable_when_locked(tmp_path, monkeypatch):
@@ -154,8 +161,7 @@ def _seed_indexed_client(tmp_path, monkeypatch, *, timestamp: str):
     with patches[0]:
         assert build_search_index(str(tmp_path / "projects"), [], force=True) is True
 
-    app = create_app(base_dir=str(tmp_path / "projects"))
-    app.config["TESTING"] = True
+    app = create_app(base_dir=str(tmp_path / "projects"), testing=True)
     return app.test_client()
 
 
@@ -183,6 +189,36 @@ def test_search_uses_index_when_usable(tmp_path, monkeypatch):
         resp = client.get("/api/search?q=Hello")
     assert resp.status_code == 200
     assert len(resp.get_json()) >= 1
+
+
+def test_index_hit_excluded_fails_closed_when_session_unreadable():
+    rules = [[("word", "secret")]]
+    with (
+        patch("api.search.get_summary", return_value=None),
+        patch("api.search.get_cached_session", side_effect=OSError("unreadable")),
+    ):
+        assert _index_hit_excluded(
+            rules,
+            "rules-fp",
+            project_name="demo",
+            file_path="/tmp/session.jsonl",
+            mtime=1.0,
+        )
+
+
+def test_search_falls_back_on_tokenless_query(tmp_path, monkeypatch):
+    recent_ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    client = _seed_indexed_client(tmp_path, monkeypatch, timestamp=recent_ts)
+    seen: list[bool] = []
+
+    def _fake_live_scan(*_args, **_kwargs):
+        seen.append(True)
+        return []
+
+    with patch("api.search._search_live_scan", side_effect=_fake_live_scan):
+        resp = client.get("/api/search?q=!!!")
+    assert resp.status_code == 200
+    assert seen == [True]
 
 
 def test_search_falls_back_when_index_query_fails(tmp_path, monkeypatch):
