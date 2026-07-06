@@ -56,6 +56,11 @@ Extra fields may appear for specific codes (for example `since` on invalid bulk-
 | `code` | HTTP | Routes | Meaning |
 |--------|------|--------|---------|
 | `SEARCH_INVALID_LIMIT` | 400 | `GET /api/search` | Query param `limit` is not a positive integer |
+| `SEARCH_EMPTY_QUERY` | 400 | `GET /api/search` | Query param `q` is empty or whitespace |
+| `SEARCH_QUERY_TOO_LONG` | 400 | `GET /api/search` | Query param `q` exceeds 500 characters |
+| `SEARCH_INVALID_SINCE_DAYS` | 400 | `GET /api/search` | Query param `since_days` is not a positive integer |
+| `SEARCH_PROJECTS_UNAVAILABLE` | 503 | `GET /api/search` | Claude projects directory is missing or not readable |
+| `SEARCH_INDEX_UNAVAILABLE` | 503 | `GET /api/search` | FTS index is locked during rebuild |
 | `INVALID_PATH` | 400 | Session, stats, export session | Path traversal or rejected URL segment |
 | `SESSION_NOT_FOUND` | 404 | Session, stats, export session | File missing on disk or session excluded by rules |
 | `INVALID_REQUEST_BODY` | 400 | `POST /api/export` | Body is not a JSON object |
@@ -280,14 +285,18 @@ curl -s "http://127.0.0.1:5000/api/sessions/F--boost-capy/session_abc123/stats" 
 
 **Source:** [`api/search.py`](../api/search.py)
 
-Case-insensitive substring search across all non-excluded messages in all projects. Linear scan — suitable for local history size, not indexed search.
+Case-insensitive substring search across all non-excluded messages in all projects. Uses a local FTS5 index when available; falls back to a live JSONL scan when the index is missing, stale, or the query cannot be served from SQLite.
 
 #### Query parameters
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `q` | string | `""` | Search string; whitespace stripped; empty → `[]` |
+| `q` | string | — | Search string (required); whitespace stripped; max 500 characters |
 | `limit` | integer | `50` | Max results; must be ≥ 1; **capped at 500** |
+| `all_history` | flag | off | When `1` or `true`, search all history (no time window) |
+| `since_days` | integer | `30` | When `all_history` is off, include messages from the last *N* days (positive integer; capped at 36 500) |
+
+By default, messages older than 30 days are excluded. Sessions without a parseable timestamp may still match when windowed.
 
 #### Response — `200 OK`
 
@@ -306,10 +315,17 @@ Case-insensitive substring search across all non-excluded messages in all projec
 
 | Status | `code` | When |
 |--------|--------|------|
+| 400 | `SEARCH_EMPTY_QUERY` | `q` is empty or whitespace |
+| 400 | `SEARCH_QUERY_TOO_LONG` | `q` exceeds 500 characters |
 | 400 | `SEARCH_INVALID_LIMIT` | `limit` not a positive integer (e.g. `abc`, `0`, `1.5`) |
+| 400 | `SEARCH_INVALID_SINCE_DAYS` | `since_days` not a positive integer |
+| 503 | `SEARCH_PROJECTS_UNAVAILABLE` | Projects directory missing or not readable |
+| 503 | `SEARCH_INDEX_UNAVAILABLE` | FTS index locked during rebuild |
+| 500 | `INTERNAL_ERROR` | Unexpected server failure |
 
 ```bash
 curl -s "http://127.0.0.1:5000/api/search?q=parser&limit=10" | jq '.[0]'
+curl -s "http://127.0.0.1:5000/api/search?q="   # → 400 SEARCH_EMPTY_QUERY
 curl -s "http://127.0.0.1:5000/api/search?q=test&limit=abc"   # → 400
 ```
 

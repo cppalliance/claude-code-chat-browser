@@ -77,6 +77,7 @@ class IndexQueryResult(TypedDict):
     query_ok: bool
     sql_rows_fetched: int
     sql_exhausted: bool
+    index_locked: bool
 
 
 def cache_dir() -> Path:
@@ -621,9 +622,16 @@ def query_index_hits(
         "query_ok": True,
         "sql_rows_fetched": 0,
         "sql_exhausted": True,
+        "index_locked": False,
     }
     if not query_lower or not index_search_enabled():
-        return {"hits": [], "query_ok": False, "sql_rows_fetched": 0, "sql_exhausted": True}
+        return {
+            "hits": [],
+            "query_ok": False,
+            "sql_rows_fetched": 0,
+            "sql_exhausted": True,
+            "index_locked": False,
+        }
 
     fts_q = _fts_match_query(query_lower)
     if not fts_q:
@@ -632,7 +640,13 @@ def query_index_hits(
     sql_limit = max(max_results, _FTS_BATCH_SIZE)
     with _index_db_conn(readonly=True) as conn:
         if conn is None:
-            return {"hits": [], "query_ok": False, "sql_rows_fetched": 0, "sql_exhausted": True}
+            return {
+                "hits": [],
+                "query_ok": False,
+                "sql_rows_fetched": 0,
+                "sql_exhausted": True,
+                "index_locked": False,
+            }
         try:
             rows = conn.execute(
                 "SELECT m.session_id, m.project_name, m.role, m.timestamp_ms, m.text,"
@@ -645,9 +659,24 @@ def query_index_hits(
                 " LIMIT ? OFFSET ?",
                 (fts_q, sql_limit, sql_offset),
             ).fetchall()
+        except sqlite3.OperationalError as exc:
+            _logger.debug("FTS query locked (%s); index may be rebuilding", exc)
+            return {
+                "hits": [],
+                "query_ok": False,
+                "sql_rows_fetched": 0,
+                "sql_exhausted": True,
+                "index_locked": True,
+            }
         except sqlite3.Error as exc:
             _logger.debug("FTS query failed (%s); index may be rebuilding", exc)
-            return {"hits": [], "query_ok": False, "sql_rows_fetched": 0, "sql_exhausted": True}
+            return {
+                "hits": [],
+                "query_ok": False,
+                "sql_rows_fetched": 0,
+                "sql_exhausted": True,
+                "index_locked": False,
+            }
 
     hits: list[IndexMessageHitDict] = []
     rows_scanned = 0
@@ -678,6 +707,7 @@ def query_index_hits(
         "query_ok": True,
         "sql_rows_fetched": rows_scanned,
         "sql_exhausted": len(rows) < sql_limit,
+        "index_locked": False,
     }
 
 

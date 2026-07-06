@@ -20,6 +20,20 @@ from tests.conftest import assert_error_response
         ),
         (
             "get",
+            "/api/search?q=",
+            {},
+            400,
+            ErrorCode.SEARCH_EMPTY_QUERY,
+        ),
+        (
+            "get",
+            "/api/search?q=test&since_days=foo",
+            {},
+            400,
+            ErrorCode.SEARCH_INVALID_SINCE_DAYS,
+        ),
+        (
+            "get",
             "/api/sessions/test-project/nonexistent",
             {},
             404,

@@ -6,7 +6,25 @@ import { showProjects } from './projects.js';
 
 // ==================== Search ====================
 
+const SEARCH_LIMIT = 50;
+
 let lastSearchRequestId = 0;
+
+export function highlightSnippet(snippet, query) {
+    if (!snippet) return '';
+    if (!query) return esc(snippet);
+    const hay = snippet.toLowerCase();
+    const needle = query.toLowerCase();
+    const idx = hay.indexOf(needle);
+    if (idx < 0) return esc(snippet);
+    return (
+        esc(snippet.slice(0, idx))
+        + '<mark>'
+        + esc(snippet.slice(idx, idx + query.length))
+        + '</mark>'
+        + esc(snippet.slice(idx + query.length))
+    );
+}
 
 export function showSearchPage() {
     setHamburgerVisible(false);
@@ -21,6 +39,14 @@ export function showSearchPage() {
             </a>
             <br><br>
             <h1>Search</h1>
+            <p class="text-muted text-sm search-help">
+                By default, search covers the last 30 days. Chats without a parseable date may still appear.
+                Results are capped at ${SEARCH_LIMIT} (up to 500 via the API). Check
+                <label class="search-all-history-label">
+                    <input type="checkbox" id="search-all-history"> Search all history
+                </label>
+                to include older messages.
+            </p>
             <div class="search-bar">
                 <input class="input" type="text" id="search-input" placeholder="Search conversations..." autofocus>
                 <button type="button" class="btn btn-primary" id="search-submit-btn">Search</button>
@@ -54,36 +80,57 @@ export async function doSearch() {
     const query = input.value.trim();
     if (!query) return;
 
+    const allHistory = document.getElementById('search-all-history')?.checked;
     const container = document.getElementById('search-results');
-    container.innerHTML = '<div class="loading">Searching...</div>';
+    container.innerHTML = '<div class="search-loading">Searching...</div>';
+
+    const params = new URLSearchParams({
+        q: query,
+        limit: String(SEARCH_LIMIT),
+    });
+    if (allHistory) params.set('all_history', '1');
 
     try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&limit=50`);
+        const res = await fetch(`/api/search?${params.toString()}`);
         if (localRequestId !== lastSearchRequestId) return;
         if (!res.ok) {
-            let msg = `Search failed (${res.status})`;
-            try { msg = await res.text() || msg; } catch { /* ignore */ }
+            let message = `Search failed (${res.status})`;
+            let code = '';
+            try {
+                const body = await res.json();
+                if (body && typeof body.error === 'string') message = body.error;
+                if (body && typeof body.code === 'string') code = body.code;
+            } catch {
+                try { message = await res.text() || message; } catch { /* ignore */ }
+            }
             if (localRequestId !== lastSearchRequestId) return;
-            throw new Error(msg);
+            const codeAttr = code ? ` data-error-code="${esc(code)}"` : '';
+            container.innerHTML = `<p class="search-error"${codeAttr}>${esc(message)}</p>`;
+            return;
         }
         const results = await res.json();
         if (localRequestId !== lastSearchRequestId) return;
 
-        let html = `<p class="text-muted text-sm">${results.length} result${results.length !== 1 ? 's' : ''}</p><br>`;
+        let html = `<p class="text-muted text-sm">${results.length} result${results.length !== 1 ? 's' : ''}</p>`;
+        if (results.length >= SEARCH_LIMIT) {
+            html += `<p class="text-muted text-sm search-truncation">Showing the first ${SEARCH_LIMIT} matches. Narrow your query or raise <code>limit</code> in the API for more.</p>`;
+        }
         html += '<div class="search-results">';
 
         for (const r of results) {
             html += `<div class="search-result" data-project="${esc(r.project)}" data-session-id="${esc(r.session_id)}">
                 <div><strong>${esc(r.title)}</strong> <span class="text-muted text-sm">${esc(r.project)} &bull; ${esc(r.role)}</span></div>
-                <div class="snippet">...${esc(r.snippet)}...</div>
+                <div class="snippet">...${highlightSnippet(r.snippet, query)}...</div>
             </div>`;
         }
 
-        if (!results.length) html += '<div class="empty-state">No results found.</div>';
+        if (!results.length) {
+            html += '<div class="search-empty">No results found.</div>';
+        }
         html += '</div>';
         smoothSet(container, html);
     } catch (e) {
         if (localRequestId !== lastSearchRequestId) return;
-        container.innerHTML = `<div class="loading">Error: ${esc(e.message)}</div>`;
+        container.innerHTML = `<p class="search-error">${esc(e.message)}</p>`;
     }
 }

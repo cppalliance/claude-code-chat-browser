@@ -204,6 +204,25 @@ class TestGetProjectsErrorCard:
 
 
 # ---------------------------------------------------------------------------
+# GET /api/search
+# ---------------------------------------------------------------------------
+
+
+def test_search_internal_error_does_not_leak(client_single, monkeypatch):
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("internal_secret_search_token")
+
+    monkeypatch.setattr("api.search._search_via_index", lambda *_a, **_kw: None)
+    monkeypatch.setattr("api.search._search_live_scan", _boom)
+
+    resp = client_single.get("/api/search?q=Hello&all_history=1")
+    assert resp.status_code == 500
+    body_text = json.dumps(resp.get_json())
+    _assert_no_class_name_leak(body_text)
+    assert "internal_secret_search_token" not in body_text
+
+
+# ---------------------------------------------------------------------------
 # Source-level guard
 # ---------------------------------------------------------------------------
 

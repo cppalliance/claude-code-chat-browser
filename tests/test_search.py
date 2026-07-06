@@ -82,8 +82,51 @@ def test_limit_negative(client_single):
 
 def test_empty_query(client_single):
     resp = client_single.get("/api/search?q=")
-    assert resp.status_code == 200
-    assert resp.get_json() == []
+    assert resp.status_code == 400
+    assert_error_response(resp, expected_code="SEARCH_EMPTY_QUERY")
+
+
+def test_query_too_long(client_single):
+    resp = client_single.get(f"/api/search?q={'x' * 501}")
+    assert resp.status_code == 400
+    assert_error_response(resp, expected_code="SEARCH_QUERY_TOO_LONG")
+
+
+def test_invalid_since_days(client_single):
+    resp = client_single.get("/api/search?q=Hello&since_days=foo")
+    assert resp.status_code == 400
+    assert_error_response(resp, expected_code="SEARCH_INVALID_SINCE_DAYS")
+
+
+def test_invalid_since_days_zero(client_single):
+    resp = client_single.get("/api/search?q=Hello&since_days=0")
+    assert resp.status_code == 400
+    assert_error_response(resp, expected_code="SEARCH_INVALID_SINCE_DAYS")
+
+
+def test_projects_unavailable(client_single, monkeypatch):
+    monkeypatch.setattr("api.search._projects_dir_available", lambda _path: False)
+    resp = client_single.get("/api/search?q=Hello")
+    assert resp.status_code == 503
+    assert_error_response(resp, expected_code="SEARCH_PROJECTS_UNAVAILABLE")
+
+
+def test_index_unavailable_when_locked(tmp_path, monkeypatch):
+    recent_ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    client = _seed_indexed_client(tmp_path, monkeypatch, timestamp=recent_ts)
+    with patch(
+        "api.search.query_index_hits",
+        return_value={
+            "hits": [],
+            "query_ok": False,
+            "sql_rows_fetched": 0,
+            "sql_exhausted": True,
+            "index_locked": True,
+        },
+    ):
+        resp = client.get("/api/search?q=Hello")
+    assert resp.status_code == 503
+    assert_error_response(resp, expected_code="SEARCH_INDEX_UNAVAILABLE")
 
 
 def _index_patches(cache_root: Path):
@@ -152,6 +195,7 @@ def test_search_falls_back_when_index_query_fails(tmp_path, monkeypatch):
             "query_ok": False,
             "sql_rows_fetched": 0,
             "sql_exhausted": True,
+            "index_locked": False,
         },
     ):
         resp = client.get("/api/search?q=Hello")
