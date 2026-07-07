@@ -37,10 +37,6 @@ _MAX_QUERY_LEN = 500
 _MAX_SEARCH_SINCE_DAYS = 36_500
 
 
-class _SearchIndexUnavailable(Exception):
-    """Raised when the FTS index exists but is locked during rebuild."""
-
-
 def _parse_limit(raw: str | None, default: int = _DEFAULT_LIMIT) -> int:
     """Parse a positive integer limit from a query string value."""
     if raw is None or raw.strip() == "":
@@ -149,7 +145,13 @@ def _search_via_index(
             sql_offset=sql_offset,
         )
         if indexed["index_locked"]:
-            raise _SearchIndexUnavailable()
+            _logger.warning(
+                "Search index locked during query; %d hit(s) collected so far",
+                len(results),
+            )
+            if results:
+                return _rank_search_hits(results)[:max_results]
+            return None
         if not indexed["query_ok"]:
             return None
         if indexed["sql_rows_fetched"] == 0:
@@ -307,12 +309,6 @@ def search() -> FlaskReturn:
                 since_ms=since_ms,
                 max_results=max_results,
             )
-        )
-    except _SearchIndexUnavailable:
-        return error_response(
-            ErrorCode.SEARCH_INDEX_UNAVAILABLE,
-            "Search index is temporarily unavailable",
-            503,
         )
     except Exception:
         _logger.exception("Unexpected error during search")

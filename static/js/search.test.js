@@ -126,10 +126,10 @@ describe('search page', () => {
         fetch.mockResolvedValue({
             ok: false,
             status: 503,
-            json: () => Promise.resolve({
-                error: 'Search index is temporarily unavailable',
-                code: 'SEARCH_INDEX_UNAVAILABLE',
-            }),
+            text: () => Promise.resolve(JSON.stringify({
+                error: 'Claude projects directory is not accessible',
+                code: 'SEARCH_PROJECTS_UNAVAILABLE',
+            })),
         });
         document.getElementById('search-input').value = 'fail';
 
@@ -137,8 +137,25 @@ describe('search page', () => {
 
         const err = document.querySelector('.search-error');
         expect(err).not.toBeNull();
-        expect(err.getAttribute('data-error-code')).toBe('SEARCH_INDEX_UNAVAILABLE');
-        expect(err.textContent).toContain('temporarily unavailable');
+        expect(err.getAttribute('data-error-code')).toBe('SEARCH_PROJECTS_UNAVAILABLE');
+        expect(err.textContent).toContain('not accessible');
+    });
+
+    it('doSearch shows plain-text error body when response is not JSON', async () => {
+        showSearchPage();
+        fetch.mockResolvedValue({
+            ok: false,
+            status: 502,
+            text: () => Promise.resolve('Bad Gateway from proxy'),
+        });
+        document.getElementById('search-input').value = 'fail';
+
+        await doSearch();
+
+        const err = document.querySelector('.search-error');
+        expect(err).not.toBeNull();
+        expect(err.textContent).toBe('Bad Gateway from proxy');
+        expect(err.getAttribute('data-error-code')).toBeNull();
     });
 
     it('doSearch ignores stale responses when a newer request was started', async () => {

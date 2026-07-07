@@ -106,12 +106,14 @@ export async function doSearch() {
         if (!res.ok) {
             let message = `Search failed (${res.status})`;
             let code = '';
+            const raw = await res.text();
             try {
-                const body = await res.json();
+                const body = JSON.parse(raw);
                 if (body && typeof body.error === 'string') message = body.error;
                 if (body && typeof body.code === 'string') code = body.code;
             } catch {
-                try { message = await res.text() || message; } catch { /* ignore */ }
+                const trimmed = raw.trim();
+                if (trimmed) message = trimmed;
             }
             if (localRequestId !== lastSearchRequestId) return;
             const codeAttr = code ? ` data-error-code="${esc(code)}"` : '';

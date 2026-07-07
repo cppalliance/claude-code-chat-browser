@@ -118,22 +118,22 @@ def test_missing_projects_dir_is_not_unavailable(client_single, monkeypatch):
     assert resp.status_code == 200
 
 
-def test_index_unavailable_when_locked(tmp_path, monkeypatch):
+def test_index_lock_falls_back_to_live_scan(tmp_path, monkeypatch):
     recent_ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     client = _seed_indexed_client(tmp_path, monkeypatch, timestamp=recent_ts)
     with patch(
         "api.search.query_index_hits",
         return_value={
             "hits": [],
-            "query_ok": False,
+            "query_ok": True,
             "sql_rows_fetched": 0,
             "sql_exhausted": True,
             "index_locked": True,
         },
     ):
         resp = client.get("/api/search?q=Hello")
-    assert resp.status_code == 503
-    assert_error_response(resp, expected_code="SEARCH_INDEX_UNAVAILABLE")
+    assert resp.status_code == 200
+    assert len(resp.get_json()) >= 1
 
 
 def _index_patches(cache_root: Path):
