@@ -20,6 +20,7 @@ from utils.search_index import (
     resolve_search_since_ms,
     search_snippet,
     timestamp_in_search_window_iso,
+    timestamp_to_ms,
     tool_result_searchable_text,
 )
 from utils.session_cache import get_cached_session
@@ -57,6 +58,17 @@ def _parse_since_days(raw: str | None) -> int | None:
     if days <= 0:
         return None
     return min(days, _MAX_SEARCH_SINCE_DAYS)
+
+
+def _rank_search_hits(results: list[SearchHitDict]) -> list[SearchHitDict]:
+    """Sort hits by timestamp descending (missing timestamps last)."""
+    return sorted(
+        results,
+        key=lambda hit: timestamp_to_ms(
+            hit["timestamp"] if isinstance(hit.get("timestamp"), str) else None
+        ),
+        reverse=True,
+    )
 
 
 def _message_searchable_text(msg: MessageDict) -> str:
@@ -149,7 +161,7 @@ def _search_via_index(
         sql_offset += indexed["sql_rows_fetched"]
         if indexed["sql_exhausted"]:
             break
-    return results
+    return _rank_search_hits(results)[:max_results]
 
 
 def _search_live_scan(
@@ -164,12 +176,8 @@ def _search_live_scan(
     projects = list_projects(base)
     results: list[SearchHitDict] = []
     for project in projects:
-        if len(results) >= max_results:
-            break
         sessions = list_sessions(project["path"])
         for sess_info in sessions:
-            if len(results) >= max_results:
-                break
             try:
                 session = get_cached_session(sess_info["path"])
             except Exception:
@@ -202,9 +210,7 @@ def _search_live_scan(
                         "snippet": search_snippet(text, query),
                     }
                 )
-                if len(results) >= max_results:
-                    break
-    return results
+    return _rank_search_hits(results)[:max_results]
 
 
 @search_bp.route("/api/search")

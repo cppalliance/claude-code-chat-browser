@@ -58,6 +58,7 @@ _background_started = False
 _usability_cache: dict[tuple[str, str], tuple[bool, float]] = {}
 _usability_cache_lock = threading.Lock()
 _USABILITY_CACHE_TTL_SECONDS = 30.0
+_FTS_BATCH_SIZE = 200
 
 
 class IndexMessageHitDict(TypedDict):
@@ -628,7 +629,7 @@ def query_index_hits(
     if not fts_q:
         return empty
 
-    sql_limit = max(max_results * 20, max_results)
+    sql_limit = max(max_results, _FTS_BATCH_SIZE)
     with _index_db_conn(readonly=True) as conn:
         if conn is None:
             return {"hits": [], "query_ok": False, "sql_rows_fetched": 0, "sql_exhausted": True}
@@ -640,6 +641,7 @@ def query_index_hits(
                 " JOIN sessions s"
                 " ON s.session_id = m.session_id AND s.project_name = m.project_name"
                 " WHERE messages_fts MATCH ?"
+                " ORDER BY m.timestamp_ms DESC"
                 " LIMIT ? OFFSET ?",
                 (fts_q, sql_limit, sql_offset),
             ).fetchall()
@@ -648,7 +650,9 @@ def query_index_hits(
             return {"hits": [], "query_ok": False, "sql_rows_fetched": 0, "sql_exhausted": True}
 
     hits: list[IndexMessageHitDict] = []
+    rows_scanned = 0
     for row in rows:
+        rows_scanned += 1
         text = row["text"] or ""
         if query_lower not in text.lower():
             continue
@@ -672,7 +676,7 @@ def query_index_hits(
     return {
         "hits": hits,
         "query_ok": True,
-        "sql_rows_fetched": len(rows),
+        "sql_rows_fetched": rows_scanned,
         "sql_exhausted": len(rows) < sql_limit,
     }
 

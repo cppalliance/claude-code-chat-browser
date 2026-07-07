@@ -147,7 +147,12 @@ def test_search_falls_back_when_index_query_fails(tmp_path, monkeypatch):
     client = _seed_indexed_client(tmp_path, monkeypatch, timestamp=recent_ts)
     with patch(
         "api.search.query_index_hits",
-        return_value={"hits": [], "query_ok": False},
+        return_value={
+            "hits": [],
+            "query_ok": False,
+            "sql_rows_fetched": 0,
+            "sql_exhausted": True,
+        },
     ):
         resp = client.get("/api/search?q=Hello")
     assert resp.status_code == 200

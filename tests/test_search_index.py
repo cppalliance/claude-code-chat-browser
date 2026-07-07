@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
+from api.search import _search_via_index
 from utils.search_index import (
     build_search_index,
     index_is_usable,
@@ -238,6 +239,93 @@ class TestSearchWindow:
 
 
 class TestQueryIndexHits:
+    def test_results_ordered_newest_first(self, tmp_path, monkeypatch):
+        cache_root = tmp_path / "cache"
+        cache_root.mkdir()
+        projects = tmp_path / "projects"
+        _write_session(
+            projects / "order-proj" / "session.jsonl",
+            [
+                {
+                    "type": "user",
+                    "timestamp": "2026-05-19T10:00:00Z",
+                    "message": {"content": [{"type": "text", "text": "order alpha token"}]},
+                },
+                {
+                    "type": "user",
+                    "timestamp": "2026-06-19T10:00:00Z",
+                    "message": {"content": [{"type": "text", "text": "order beta token"}]},
+                },
+                {
+                    "type": "user",
+                    "timestamp": "2026-07-19T10:00:00Z",
+                    "message": {"content": [{"type": "text", "text": "order gamma token"}]},
+                },
+            ],
+        )
+        monkeypatch.setenv("CLAUDE_CODE_CHAT_BROWSER_SEARCH_INDEX_DIR", str(cache_root))
+        patches = _index_patches(cache_root)
+        with patches[0]:
+            build_search_index(str(projects), [], force=True)
+            hits = query_index_hits("order", since_ms=None, max_results=10)
+            assert hits["query_ok"] is True
+            assert len(hits["hits"]) == 3
+            timestamps = [hit["timestamp"] for hit in hits["hits"]]
+            assert timestamps == sorted(timestamps, reverse=True)
+
+    def test_phrase_filter_paginates_past_decoy_token_matches(self, tmp_path, monkeypatch):
+        """Multi-word phrase matches beyond one FTS batch are not skipped."""
+        cache_root = tmp_path / "cache"
+        cache_root.mkdir()
+        projects = tmp_path / "projects"
+        lines: list[dict[str, object]] = []
+        for i in range(250):
+            lines.append(
+                {
+                    "type": "user",
+                    "timestamp": f"2026-07-{(i % 28) + 1:02d}T10:00:00Z",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"phrase target decoy unique token only {i}",
+                            }
+                        ]
+                    },
+                }
+            )
+        phrase = "decoy unique token only phrase target"
+        lines.append(
+            {
+                "type": "user",
+                "timestamp": "2025-12-01T10:00:00Z",
+                "message": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": phrase,
+                        }
+                    ]
+                },
+            }
+        )
+        _write_session(projects / "page-proj" / "session.jsonl", lines)
+        monkeypatch.setenv("CLAUDE_CODE_CHAT_BROWSER_SEARCH_INDEX_DIR", str(cache_root))
+        patches = _index_patches(cache_root)
+        with patches[0]:
+            build_search_index(str(projects), [], force=True)
+            results = _search_via_index(
+                str(projects),
+                [],
+                phrase,
+                phrase.lower(),
+                since_ms=None,
+                max_results=1,
+            )
+            assert results is not None
+            assert len(results) == 1
+            assert phrase in results[0]["snippet"] or "phrase target" in results[0]["snippet"]
+
     def test_fts_failure_returns_query_not_ok(self, indexed_tree):
         @contextmanager
         def _broken_conn(*, readonly: bool = True):
