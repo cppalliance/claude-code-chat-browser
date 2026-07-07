@@ -8,12 +8,22 @@ import sys
 from pathlib import Path
 
 THRESHOLD = 1.20
+# Sub-ms search timings are noisy on ubuntu CI; allow a wider band than parse/export.
+SEARCH_BENCHMARK_THRESHOLD = 2.0
+RELAXED_THRESHOLD_TESTS = frozenset({"test_search_full_corpus"})
+
+
+def benchmark_regression_limit(name: str, threshold: float = THRESHOLD) -> float:
+    """Return the allowed regression ratio for a gated benchmark."""
+    if name in RELAXED_THRESHOLD_TESTS:
+        return SEARCH_BENCHMARK_THRESHOLD
+    return threshold
+
 
 # Sub-ms timings are too noisy for a fixed 20% gate on ubuntu CI.
 EXCLUDED_FROM_GATE = frozenset(
     {
         "test_parse_session_small",
-        "test_search_full_corpus",
     }
 )
 
@@ -153,13 +163,14 @@ def check_regression(
             print(f"WARN: baseline for {name!r} is zero; skipping ratio check")
             continue
         ratio = cur / base
-        tag = "FAIL" if ratio > threshold else "ok"
+        limit = benchmark_regression_limit(name, threshold)
+        tag = "FAIL" if ratio > limit else "ok"
         entry = entries_by_name.get(name)
         if metric_is_bytes(name, entry):
             print(f"[{tag}] {name}: {cur:.0f} bytes vs {base:.0f} bytes ({ratio:.2f}x)")
         else:
             print(f"[{tag}] {name}: {cur:.6f}s vs {base:.6f}s ({ratio:.2f}x)")
-        if ratio > threshold:
+        if ratio > limit:
             failures.append(name)
 
     for name in flat:
@@ -169,7 +180,15 @@ def check_regression(
             print(f"WARN: {name!r} has no baseline yet; not gated")
 
     if failures:
-        print(f"\nREGRESSION: {len(failures)} benchmark(s) exceeded {threshold:.0%}")
+        limits = {benchmark_regression_limit(name, threshold) for name in failures}
+        if len(limits) == 1:
+            (limit,) = limits
+            print(f"\nREGRESSION: {len(failures)} benchmark(s) exceeded {limit:.0%}")
+        else:
+            details = ", ".join(
+                f"{name} ({benchmark_regression_limit(name, threshold):.0%})" for name in failures
+            )
+            print(f"\nREGRESSION: {len(failures)} benchmark(s) exceeded limit: {details}")
     if missing:
         print(f"\nMISSING: {len(missing)} gated benchmark(s) absent from current results")
     if failures or missing:

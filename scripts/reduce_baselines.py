@@ -70,8 +70,8 @@ def reduce_baselines(
         "_note": (
             "Gated means from ubuntu-latest CI benchmark-results.json."
             f"{slack_note} "
-            "Excluded from gate (recorded for reference): test_parse_session_small, "
-            "test_search_full_corpus (sub-ms CI noise). "
+            "Excluded from gate (recorded for reference): test_parse_session_small "
+            "(sub-ms CI noise). "
             "Memory benchmarks use extra_info.peak_bytes (bytes); "
             "latency uses stats.mean (seconds)."
         ),

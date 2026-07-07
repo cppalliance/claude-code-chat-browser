@@ -100,7 +100,7 @@ def test_session_detail_includes_thinking_blocks(client_thinking):
 
 
 def test_search_returns_results(client):
-    resp = client.get("/api/search?q=Hello")
+    resp = client.get("/api/search?q=Hello&all_history=1")
     assert resp.status_code == 200
     results = resp.get_json()
     assert isinstance(results, list)
@@ -121,7 +121,7 @@ def test_search_invalid_limit(client):
 
 
 def test_search_valid_limit(client):
-    resp = client.get("/api/search?q=Hello&limit=5")
+    resp = client.get("/api/search?q=Hello&limit=5&all_history=1")
     assert resp.status_code == 200
     results = resp.get_json()
     assert isinstance(results, list)

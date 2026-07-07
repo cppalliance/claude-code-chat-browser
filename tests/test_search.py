@@ -5,7 +5,15 @@ The `client_single` fixture (one seeded session) is provided by tests/conftest.p
 
 from __future__ import annotations
 
-from tests.conftest import assert_error_response
+import json
+import shutil
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from unittest.mock import patch
+
+from app import create_app
+from tests.conftest import FIXTURES, assert_error_response
+from utils.search_index import build_search_index, reset_background_for_tests
 
 _SEARCH_HIT_KEYS = frozenset(
     {
@@ -76,3 +84,76 @@ def test_empty_query(client_single):
     resp = client_single.get("/api/search?q=")
     assert resp.status_code == 200
     assert resp.get_json() == []
+
+
+def _index_patches(cache_root: Path):
+    return (patch("utils.search_index.cache_dir", return_value=cache_root),)
+
+
+def _seed_indexed_client(tmp_path, monkeypatch, *, timestamp: str):
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    project = tmp_path / "projects" / "demo-proj"
+    project.mkdir(parents=True)
+    session_path = project / "session_alpha.jsonl"
+    shutil.copy(FIXTURES / "session_minimal.jsonl", session_path)
+    lines = session_path.read_text(encoding="utf-8").splitlines()
+    entry = json.loads(lines[0])
+    entry["timestamp"] = timestamp
+    lines[0] = json.dumps(entry, ensure_ascii=False)
+    session_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    monkeypatch.setenv("CLAUDE_CODE_CHAT_BROWSER_SEARCH_INDEX_DIR", str(cache_root))
+    monkeypatch.delenv("CLAUDE_CODE_CHAT_BROWSER_NO_SEARCH_INDEX", raising=False)
+    reset_background_for_tests()
+
+    patches = _index_patches(cache_root)
+    with patches[0]:
+        assert build_search_index(str(tmp_path / "projects"), [], force=True) is True
+
+    app = create_app(base_dir=str(tmp_path / "projects"))
+    app.config["TESTING"] = True
+    return app.test_client()
+
+
+def test_default_window_excludes_old_session(tmp_path, monkeypatch):
+    old_ts = (datetime.now(UTC) - timedelta(days=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    client = _seed_indexed_client(tmp_path, monkeypatch, timestamp=old_ts)
+    resp = client.get("/api/search?q=Hello")
+    assert resp.status_code == 200
+    assert resp.get_json() == []
+
+
+def test_all_history_includes_old_session(tmp_path, monkeypatch):
+    old_ts = (datetime.now(UTC) - timedelta(days=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    client = _seed_indexed_client(tmp_path, monkeypatch, timestamp=old_ts)
+    resp = client.get("/api/search?q=Hello&all_history=1")
+    assert resp.status_code == 200
+    assert len(resp.get_json()) >= 1
+
+
+def test_search_uses_index_when_usable(tmp_path, monkeypatch):
+    recent_ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    client = _seed_indexed_client(tmp_path, monkeypatch, timestamp=recent_ts)
+    with patch("api.search.get_cached_session") as live_parse:
+        live_parse.side_effect = AssertionError("live-scan should not run when index is warm")
+        resp = client.get("/api/search?q=Hello")
+    assert resp.status_code == 200
+    assert len(resp.get_json()) >= 1
+
+
+def test_search_falls_back_when_index_query_fails(tmp_path, monkeypatch):
+    recent_ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    client = _seed_indexed_client(tmp_path, monkeypatch, timestamp=recent_ts)
+    with patch(
+        "api.search.query_index_hits",
+        return_value={
+            "hits": [],
+            "query_ok": False,
+            "sql_rows_fetched": 0,
+            "sql_exhausted": True,
+        },
+    ):
+        resp = client.get("/api/search?q=Hello")
+    assert resp.status_code == 200
+    assert len(resp.get_json()) >= 1

@@ -3,6 +3,7 @@
 __version__ = "0.2.0.dev0"
 
 import argparse
+import logging
 import sys
 
 from flask import Flask
@@ -13,6 +14,7 @@ from api.schema_report import schema_report_bp
 from api.search import search_bp
 from api.sessions import sessions_bp
 from utils.exclusion_rules import load_rules, resolve_exclusion_rules_path
+from utils.session_path import get_claude_projects_dir
 
 # Content-Security-Policy for all Flask responses. 'unsafe-inline' in style-src is
 # required because highlight.js themes apply inline styles; can be tightened with
@@ -103,6 +105,15 @@ def create_app(
     app.register_blueprint(search_bp)
     app.register_blueprint(export_bp)
     app.register_blueprint(schema_report_bp)
+
+    if not app.config.get("TESTING"):
+        try:
+            from utils.search_index import start_search_index_background
+
+            projects_dir = base_dir or get_claude_projects_dir()
+            start_search_index_background(projects_dir, app.config["EXCLUSION_RULES"])
+        except Exception:
+            logging.getLogger(__name__).exception("Failed to start search index background worker")
 
     @app.after_request
     def set_security_headers(response):
