@@ -33,6 +33,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from flask import Flask
 
 from api.projects import projects_bp
+from api.search import _IndexSearchOutcome
 from api.sessions import sessions_bp
 
 # Defensive blocklist — any of these substrings appearing in a response body
@@ -212,7 +213,10 @@ def test_search_internal_error_does_not_leak(client_single, monkeypatch):
     def _boom(*_args, **_kwargs):
         raise RuntimeError("internal_secret_search_token")
 
-    monkeypatch.setattr("api.search._search_via_index", lambda *_a, **_kw: (None, False))
+    monkeypatch.setattr(
+        "api.search._search_via_index",
+        lambda *_a, **_kw: _IndexSearchOutcome(None, False),
+    )
     monkeypatch.setattr("api.search._search_live_scan", _boom)
 
     resp = client_single.get("/api/search?q=Hello&all_history=1")

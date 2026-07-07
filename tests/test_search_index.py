@@ -315,7 +315,7 @@ class TestQueryIndexHits:
         patches = _index_patches(cache_root)
         with patches[0]:
             build_search_index(str(projects), [], force=True)
-            results, _fts_exhausted = _search_via_index(
+            outcome = _search_via_index(
                 str(projects),
                 [],
                 phrase,
@@ -323,9 +323,10 @@ class TestQueryIndexHits:
                 since_ms=None,
                 max_results=1,
             )
-            assert results is not None
-            assert len(results) == 1
-            assert phrase in results[0]["snippet"] or "phrase target" in results[0]["snippet"]
+            assert outcome.hits is not None
+            assert len(outcome.hits) == 1
+            snippet = outcome.hits[0]["snippet"]
+            assert phrase in snippet or "phrase target" in snippet
 
     def test_fts_failure_returns_query_not_ok(self, indexed_tree):
         @contextmanager
@@ -453,7 +454,7 @@ class TestIndexSearchCompleteness:
         patches = _index_patches(cache_root)
         with patches[0]:
             build_search_index(str(projects), rules, force=True)
-            results, _fts_exhausted = _search_via_index(
+            outcome = _search_via_index(
                 str(projects),
                 rules,
                 term,
@@ -461,9 +462,9 @@ class TestIndexSearchCompleteness:
                 since_ms=None,
                 max_results=50,
             )
-            assert results is not None
-            assert len(results) == 50
-            assert all(hit["project"] == "good-proj" for hit in results)
+            assert outcome.hits is not None
+            assert len(outcome.hits) == 50
+            assert all(hit["project"] == "good-proj" for hit in outcome.hits)
 
     def test_system_content_index_and_live_scan_parity(self, tmp_path, monkeypatch):
         cache_root = tmp_path / "cache"

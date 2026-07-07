@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, NamedTuple
 
 from flask import Blueprint, current_app, request
 
@@ -34,6 +34,16 @@ _DEFAULT_LIMIT = 50
 _MAX_LIMIT = 500
 _MAX_QUERY_LEN = 500
 _MAX_SEARCH_SINCE_DAYS = 36_500
+
+
+class _IndexSearchOutcome(NamedTuple):
+    hits: list[SearchHitDict] | None
+    fts_exhausted: bool
+    index_locked_without_hits: bool = False
+
+
+class _SearchIndexUnavailableError(Exception):
+    """Index locked with no partial hits and live-scan fallback failed."""
 
 
 def _parse_limit(raw: str | None, default: int = _DEFAULT_LIMIT) -> int:
@@ -145,9 +155,9 @@ def _search_via_index(
     *,
     since_ms: int | None,
     max_results: int,
-) -> tuple[list[SearchHitDict] | None, bool]:
+) -> _IndexSearchOutcome:
     if not index_search_enabled() or not index_is_usable(projects_dir, rules):
-        return None, False
+        return _IndexSearchOutcome(None, False)
 
     rules_fp = rules_fingerprint(rules)
     results: list[SearchHitDict] = []
@@ -167,10 +177,10 @@ def _search_via_index(
                 len(results),
             )
             if results:
-                return _rank_search_hits(results)[:max_results], False
-            return None, False
+                return _IndexSearchOutcome(_rank_search_hits(results)[:max_results], False)
+            return _IndexSearchOutcome(None, False, index_locked_without_hits=True)
         if not indexed["query_ok"]:
-            return None, False
+            return _IndexSearchOutcome(None, False)
         if indexed["sql_rows_fetched"] == 0:
             fts_exhausted = indexed["sql_exhausted"]
             break
@@ -201,7 +211,36 @@ def _search_via_index(
         if indexed["sql_exhausted"]:
             fts_exhausted = True
             break
-    return _rank_search_hits(results)[:max_results], fts_exhausted
+    return _IndexSearchOutcome(_rank_search_hits(results)[:max_results], fts_exhausted)
+
+
+def _live_scan_with_index_lock_fallback(
+    base: str,
+    rules: list[Any],
+    query: str,
+    query_lower: str,
+    *,
+    since_ms: int | None,
+    max_results: int,
+    index_locked_without_hits: bool,
+) -> list[SearchHitDict]:
+    try:
+        return _search_live_scan(
+            base,
+            rules,
+            query,
+            query_lower,
+            since_ms=since_ms,
+            max_results=max_results,
+        )
+    except Exception:
+        if index_locked_without_hits:
+            _logger.warning(
+                "Search index locked; live-scan fallback failed",
+                exc_info=True,
+            )
+            raise _SearchIndexUnavailableError from None
+        raise
 
 
 def _resolve_search_results(
@@ -213,7 +252,7 @@ def _resolve_search_results(
     since_ms: int | None,
     max_results: int,
 ) -> list[SearchHitDict]:
-    indexed, _fts_exhausted = _search_via_index(
+    outcome = _search_via_index(
         base,
         rules,
         query,
@@ -221,28 +260,30 @@ def _resolve_search_results(
         since_ms=since_ms,
         max_results=max_results,
     )
-    if indexed is None:
-        return _search_live_scan(
+    if outcome.hits is None:
+        return _live_scan_with_index_lock_fallback(
             base,
             rules,
             query,
             query_lower,
             since_ms=since_ms,
             max_results=max_results,
+            index_locked_without_hits=outcome.index_locked_without_hits,
         )
 
-    if len(indexed) >= max_results:
-        return indexed
+    if len(outcome.hits) >= max_results:
+        return outcome.hits
 
-    live = _search_live_scan(
+    live = _live_scan_with_index_lock_fallback(
         base,
         rules,
         query,
         query_lower,
         since_ms=since_ms,
         max_results=max_results,
+        index_locked_without_hits=False,
     )
-    return _merge_search_hits(indexed, live, max_results=max_results)
+    return _merge_search_hits(outcome.hits, live, max_results=max_results)
 
 
 def _search_live_scan(
@@ -358,6 +399,12 @@ def search() -> FlaskReturn:
                 since_ms=since_ms,
                 max_results=max_results,
             )
+        )
+    except _SearchIndexUnavailableError:
+        return error_response(
+            ErrorCode.SEARCH_INDEX_UNAVAILABLE,
+            "Search index is temporarily unavailable",
+            503,
         )
     except Exception:
         _logger.exception("Unexpected error during search")

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from types import SimpleNamespace
+
 import pytest
 
 from api.error_codes import ErrorCode
@@ -73,3 +76,23 @@ def test_bulk_export_empty_includes_export_nothing_code(client_empty):
     resp = client_empty.post("/api/export", json={"since": "all"})
     assert resp.status_code == 422
     assert_error_response(resp, expected_code="EXPORT_NOTHING_TO_EXPORT")
+
+
+def test_search_index_unavailable_code(client_single, monkeypatch):
+    monkeypatch.setattr(
+        "api.search._search_via_index",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            hits=None,
+            fts_exhausted=False,
+            index_locked_without_hits=True,
+        ),
+    )
+    monkeypatch.setattr(
+        "api.search._search_live_scan",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("live scan failed")),
+    )
+    resp = client_single.get("/api/search?q=test")
+    assert resp.status_code == 503
+    body_text = json.dumps(resp.get_json())
+    assert_error_response(resp, expected_code=ErrorCode.SEARCH_INDEX_UNAVAILABLE)
+    assert "live scan failed" not in body_text
