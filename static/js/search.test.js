@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { showSearchPage, doSearch } from './search.js';
+import { showSearchPage, doSearch, highlightSnippet } from './search.js';
 
-// SearchHitDict[] — mirrors models/search.py (no highlight wrapper in search.js; snippets are escaped text only).
+// SearchHitDict[] — mirrors models/search.py.
 const SEARCH_HITS = [
     {
         project: 'alpha',
@@ -21,6 +21,21 @@ const SEARCH_HITS = [
     },
 ];
 
+describe('highlightSnippet', () => {
+    it('wraps a case-insensitive match in mark after escaping', () => {
+        const html = highlightSnippet('matched keyword here', 'Keyword');
+        expect(html).toContain('<mark>keyword</mark>');
+        expect(html).not.toContain('<script>');
+    });
+
+    it('does not inject raw HTML from session content', () => {
+        const html = highlightSnippet('<img onerror=alert(1)>', 'img');
+        expect(html).toContain('&lt;');
+        expect(html).not.toContain('<img onerror');
+        expect(html).not.toContain('<script>');
+    });
+});
+
 describe('search page', () => {
     beforeEach(() => {
         document.body.innerHTML = '<div id="content"></div>';
@@ -37,10 +52,21 @@ describe('search page', () => {
         expect(window.location.hash).toBe('#search');
         expect(document.getElementById('search-input')).not.toBeNull();
         expect(document.getElementById('search-results')).not.toBeNull();
-        expect(document.getElementById('content').innerHTML).toContain('Search conversations');
+        expect(document.getElementById('search-all-history')).not.toBeNull();
+        expect(document.getElementById('content').innerHTML).toContain('30 days');
     });
 
-    it('doSearch renders results with snippet text', async () => {
+    it('doSearch prompts when query is empty', async () => {
+        showSearchPage();
+        document.getElementById('search-input').value = '   ';
+
+        await doSearch();
+
+        expect(document.getElementById('search-results').innerHTML).toContain('Enter a search term');
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('doSearch renders results with highlighted snippet text', async () => {
         showSearchPage();
         fetch.mockResolvedValue({
             ok: true,
@@ -53,8 +79,19 @@ describe('search page', () => {
         const results = document.getElementById('search-results');
         expect(results.innerHTML).toContain('2 results');
         expect(results.innerHTML).toContain('First hit');
-        expect(results.innerHTML).toContain('matched keyword here');
+        expect(results.innerHTML).toContain('<mark>keyword</mark>');
         expect(results.querySelectorAll('.search-result').length).toBe(2);
+    });
+
+    it('doSearch sends all_history when checkbox is checked', async () => {
+        showSearchPage();
+        fetch.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
+        document.getElementById('search-input').value = 'old';
+        document.getElementById('search-all-history').checked = true;
+
+        await doSearch();
+
+        expect(fetch).toHaveBeenCalledWith(expect.stringContaining('all_history=1'));
     });
 
     it('doSearch shows empty state when no hits', async () => {
@@ -66,18 +103,59 @@ describe('search page', () => {
 
         const results = document.getElementById('search-results');
         expect(results.innerHTML).toContain('0 results');
-        expect(results.innerHTML).toContain('No results found');
+        expect(results.innerHTML).toContain('search-empty');
+        expect(results.innerHTML).not.toContain('search-error');
     });
 
-    it('doSearch surfaces HTTP errors', async () => {
+    it('doSearch shows truncation warning when results hit the limit', async () => {
         showSearchPage();
-        fetch.mockResolvedValue({ ok: false, status: 503, text: () => Promise.resolve('unavailable') });
+        const full = Array.from({ length: 50 }, (_, i) => ({
+            ...SEARCH_HITS[0],
+            session_id: `sess-${i}`,
+        }));
+        fetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(full) });
+        document.getElementById('search-input').value = 'keyword';
+
+        await doSearch();
+
+        expect(document.getElementById('search-results').innerHTML).toContain('search-truncation');
+    });
+
+    it('doSearch surfaces structured API errors with data-error-code', async () => {
+        showSearchPage();
+        fetch.mockResolvedValue({
+            ok: false,
+            status: 503,
+            text: () => Promise.resolve(JSON.stringify({
+                error: 'Claude projects directory is not accessible',
+                code: 'SEARCH_PROJECTS_UNAVAILABLE',
+            })),
+        });
         document.getElementById('search-input').value = 'fail';
 
         await doSearch();
 
-        expect(document.getElementById('search-results').innerHTML).toContain('Error:');
-        expect(document.getElementById('search-results').innerHTML).toContain('unavailable');
+        const err = document.querySelector('.search-error');
+        expect(err).not.toBeNull();
+        expect(err.getAttribute('data-error-code')).toBe('SEARCH_PROJECTS_UNAVAILABLE');
+        expect(err.textContent).toContain('not accessible');
+    });
+
+    it('doSearch shows plain-text error body when response is not JSON', async () => {
+        showSearchPage();
+        fetch.mockResolvedValue({
+            ok: false,
+            status: 502,
+            text: () => Promise.resolve('Bad Gateway from proxy'),
+        });
+        document.getElementById('search-input').value = 'fail';
+
+        await doSearch();
+
+        const err = document.querySelector('.search-error');
+        expect(err).not.toBeNull();
+        expect(err.textContent).toBe('Bad Gateway from proxy');
+        expect(err.getAttribute('data-error-code')).toBeNull();
     });
 
     it('doSearch ignores stale responses when a newer request was started', async () => {

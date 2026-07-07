@@ -92,8 +92,11 @@ def validate_startup_cli(args: argparse.Namespace) -> None:
 def create_app(
     base_dir: str | None = None,
     exclusion_rules_path: str | None = None,
+    *,
+    testing: bool = False,
 ) -> Flask:
     app = Flask(__name__)
+    app.config["TESTING"] = testing
     app.config["CLAUDE_PROJECTS_DIR"] = base_dir
 
     resolved = resolve_exclusion_rules_path(exclusion_rules_path)
@@ -106,7 +109,7 @@ def create_app(
     app.register_blueprint(export_bp)
     app.register_blueprint(schema_report_bp)
 
-    if not app.config.get("TESTING"):
+    if not testing:
         try:
             from utils.search_index import start_search_index_background
 

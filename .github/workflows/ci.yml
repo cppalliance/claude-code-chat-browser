@@ -38,7 +38,7 @@ jobs:
         run: |
           python - <<'PY'
           from app import create_app
-          app = create_app()
+          app = create_app(testing=True)
           client = app.test_client()
           assert client.get("/").status_code == 200
           PY

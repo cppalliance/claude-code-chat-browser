@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import sqlite3
+import sys
 import threading
 import time
 import uuid
@@ -23,7 +24,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, TypedDict
 
-from models.session import RoleLiteral
+from models.session import MessageDict, RoleLiteral
 from utils.jsonl_helpers import entry_message, extract_text, first_title_line
 from utils.session_path import list_projects, list_sessions
 from utils.session_summary_cache import rules_fingerprint
@@ -36,6 +37,7 @@ __all__ = [
     "ensure_search_index",
     "index_is_usable",
     "index_search_enabled",
+    "message_searchable_text",
     "query_index_hits",
     "resolve_search_since_ms",
     "search_snippet",
@@ -55,6 +57,7 @@ _SKIP_ENTRY_TYPES = frozenset({"file-history-snapshot", "summary"})
 _index_lock = threading.Lock()
 _index_build_lock = threading.Lock()
 _background_started = False
+_background_lock_fd: int | None = None
 _usability_cache: dict[tuple[str, str], tuple[bool, float]] = {}
 _usability_cache_lock = threading.Lock()
 _USABILITY_CACHE_TTL_SECONDS = 30.0
@@ -77,6 +80,7 @@ class IndexQueryResult(TypedDict):
     query_ok: bool
     sql_rows_fetched: int
     sql_exhausted: bool
+    index_locked: bool
 
 
 def cache_dir() -> Path:
@@ -338,12 +342,51 @@ def tool_result_searchable_text(raw: object) -> str:
     return "\n".join(parts)
 
 
+def progress_searchable_text(raw: object) -> str:
+    if not isinstance(raw, dict):
+        return ""
+    output = raw.get("output")
+    return output if isinstance(output, str) and output.strip() else ""
+
+
+def combine_searchable_text(
+    *,
+    text: str = "",
+    content: str = "",
+    tool_result: object = None,
+    progress_data: object = None,
+) -> str:
+    """Merge searchable fields the same way for index build and live scan."""
+    merged = text if isinstance(text, str) else ""
+    if not merged and isinstance(content, str):
+        merged = content
+    tool_text = tool_result_searchable_text(tool_result) if tool_result is not None else ""
+    if tool_text:
+        merged = f"{merged}\n{tool_text}" if merged else tool_text
+    progress_text = progress_searchable_text(progress_data)
+    if progress_text:
+        merged = f"{merged}\n{progress_text}" if merged else progress_text
+    return merged
+
+
+def message_searchable_text(msg: MessageDict) -> str:
+    """Searchable text for one parsed session message (live-scan path)."""
+    text = msg.get("text", "") or msg.get("content", "")
+    if not isinstance(text, str):
+        text = ""
+    return combine_searchable_text(
+        text=text,
+        tool_result=msg.get("tool_result"),
+        progress_data=msg.get("data") if msg.get("role") == "progress" else None,
+    )
+
+
 def _coerce_role(entry_type: str | None) -> RoleLiteral | None:
-    if entry_type == "user":
-        return "user"
-    if entry_type == "assistant":
-        return "assistant"
-    return None
+    if entry_type in ("user", "assistant", "system", "progress"):
+        return entry_type  # type: ignore[return-value]
+    if entry_type is None:
+        return None
+    return "system"
 
 
 def _indexable_texts_from_entry(
@@ -359,22 +402,41 @@ def _indexable_texts_from_entry(
     ts = timestamp if isinstance(timestamp, str) else None
     texts: list[tuple[str, str | None, RoleLiteral]] = []
 
-    if role is not None:
-        msg = entry_message(entry)
-        content = msg.get("content", [])
-        text = extract_text(content)
-        if isinstance(text, str) and text.strip():
-            texts.append((text, ts, role))
-
     if entry_type == "user":
-        tool_text = tool_result_searchable_text(entry.get("toolUseResult"))
-        if tool_text:
-            texts.append((tool_text, ts, "user"))
+        msg = entry_message(entry)
+        text = combine_searchable_text(
+            text=extract_text(msg.get("content", [])),
+            tool_result=entry.get("toolUseResult"),
+        )
+        if text:
+            texts.append((text, ts, "user"))
+        return texts
 
-    if not texts and role is not None:
+    if entry_type == "assistant":
+        msg = entry_message(entry)
+        text = combine_searchable_text(text=extract_text(msg.get("content", [])))
+        if text:
+            texts.append((text, ts, "assistant"))
+        return texts
+
+    if entry_type == "system":
         raw_content = entry.get("content", "")
-        if isinstance(raw_content, str) and raw_content.strip():
-            texts.append((raw_content, ts, role))
+        content = raw_content if isinstance(raw_content, str) else ""
+        text = combine_searchable_text(content=content)
+        if text:
+            texts.append((text, ts, "system"))
+        return texts
+
+    if entry_type == "progress":
+        text = combine_searchable_text(progress_data=entry.get("data"))
+        if text:
+            texts.append((text, ts, "progress"))
+        return texts
+
+    if role is not None:
+        text = combine_searchable_text(content=entry.get("content", ""))
+        if text:
+            texts.append((text, ts, role))
 
     return texts
 
@@ -556,6 +618,31 @@ def ensure_search_index(projects_dir: str, rules: list[Any]) -> None:
             build_search_index(projects_dir, rules)
 
 
+def _try_acquire_cross_process_background_lock() -> bool:
+    """Return True when this process should own the background index worker."""
+    global _background_lock_fd
+    if _background_lock_fd is not None:
+        return True
+    root = cache_dir()
+    root.mkdir(parents=True, exist_ok=True)
+    lock_path = root / "search_index.background.lock"
+    fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR)
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (OSError, BlockingIOError):
+        os.close(fd)
+        return False
+    _background_lock_fd = fd
+    return True
+
+
 def start_search_index_background(
     projects_dir: str,
     rules: list[Any],
@@ -568,6 +655,8 @@ def start_search_index_background(
         return
     with _index_lock:
         if _background_started:
+            return
+        if not _try_acquire_cross_process_background_lock():
             return
         _background_started = True
 
@@ -616,23 +705,35 @@ def query_index_hits(
     sql_offset: int = 0,
 ) -> IndexQueryResult:
     """Return message hits from the FTS index (pre-exclusion, pre-snippet)."""
-    empty: IndexQueryResult = {
-        "hits": [],
-        "query_ok": True,
-        "sql_rows_fetched": 0,
-        "sql_exhausted": True,
-    }
     if not query_lower or not index_search_enabled():
-        return {"hits": [], "query_ok": False, "sql_rows_fetched": 0, "sql_exhausted": True}
+        return {
+            "hits": [],
+            "query_ok": False,
+            "sql_rows_fetched": 0,
+            "sql_exhausted": True,
+            "index_locked": False,
+        }
 
     fts_q = _fts_match_query(query_lower)
     if not fts_q:
-        return empty
+        return {
+            "hits": [],
+            "query_ok": False,
+            "sql_rows_fetched": 0,
+            "sql_exhausted": True,
+            "index_locked": False,
+        }
 
     sql_limit = max(max_results, _FTS_BATCH_SIZE)
     with _index_db_conn(readonly=True) as conn:
         if conn is None:
-            return {"hits": [], "query_ok": False, "sql_rows_fetched": 0, "sql_exhausted": True}
+            return {
+                "hits": [],
+                "query_ok": False,
+                "sql_rows_fetched": 0,
+                "sql_exhausted": True,
+                "index_locked": False,
+            }
         try:
             rows = conn.execute(
                 "SELECT m.session_id, m.project_name, m.role, m.timestamp_ms, m.text,"
@@ -645,9 +746,24 @@ def query_index_hits(
                 " LIMIT ? OFFSET ?",
                 (fts_q, sql_limit, sql_offset),
             ).fetchall()
+        except sqlite3.OperationalError as exc:
+            _logger.debug("FTS query locked (%s); index may be rebuilding", exc)
+            return {
+                "hits": [],
+                "query_ok": False,
+                "sql_rows_fetched": 0,
+                "sql_exhausted": True,
+                "index_locked": True,
+            }
         except sqlite3.Error as exc:
             _logger.debug("FTS query failed (%s); index may be rebuilding", exc)
-            return {"hits": [], "query_ok": False, "sql_rows_fetched": 0, "sql_exhausted": True}
+            return {
+                "hits": [],
+                "query_ok": False,
+                "sql_rows_fetched": 0,
+                "sql_exhausted": True,
+                "index_locked": False,
+            }
 
     hits: list[IndexMessageHitDict] = []
     rows_scanned = 0
@@ -673,17 +789,25 @@ def query_index_hits(
         )
         if len(hits) >= max_results:
             break
+    batch_fully_scanned = rows_scanned == len(rows)
     return {
         "hits": hits,
         "query_ok": True,
         "sql_rows_fetched": rows_scanned,
-        "sql_exhausted": len(rows) < sql_limit,
+        "sql_exhausted": batch_fully_scanned and len(rows) < sql_limit,
+        "index_locked": False,
     }
 
 
 def reset_background_for_tests() -> None:
     """Allow tests to restart the background worker."""
-    global _background_started
+    global _background_started, _background_lock_fd
     with _index_lock:
         _background_started = False
+        if _background_lock_fd is not None:
+            try:
+                os.close(_background_lock_fd)
+            except OSError:
+                pass
+            _background_lock_fd = None
     _clear_usability_cache()

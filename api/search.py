@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -11,17 +12,16 @@ from flask import Blueprint, current_app, request
 from api._flask_types import FlaskReturn, json_response
 from api.error_codes import ErrorCode, error_response
 from models.search import SearchHitDict
-from models.session import MessageDict
 from utils.exclusion_rules import is_session_excluded
 from utils.search_index import (
     index_is_usable,
     index_search_enabled,
+    message_searchable_text,
     query_index_hits,
     resolve_search_since_ms,
     search_snippet,
     timestamp_in_search_window_iso,
     timestamp_to_ms,
-    tool_result_searchable_text,
 )
 from utils.session_cache import get_cached_session
 from utils.session_path import get_claude_projects_dir, list_projects, list_sessions
@@ -32,6 +32,7 @@ _logger = logging.getLogger(__name__)
 
 _DEFAULT_LIMIT = 50
 _MAX_LIMIT = 500
+_MAX_QUERY_LEN = 500
 _MAX_SEARCH_SINCE_DAYS = 36_500
 
 
@@ -53,10 +54,10 @@ def _parse_since_days(raw: str | None) -> int | None:
         return None
     try:
         days = int(str(raw).strip())
-    except ValueError:
-        return None
+    except ValueError as exc:
+        raise ValueError("Invalid since_days: must be a positive integer") from exc
     if days <= 0:
-        return None
+        raise ValueError("Invalid since_days: must be a positive integer")
     return min(days, _MAX_SEARCH_SINCE_DAYS)
 
 
@@ -71,16 +72,44 @@ def _rank_search_hits(results: list[SearchHitDict]) -> list[SearchHitDict]:
     )
 
 
-def _message_searchable_text(msg: MessageDict) -> str:
-    text = msg.get("text", "") or msg.get("content", "")
-    if not isinstance(text, str):
-        text = ""
-    tool_result = msg.get("tool_result")
-    if isinstance(tool_result, dict):
-        tool_text = tool_result_searchable_text(tool_result)
-        if tool_text:
-            text = f"{text}\n{tool_text}" if text else tool_text
-    return text
+def _hit_dedup_key(hit: SearchHitDict) -> tuple[str, str, str | None, str]:
+    ts = hit.get("timestamp")
+    return (
+        hit["project"],
+        hit["session_id"],
+        ts if isinstance(ts, str) else None,
+        hit["role"],
+    )
+
+
+def _merge_search_hits(
+    primary: list[SearchHitDict],
+    extra: list[SearchHitDict],
+    *,
+    max_results: int,
+) -> list[SearchHitDict]:
+    seen = {_hit_dedup_key(hit) for hit in primary}
+    merged = list(primary)
+    for hit in extra:
+        key = _hit_dedup_key(hit)
+        if key in seen:
+            continue
+        merged.append(hit)
+        seen.add(key)
+        if len(merged) >= max_results:
+            break
+    return _rank_search_hits(merged)[:max_results]
+
+
+def _projects_dir_inaccessible(projects_dir: str) -> bool:
+    """True when the projects path exists but cannot be listed (503 case)."""
+    try:
+        if not os.path.isdir(projects_dir):
+            return False
+        os.listdir(projects_dir)
+        return False
+    except OSError:
+        return True
 
 
 def _index_hit_excluded(
@@ -104,7 +133,7 @@ def _index_hit_excluded(
             file_path,
             exc_info=True,
         )
-        return False
+        return True
     return is_session_excluded(rules, session, project_name)
 
 
@@ -116,13 +145,14 @@ def _search_via_index(
     *,
     since_ms: int | None,
     max_results: int,
-) -> list[SearchHitDict] | None:
+) -> tuple[list[SearchHitDict] | None, bool]:
     if not index_search_enabled() or not index_is_usable(projects_dir, rules):
-        return None
+        return None, False
 
     rules_fp = rules_fingerprint(rules)
     results: list[SearchHitDict] = []
     sql_offset = 0
+    fts_exhausted = False
     while len(results) < max_results:
         need = max_results - len(results)
         indexed = query_index_hits(
@@ -131,9 +161,18 @@ def _search_via_index(
             max_results=need,
             sql_offset=sql_offset,
         )
+        if indexed["index_locked"]:
+            _logger.warning(
+                "Search index locked during query; %d hit(s) collected so far",
+                len(results),
+            )
+            if results:
+                return _rank_search_hits(results)[:max_results], False
+            return None, False
         if not indexed["query_ok"]:
-            return None
+            return None, False
         if indexed["sql_rows_fetched"] == 0:
+            fts_exhausted = indexed["sql_exhausted"]
             break
 
         for hit in indexed["hits"]:
@@ -160,8 +199,50 @@ def _search_via_index(
 
         sql_offset += indexed["sql_rows_fetched"]
         if indexed["sql_exhausted"]:
+            fts_exhausted = True
             break
-    return _rank_search_hits(results)[:max_results]
+    return _rank_search_hits(results)[:max_results], fts_exhausted
+
+
+def _resolve_search_results(
+    base: str,
+    rules: list[Any],
+    query: str,
+    query_lower: str,
+    *,
+    since_ms: int | None,
+    max_results: int,
+) -> list[SearchHitDict]:
+    indexed, _fts_exhausted = _search_via_index(
+        base,
+        rules,
+        query,
+        query_lower,
+        since_ms=since_ms,
+        max_results=max_results,
+    )
+    if indexed is None:
+        return _search_live_scan(
+            base,
+            rules,
+            query,
+            query_lower,
+            since_ms=since_ms,
+            max_results=max_results,
+        )
+
+    if len(indexed) >= max_results:
+        return indexed
+
+    live = _search_live_scan(
+        base,
+        rules,
+        query,
+        query_lower,
+        since_ms=since_ms,
+        max_results=max_results,
+    )
+    return _merge_search_hits(indexed, live, max_results=max_results)
 
 
 def _search_live_scan(
@@ -192,7 +273,7 @@ def _search_live_scan(
                 continue
 
             for msg in session["messages"]:
-                text = _message_searchable_text(msg)
+                text = message_searchable_text(msg)
                 if not text or query_lower not in text.lower():
                     continue
                 if not timestamp_in_search_window_iso(
@@ -215,9 +296,20 @@ def _search_live_scan(
 
 @search_bp.route("/api/search")
 def search() -> FlaskReturn:
-    query = request.args.get("q", "").strip()
+    raw_query = request.args.get("q", "")
+    query = raw_query.strip()
     if not query:
-        return json_response([])
+        return error_response(
+            ErrorCode.SEARCH_EMPTY_QUERY,
+            "Search query is required",
+            400,
+        )
+    if len(query) > _MAX_QUERY_LEN:
+        return error_response(
+            ErrorCode.SEARCH_QUERY_TOO_LONG,
+            f"Search query must be at most {_MAX_QUERY_LEN} characters",
+            400,
+        )
 
     try:
         max_results = _parse_limit(request.args.get("limit"))
@@ -228,35 +320,49 @@ def search() -> FlaskReturn:
             400,
         )
 
+    since_days_raw = request.args.get("since_days")
+    try:
+        since_days = _parse_since_days(since_days_raw)
+    except ValueError:
+        return error_response(
+            ErrorCode.SEARCH_INVALID_SINCE_DAYS,
+            "Invalid since_days: must be a positive integer",
+            400,
+        )
+
     query_lower = query.lower()
     all_history = request.args.get("all_history") in ("1", "true")
     since_ms = resolve_search_since_ms(
         all_history=all_history,
-        since_days=_parse_since_days(request.args.get("since_days")),
+        since_days=since_days,
         now=datetime.now(timezone.utc),
     )
 
     base = current_app.config.get("CLAUDE_PROJECTS_DIR") or get_claude_projects_dir()
+    if _projects_dir_inaccessible(base):
+        return error_response(
+            ErrorCode.SEARCH_PROJECTS_UNAVAILABLE,
+            "Claude projects directory is not accessible",
+            503,
+        )
+
     rules = current_app.config.get("EXCLUSION_RULES") or []
 
-    indexed = _search_via_index(
-        base,
-        rules,
-        query,
-        query_lower,
-        since_ms=since_ms,
-        max_results=max_results,
-    )
-    if indexed is not None:
-        return json_response(indexed)
-
-    return json_response(
-        _search_live_scan(
-            base,
-            rules,
-            query,
-            query_lower,
-            since_ms=since_ms,
-            max_results=max_results,
+    try:
+        return json_response(
+            _resolve_search_results(
+                base,
+                rules,
+                query,
+                query_lower,
+                since_ms=since_ms,
+                max_results=max_results,
+            )
         )
-    )
+    except Exception:
+        _logger.exception("Unexpected error during search")
+        return error_response(
+            ErrorCode.INTERNAL_ERROR,
+            "Search failed",
+            500,
+        )

@@ -119,6 +119,5 @@ def export_corpus(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
 def bench_client_search_corpus(tmp_path: Path):
     """Flask test client backed by a 50-session synthetic project tree."""
     seed_search_corpus(tmp_path)
-    app = create_app(base_dir=str(tmp_path))
-    app.config["TESTING"] = True
+    app = create_app(base_dir=str(tmp_path), testing=True)
     return app.test_client()

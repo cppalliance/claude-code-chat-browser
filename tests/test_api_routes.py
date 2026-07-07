@@ -39,7 +39,7 @@ def test_session_stats_excluded_session_returns_404(tmp_path, export_state_file)
     rules_path = tmp_path / "exclusion-rules.txt"
     rules_path.write_text("integration fixture\n", encoding="utf-8")
 
-    app = create_app(base_dir=str(tmp_path), exclusion_rules_path=str(rules_path))
+    app = create_app(base_dir=str(tmp_path), exclusion_rules_path=str(rules_path), testing=True)
     app.config["TESTING"] = True
     excluded_client = app.test_client()
 

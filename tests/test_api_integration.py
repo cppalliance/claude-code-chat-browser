@@ -109,8 +109,9 @@ def test_search_returns_results(client):
 
 def test_search_empty_query(client):
     resp = client.get("/api/search?q=")
-    assert resp.status_code == 200
-    assert resp.get_json() == []
+    assert resp.status_code == 400
+    _assert_error_shape(resp)
+    assert resp.get_json()["code"] == "SEARCH_EMPTY_QUERY"
 
 
 def test_search_invalid_limit(client):
