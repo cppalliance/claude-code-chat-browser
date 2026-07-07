@@ -212,7 +212,7 @@ def test_search_internal_error_does_not_leak(client_single, monkeypatch):
     def _boom(*_args, **_kwargs):
         raise RuntimeError("internal_secret_search_token")
 
-    monkeypatch.setattr("api.search._search_via_index", lambda *_a, **_kw: None)
+    monkeypatch.setattr("api.search._search_via_index", lambda *_a, **_kw: (None, False))
     monkeypatch.setattr("api.search._search_live_scan", _boom)
 
     resp = client_single.get("/api/search?q=Hello&all_history=1")

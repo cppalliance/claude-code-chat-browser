@@ -11,7 +11,8 @@ from unittest.mock import patch
 
 import pytest
 
-from api.search import _search_via_index
+from api.search import _resolve_search_results, _search_via_index
+from utils.exclusion_rules import load_rules
 from utils.search_index import (
     build_search_index,
     index_is_usable,
@@ -314,7 +315,7 @@ class TestQueryIndexHits:
         patches = _index_patches(cache_root)
         with patches[0]:
             build_search_index(str(projects), [], force=True)
-            results = _search_via_index(
+            results, _fts_exhausted = _search_via_index(
                 str(projects),
                 [],
                 phrase,
@@ -384,6 +385,130 @@ class TestBypassAndBackground:
             assert mock_thread.call_count == 1
             assert mock_thread.call_args.kwargs.get("daemon") is True
             assert mock_thread.return_value.start.call_count == 1
+
+
+class TestIndexSearchCompleteness:
+    def test_partial_batch_not_marked_exhausted(self, tmp_path, monkeypatch):
+        """sql_exhausted stays false until every row in the SQL batch is scanned."""
+        cache_root = tmp_path / "cache"
+        cache_root.mkdir()
+        projects = tmp_path / "projects"
+        lines: list[dict[str, object]] = []
+        for i in range(120):
+            lines.append(
+                {
+                    "type": "user",
+                    "timestamp": f"2026-07-{(i % 28) + 1:02d}T10:00:00Z",
+                    "message": {
+                        "content": [{"type": "text", "text": f"batch sentinel token {i}"}],
+                    },
+                }
+            )
+        _write_session(projects / "batch-proj" / "session.jsonl", lines)
+        monkeypatch.setenv("CLAUDE_CODE_CHAT_BROWSER_SEARCH_INDEX_DIR", str(cache_root))
+        patches = _index_patches(cache_root)
+        with patches[0]:
+            build_search_index(str(projects), [], force=True)
+            result = query_index_hits(
+                "batch sentinel token",
+                since_ms=None,
+                max_results=50,
+                sql_offset=0,
+            )
+            assert result["query_ok"] is True
+            assert len(result["hits"]) == 50
+            assert result["sql_rows_fetched"] < 120
+            assert result["sql_exhausted"] is False
+
+    def test_index_search_fills_limit_after_excluded_hits(self, tmp_path, monkeypatch):
+        cache_root = tmp_path / "cache"
+        cache_root.mkdir()
+        projects = tmp_path / "projects"
+        term = "quota-fill-sentinel"
+        excl_lines: list[dict[str, object]] = []
+        for i in range(80):
+            excl_lines.append(
+                {
+                    "type": "user",
+                    "timestamp": f"2026-08-{(i % 28) + 1:02d}T10:00:00Z",
+                    "message": {"content": [{"type": "text", "text": f"{term} excluded"}]},
+                }
+            )
+        good_lines: list[dict[str, object]] = []
+        for i in range(60):
+            good_lines.append(
+                {
+                    "type": "user",
+                    "timestamp": f"2026-05-{(i % 28) + 1:02d}T10:00:00Z",
+                    "message": {"content": [{"type": "text", "text": f"{term} good"}]},
+                }
+            )
+        _write_session(projects / "excl-proj" / "session.jsonl", excl_lines)
+        _write_session(projects / "good-proj" / "session.jsonl", good_lines)
+        rules_path = tmp_path / "rules.txt"
+        rules_path.write_text("excl-proj\n", encoding="utf-8")
+        rules = load_rules(str(rules_path))
+
+        monkeypatch.setenv("CLAUDE_CODE_CHAT_BROWSER_SEARCH_INDEX_DIR", str(cache_root))
+        patches = _index_patches(cache_root)
+        with patches[0]:
+            build_search_index(str(projects), rules, force=True)
+            results, _fts_exhausted = _search_via_index(
+                str(projects),
+                rules,
+                term,
+                term.lower(),
+                since_ms=None,
+                max_results=50,
+            )
+            assert results is not None
+            assert len(results) == 50
+            assert all(hit["project"] == "good-proj" for hit in results)
+
+    def test_system_content_index_and_live_scan_parity(self, tmp_path, monkeypatch):
+        cache_root = tmp_path / "cache"
+        cache_root.mkdir()
+        projects = tmp_path / "projects"
+        sentinel = "system-role-sentinel-xyz"
+        _write_session(
+            projects / "sys-proj" / "session.jsonl",
+            [
+                {
+                    "type": "user",
+                    "timestamp": "2026-06-01T10:00:00Z",
+                    "message": {"content": [{"type": "text", "text": "hello"}]},
+                },
+                {
+                    "type": "system",
+                    "timestamp": "2026-06-01T10:00:01Z",
+                    "content": f"compact boundary note {sentinel}",
+                },
+                {
+                    "type": "assistant",
+                    "timestamp": "2026-06-01T10:00:02Z",
+                    "message": {"content": [{"type": "text", "text": "ack"}]},
+                },
+            ],
+        )
+        monkeypatch.setenv("CLAUDE_CODE_CHAT_BROWSER_SEARCH_INDEX_DIR", str(cache_root))
+        patches = _index_patches(cache_root)
+        with patches[0]:
+            build_search_index(str(projects), [], force=True)
+            indexed = query_index_hits(sentinel, since_ms=None, max_results=5)
+            assert indexed["query_ok"] is True
+            assert len(indexed["hits"]) == 1
+            assert indexed["hits"][0]["role"] == "system"
+
+            resolved = _resolve_search_results(
+                str(projects),
+                [],
+                sentinel,
+                sentinel.lower(),
+                since_ms=None,
+                max_results=5,
+            )
+            assert len(resolved) == 1
+            assert resolved[0]["role"] == "system"
 
 
 class TestResolveSearchSinceMs:

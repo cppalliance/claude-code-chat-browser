@@ -12,17 +12,16 @@ from flask import Blueprint, current_app, request
 from api._flask_types import FlaskReturn, json_response
 from api.error_codes import ErrorCode, error_response
 from models.search import SearchHitDict
-from models.session import MessageDict
 from utils.exclusion_rules import is_session_excluded
 from utils.search_index import (
     index_is_usable,
     index_search_enabled,
+    message_searchable_text,
     query_index_hits,
     resolve_search_since_ms,
     search_snippet,
     timestamp_in_search_window_iso,
     timestamp_to_ms,
-    tool_result_searchable_text,
 )
 from utils.session_cache import get_cached_session
 from utils.session_path import get_claude_projects_dir, list_projects, list_sessions
@@ -73,6 +72,35 @@ def _rank_search_hits(results: list[SearchHitDict]) -> list[SearchHitDict]:
     )
 
 
+def _hit_dedup_key(hit: SearchHitDict) -> tuple[str, str, str | None, str]:
+    ts = hit.get("timestamp")
+    return (
+        hit["project"],
+        hit["session_id"],
+        ts if isinstance(ts, str) else None,
+        hit["role"],
+    )
+
+
+def _merge_search_hits(
+    primary: list[SearchHitDict],
+    extra: list[SearchHitDict],
+    *,
+    max_results: int,
+) -> list[SearchHitDict]:
+    seen = {_hit_dedup_key(hit) for hit in primary}
+    merged = list(primary)
+    for hit in extra:
+        key = _hit_dedup_key(hit)
+        if key in seen:
+            continue
+        merged.append(hit)
+        seen.add(key)
+        if len(merged) >= max_results:
+            break
+    return _rank_search_hits(merged)[:max_results]
+
+
 def _projects_dir_inaccessible(projects_dir: str) -> bool:
     """True when the projects path exists but cannot be listed (503 case)."""
     try:
@@ -82,18 +110,6 @@ def _projects_dir_inaccessible(projects_dir: str) -> bool:
         return False
     except OSError:
         return True
-
-
-def _message_searchable_text(msg: MessageDict) -> str:
-    text = msg.get("text", "") or msg.get("content", "")
-    if not isinstance(text, str):
-        text = ""
-    tool_result = msg.get("tool_result")
-    if isinstance(tool_result, dict):
-        tool_text = tool_result_searchable_text(tool_result)
-        if tool_text:
-            text = f"{text}\n{tool_text}" if text else tool_text
-    return text
 
 
 def _index_hit_excluded(
@@ -129,13 +145,14 @@ def _search_via_index(
     *,
     since_ms: int | None,
     max_results: int,
-) -> list[SearchHitDict] | None:
+) -> tuple[list[SearchHitDict] | None, bool]:
     if not index_search_enabled() or not index_is_usable(projects_dir, rules):
-        return None
+        return None, False
 
     rules_fp = rules_fingerprint(rules)
     results: list[SearchHitDict] = []
     sql_offset = 0
+    fts_exhausted = False
     while len(results) < max_results:
         need = max_results - len(results)
         indexed = query_index_hits(
@@ -150,11 +167,12 @@ def _search_via_index(
                 len(results),
             )
             if results:
-                return _rank_search_hits(results)[:max_results]
-            return None
+                return _rank_search_hits(results)[:max_results], False
+            return None, False
         if not indexed["query_ok"]:
-            return None
+            return None, False
         if indexed["sql_rows_fetched"] == 0:
+            fts_exhausted = indexed["sql_exhausted"]
             break
 
         for hit in indexed["hits"]:
@@ -181,8 +199,50 @@ def _search_via_index(
 
         sql_offset += indexed["sql_rows_fetched"]
         if indexed["sql_exhausted"]:
+            fts_exhausted = True
             break
-    return _rank_search_hits(results)[:max_results]
+    return _rank_search_hits(results)[:max_results], fts_exhausted
+
+
+def _resolve_search_results(
+    base: str,
+    rules: list[Any],
+    query: str,
+    query_lower: str,
+    *,
+    since_ms: int | None,
+    max_results: int,
+) -> list[SearchHitDict]:
+    indexed, _fts_exhausted = _search_via_index(
+        base,
+        rules,
+        query,
+        query_lower,
+        since_ms=since_ms,
+        max_results=max_results,
+    )
+    if indexed is None:
+        return _search_live_scan(
+            base,
+            rules,
+            query,
+            query_lower,
+            since_ms=since_ms,
+            max_results=max_results,
+        )
+
+    if len(indexed) >= max_results:
+        return indexed
+
+    live = _search_live_scan(
+        base,
+        rules,
+        query,
+        query_lower,
+        since_ms=since_ms,
+        max_results=max_results,
+    )
+    return _merge_search_hits(indexed, live, max_results=max_results)
 
 
 def _search_live_scan(
@@ -213,7 +273,7 @@ def _search_live_scan(
                 continue
 
             for msg in session["messages"]:
-                text = _message_searchable_text(msg)
+                text = message_searchable_text(msg)
                 if not text or query_lower not in text.lower():
                     continue
                 if not timestamp_in_search_window_iso(
@@ -289,19 +349,8 @@ def search() -> FlaskReturn:
     rules = current_app.config.get("EXCLUSION_RULES") or []
 
     try:
-        indexed = _search_via_index(
-            base,
-            rules,
-            query,
-            query_lower,
-            since_ms=since_ms,
-            max_results=max_results,
-        )
-        if indexed is not None:
-            return json_response(indexed)
-
         return json_response(
-            _search_live_scan(
+            _resolve_search_results(
                 base,
                 rules,
                 query,

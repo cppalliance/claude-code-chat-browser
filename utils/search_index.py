@@ -24,7 +24,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, TypedDict
 
-from models.session import RoleLiteral
+from models.session import MessageDict, RoleLiteral
 from utils.jsonl_helpers import entry_message, extract_text, first_title_line
 from utils.session_path import list_projects, list_sessions
 from utils.session_summary_cache import rules_fingerprint
@@ -37,6 +37,7 @@ __all__ = [
     "ensure_search_index",
     "index_is_usable",
     "index_search_enabled",
+    "message_searchable_text",
     "query_index_hits",
     "resolve_search_since_ms",
     "search_snippet",
@@ -341,12 +342,51 @@ def tool_result_searchable_text(raw: object) -> str:
     return "\n".join(parts)
 
 
+def progress_searchable_text(raw: object) -> str:
+    if not isinstance(raw, dict):
+        return ""
+    output = raw.get("output")
+    return output if isinstance(output, str) and output.strip() else ""
+
+
+def combine_searchable_text(
+    *,
+    text: str = "",
+    content: str = "",
+    tool_result: object = None,
+    progress_data: object = None,
+) -> str:
+    """Merge searchable fields the same way for index build and live scan."""
+    merged = text if isinstance(text, str) else ""
+    if not merged and isinstance(content, str):
+        merged = content
+    tool_text = tool_result_searchable_text(tool_result) if tool_result is not None else ""
+    if tool_text:
+        merged = f"{merged}\n{tool_text}" if merged else tool_text
+    progress_text = progress_searchable_text(progress_data)
+    if progress_text:
+        merged = f"{merged}\n{progress_text}" if merged else progress_text
+    return merged
+
+
+def message_searchable_text(msg: MessageDict) -> str:
+    """Searchable text for one parsed session message (live-scan path)."""
+    text = msg.get("text", "") or msg.get("content", "")
+    if not isinstance(text, str):
+        text = ""
+    return combine_searchable_text(
+        text=text,
+        tool_result=msg.get("tool_result"),
+        progress_data=msg.get("data") if msg.get("role") == "progress" else None,
+    )
+
+
 def _coerce_role(entry_type: str | None) -> RoleLiteral | None:
-    if entry_type == "user":
-        return "user"
-    if entry_type == "assistant":
-        return "assistant"
-    return None
+    if entry_type in ("user", "assistant", "system", "progress"):
+        return entry_type  # type: ignore[return-value]
+    if entry_type is None:
+        return None
+    return "system"
 
 
 def _indexable_texts_from_entry(
@@ -362,22 +402,41 @@ def _indexable_texts_from_entry(
     ts = timestamp if isinstance(timestamp, str) else None
     texts: list[tuple[str, str | None, RoleLiteral]] = []
 
-    if role is not None:
-        msg = entry_message(entry)
-        content = msg.get("content", [])
-        text = extract_text(content)
-        if isinstance(text, str) and text.strip():
-            texts.append((text, ts, role))
-
     if entry_type == "user":
-        tool_text = tool_result_searchable_text(entry.get("toolUseResult"))
-        if tool_text:
-            texts.append((tool_text, ts, "user"))
+        msg = entry_message(entry)
+        text = combine_searchable_text(
+            text=extract_text(msg.get("content", [])),
+            tool_result=entry.get("toolUseResult"),
+        )
+        if text:
+            texts.append((text, ts, "user"))
+        return texts
 
-    if not texts and role is not None:
+    if entry_type == "assistant":
+        msg = entry_message(entry)
+        text = combine_searchable_text(text=extract_text(msg.get("content", [])))
+        if text:
+            texts.append((text, ts, "assistant"))
+        return texts
+
+    if entry_type == "system":
         raw_content = entry.get("content", "")
-        if isinstance(raw_content, str) and raw_content.strip():
-            texts.append((raw_content, ts, role))
+        content = raw_content if isinstance(raw_content, str) else ""
+        text = combine_searchable_text(content=content)
+        if text:
+            texts.append((text, ts, "system"))
+        return texts
+
+    if entry_type == "progress":
+        text = combine_searchable_text(progress_data=entry.get("data"))
+        if text:
+            texts.append((text, ts, "progress"))
+        return texts
+
+    if role is not None:
+        text = combine_searchable_text(content=entry.get("content", ""))
+        if text:
+            texts.append((text, ts, role))
 
     return texts
 
@@ -730,11 +789,12 @@ def query_index_hits(
         )
         if len(hits) >= max_results:
             break
+    batch_fully_scanned = rows_scanned == len(rows)
     return {
         "hits": hits,
         "query_ok": True,
         "sql_rows_fetched": rows_scanned,
-        "sql_exhausted": len(rows) < sql_limit,
+        "sql_exhausted": batch_fully_scanned and len(rows) < sql_limit,
         "index_locked": False,
     }
 
