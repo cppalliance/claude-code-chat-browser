@@ -84,9 +84,7 @@ def test_search_index_unavailable_code(client_single, monkeypatch):
 
     monkeypatch.setattr(
         "api.search._search_via_index",
-        lambda *_args, **_kwargs: _IndexSearchOutcome(
-            None, False, index_locked_without_hits=True
-        ),
+        lambda *_args, **_kwargs: _IndexSearchOutcome(None, False, index_locked_without_hits=True),
     )
     monkeypatch.setattr("api.search._search_live_scan", _raise_live_scan_failure)
     resp = client_single.get("/api/search?q=test")
