@@ -92,6 +92,7 @@ _INVARIANT_BEHAVIOR: dict[str, tuple[dict[str, object], AssertWinner]] = {
     ),
 }
 
+
 @pytest.mark.parametrize(
     "fixture_id",
     ORDERING_INVARIANT_IDS,
