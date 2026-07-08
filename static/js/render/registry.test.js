@@ -34,6 +34,10 @@ describe('TOOL_USE_RENDERERS', () => {
         }
     });
 
+    it('CORE_TOOL_USE stays in sync with registry keys', () => {
+        expect(new Set(CORE_TOOL_USE)).toEqual(new Set(Object.keys(TOOL_USE_RENDERERS)));
+    });
+
     it('does not register the unknown dispatch sentinel as a tool renderer', () => {
         expect(Object.prototype.hasOwnProperty.call(TOOL_USE_RENDERERS, UNKNOWN_DISPATCH_KEY)).toBe(false);
     });
@@ -67,6 +71,10 @@ describe('TOOL_RESULT_RENDERERS', () => {
         for (const rt of CORE_TOOL_RESULT) {
             expect(TOOL_RESULT_RENDERERS[rt], rt).toBeTypeOf('function');
         }
+    });
+
+    it('CORE_TOOL_RESULT stays in sync with registry keys', () => {
+        expect(new Set(CORE_TOOL_RESULT)).toEqual(new Set(Object.keys(TOOL_RESULT_RENDERERS)));
     });
 
     it('renderBashResult escapes stdout', () => {
@@ -185,6 +193,56 @@ describe('renderTodoWriteResult', () => {
         });
         expect(html).toContain('Todos updated (2 items)');
         expect(html).not.toContain('99 items');
+    });
+});
+
+/** Representative fixtures for registry-driven behavioral smoke tests. */
+const TOOL_USE_FIXTURES = {
+    Bash: { input: { command: 'echo hi', description: 'say hi' } },
+    Read: { input: { file_path: 'README.md' } },
+    Write: { input: { file_path: 'out.txt', content: 'data' } },
+    Edit: { input: { file_path: 'a.js', old_string: 'x', new_string: 'y' } },
+    Glob: { input: { pattern: '*.js', path: 'src' } },
+    Grep: { input: { pattern: 'TODO', path: 'lib' } },
+    Task: { input: { subagent_type: 'explore', description: 'scan', prompt: 'go' } },
+    TodoWrite: { input: { todos: [{ status: 'pending', content: 'task' }] } },
+    AskUserQuestion: { input: { questions: [{ question: 'OK?' }] } },
+    WebFetch: { input: { url: 'https://example.com' } },
+    WebSearch: { input: { query: 'vitest' } },
+};
+
+const TOOL_RESULT_FIXTURES = {
+    bash: { exit_code: 0, stdout: 'ok' },
+    file_read: { file_path: '/a.txt', num_lines: 10 },
+    file_edit: { file_path: 'b.js' },
+    file_write: { file_path: 'c.txt' },
+    glob: { num_files: 3 },
+    grep: { num_files: 2, num_lines: 5 },
+    web_search: { query: 'test', result_count: 1 },
+    web_fetch: { url: 'https://x.com', status_code: 200 },
+    task: { status: 'completed', total_duration_ms: 1000 },
+    todo_write: { todos: [{ status: 'pending', content: 'x' }] },
+    user_input: { questions: [{ question: 'Q' }], answers: { Q: 'A' } },
+    plan: { file_path: 'plan.md' },
+};
+
+describe('registry behavioral smoke tests', () => {
+    it('every registered tool_use renderer produces non-empty HTML', () => {
+        for (const name of CORE_TOOL_USE) {
+            expect(TOOL_USE_FIXTURES[name], name).toBeDefined();
+            const html = renderToolUse({ name, ...TOOL_USE_FIXTURES[name] });
+            expect(html, name).toContain('tool-call');
+            expect(html.length, name).toBeGreaterThan(20);
+        }
+    });
+
+    it('every registered tool_result renderer produces non-empty HTML', () => {
+        for (const rt of CORE_TOOL_RESULT) {
+            expect(TOOL_RESULT_FIXTURES[rt], rt).toBeDefined();
+            const html = renderToolResult({ result_type: rt, ...TOOL_RESULT_FIXTURES[rt] });
+            expect(html, rt).toContain('tool-result');
+            expect(html.length, rt).toBeGreaterThan(20);
+        }
     });
 });
 
