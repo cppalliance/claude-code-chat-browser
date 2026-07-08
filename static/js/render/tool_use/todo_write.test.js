@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderTodoWriteUse } from './todo_write.js';
-import { mountToolUse, expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
+import { renderToolUse } from '../registry.js';
+import { expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
 
 describe('renderTodoWriteUse', () => {
     it('renders todo items with status icons', () => {
@@ -30,7 +31,7 @@ describe('renderTodoWriteUse', () => {
     });
 
     it('escapes HTML in todo content', () => {
-        const html = mountToolUse({
+        const html = renderToolUse({
             name: 'TodoWrite',
             input: { todos: [{ status: 'pending', content: XSS_SCRIPT }] },
         });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderWebSearchResult } from './web_search.js';
-import { mountToolResult, expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
+import { renderToolResult } from '../registry.js';
+import { expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
 
 describe('renderWebSearchResult', () => {
     it('renders query and result count in summary', () => {
@@ -21,7 +22,7 @@ describe('renderWebSearchResult', () => {
     });
 
     it('escapes HTML in query via registry', () => {
-        const html = mountToolResult({
+        const html = renderToolResult({
             result_type: 'web_search',
             query: XSS_SCRIPT,
             result_count: 1,

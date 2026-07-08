@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToolUseFallback } from './fallback.js';
-import { mountToolUse, expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
+import { renderToolUse } from '../registry.js';
+import { expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
 
 describe('renderToolUseFallback', () => {
     it('renders unknown tool name and JSON input', () => {
@@ -21,7 +22,7 @@ describe('renderToolUseFallback', () => {
     });
 
     it('escapes HTML in JSON fallback body', () => {
-        const html = mountToolUse({
+        const html = renderToolUse({
             name: 'MysteryTool',
             input: { payload: XSS_SCRIPT },
         });

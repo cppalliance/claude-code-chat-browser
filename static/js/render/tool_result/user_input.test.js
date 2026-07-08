@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUserInputResult } from './user_input.js';
-import { mountToolResult, expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
+import { renderToolResult } from '../registry.js';
+import { expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
 
 describe('renderUserInputResult', () => {
     it('renders questions and answers', () => {
@@ -25,7 +26,7 @@ describe('renderUserInputResult', () => {
     });
 
     it('escapes HTML in questions and answers', () => {
-        const html = mountToolResult({
+        const html = renderToolResult({
             result_type: 'user_input',
             questions: [{ question: XSS_SCRIPT }],
             answers: { key: '<bad>answer</bad>' },

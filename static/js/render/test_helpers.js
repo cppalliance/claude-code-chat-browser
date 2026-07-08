@@ -1,23 +1,9 @@
-import { expect } from 'vitest';
-import { renderToolUse, renderToolResult } from './registry.js';
+import { describe, expect, it } from 'vitest';
+import { renderToolResult } from './registry.js';
 
 /** Common XSS payloads for renderer escaping assertions. */
 export const XSS_SCRIPT = '<script>alert(1)</script>';
 export const XSS_IMG = '<img onerror=alert(1)>';
-
-/**
- * Render a tool-use card via the registry and return the HTML string.
- */
-export function mountToolUse(tool) {
-    return renderToolUse(tool);
-}
-
-/**
- * Render a tool-result card via the registry and return the HTML string.
- */
-export function mountToolResult(parsed) {
-    return renderToolResult(parsed);
-}
 
 /**
  * Assert raw HTML fragments are escaped (not present verbatim).
@@ -33,4 +19,34 @@ export function expectNoRawHtml(html, rawFragments) {
  */
 export function expectEscaped(html, escapedFragment) {
     expect(html).toContain(escapedFragment);
+}
+
+/**
+ * Shared behavioral tests for summary-only tool_result renderers (Edited/Plan/Wrote).
+ */
+export function describeSummaryOnlyResult(
+    render,
+    { suiteName, resultType, label, samplePath },
+) {
+    describe(suiteName, () => {
+        it(`renders ${label.toLowerCase()} file path in summary`, () => {
+            const html = render({ result_type: resultType, file_path: samplePath });
+            expect(html).toContain(`${label}: ${samplePath}`);
+            expect(html).toContain('tool-result');
+        });
+
+        it('handles missing file path', () => {
+            const html = render({ result_type: resultType });
+            expect(html).toContain(`${label}:`);
+            expect(html).not.toContain('undefined');
+        });
+
+        it('escapes HTML in file path via registry', () => {
+            const html = renderToolResult({
+                result_type: resultType,
+                file_path: XSS_SCRIPT,
+            });
+            expectNoRawHtml(html, [XSS_SCRIPT]);
+        });
+    });
 }

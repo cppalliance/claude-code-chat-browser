@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderAskUserQuestionUse } from './ask_user_question.js';
-import { mountToolUse, expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
+import { renderToolUse } from '../registry.js';
+import { expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
 
 describe('renderAskUserQuestionUse', () => {
     it('renders questions in the body', () => {
@@ -29,7 +30,7 @@ describe('renderAskUserQuestionUse', () => {
     });
 
     it('escapes HTML in question text', () => {
-        const html = mountToolUse({
+        const html = renderToolUse({
             name: 'AskUserQuestion',
             input: { questions: [{ question: XSS_SCRIPT }] },
         });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderWriteUse } from './write.js';
-import { mountToolUse, expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
+import { renderToolUse } from '../registry.js';
+import { expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
 
 describe('renderWriteUse', () => {
     it('renders file path and content preview', () => {
@@ -24,7 +25,7 @@ describe('renderWriteUse', () => {
     });
 
     it('escapes HTML in file path and content', () => {
-        const html = mountToolUse({
+        const html = renderToolUse({
             name: 'Write',
             input: { file_path: XSS_SCRIPT, content: '<bad>payload</bad>' },
         });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderFileWriteResult } from './file_write.js';
-import { mountToolResult, expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
+import { renderToolResult } from '../registry.js';
+import { expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
 
 describe('renderFileWriteResult', () => {
     it('renders written file path in summary', () => {
@@ -19,7 +20,7 @@ describe('renderFileWriteResult', () => {
     });
 
     it('escapes HTML in file path via registry', () => {
-        const html = mountToolResult({
+        const html = renderToolResult({
             result_type: 'file_write',
             file_path: XSS_SCRIPT,
         });

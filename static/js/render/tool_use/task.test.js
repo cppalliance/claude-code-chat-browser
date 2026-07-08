@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderTaskUse } from './task.js';
-import { mountToolUse, expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
+import { renderToolUse } from '../registry.js';
+import { expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
 
 describe('renderTaskUse', () => {
     it('renders subagent type, description, and prompt', () => {
@@ -29,7 +30,7 @@ describe('renderTaskUse', () => {
     });
 
     it('escapes HTML in task fields', () => {
-        const html = mountToolUse({
+        const html = renderToolUse({
             name: 'Task',
             input: {
                 subagent_type: XSS_SCRIPT,

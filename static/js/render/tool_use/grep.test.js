@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderGrepUse } from './grep.js';
-import { mountToolUse, expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
+import { renderToolUse } from '../registry.js';
+import { expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
 
 describe('renderGrepUse', () => {
     it('renders pattern and optional path', () => {
@@ -23,7 +24,7 @@ describe('renderGrepUse', () => {
     });
 
     it('escapes HTML in pattern and path', () => {
-        const html = mountToolUse({
+        const html = renderToolUse({
             name: 'Grep',
             input: { pattern: XSS_SCRIPT, path: '<root>' },
         });

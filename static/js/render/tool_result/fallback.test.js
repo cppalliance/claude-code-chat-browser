@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToolResultFallback } from './fallback.js';
-import { mountToolResult, expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
+import { renderToolResult } from '../registry.js';
+import { expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
 
 describe('renderToolResultFallback', () => {
     it('renders unknown result type and JSON payload', () => {
@@ -22,7 +23,7 @@ describe('renderToolResultFallback', () => {
     });
 
     it('escapes HTML in JSON fallback body', () => {
-        const html = mountToolResult({
+        const html = renderToolResult({
             result_type: 'mystery',
             content: XSS_SCRIPT,
         });

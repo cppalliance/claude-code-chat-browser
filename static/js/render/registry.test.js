@@ -34,6 +34,10 @@ describe('TOOL_USE_RENDERERS', () => {
         }
     });
 
+    it('CORE_TOOL_USE stays in sync with registry keys', () => {
+        expect(new Set(CORE_TOOL_USE)).toEqual(new Set(Object.keys(TOOL_USE_RENDERERS)));
+    });
+
     it('does not register the unknown dispatch sentinel as a tool renderer', () => {
         expect(Object.prototype.hasOwnProperty.call(TOOL_USE_RENDERERS, UNKNOWN_DISPATCH_KEY)).toBe(false);
     });
@@ -67,6 +71,10 @@ describe('TOOL_RESULT_RENDERERS', () => {
         for (const rt of CORE_TOOL_RESULT) {
             expect(TOOL_RESULT_RENDERERS[rt], rt).toBeTypeOf('function');
         }
+    });
+
+    it('CORE_TOOL_RESULT stays in sync with registry keys', () => {
+        expect(new Set(CORE_TOOL_RESULT)).toEqual(new Set(Object.keys(TOOL_RESULT_RENDERERS)));
     });
 
     it('renderBashResult escapes stdout', () => {
@@ -221,6 +229,7 @@ const TOOL_RESULT_FIXTURES = {
 describe('registry behavioral smoke tests', () => {
     it('every registered tool_use renderer produces non-empty HTML', () => {
         for (const name of CORE_TOOL_USE) {
+            expect(TOOL_USE_FIXTURES[name], name).toBeDefined();
             const html = renderToolUse({ name, ...TOOL_USE_FIXTURES[name] });
             expect(html, name).toContain('tool-call');
             expect(html.length, name).toBeGreaterThan(20);
@@ -229,6 +238,7 @@ describe('registry behavioral smoke tests', () => {
 
     it('every registered tool_result renderer produces non-empty HTML', () => {
         for (const rt of CORE_TOOL_RESULT) {
+            expect(TOOL_RESULT_FIXTURES[rt], rt).toBeDefined();
             const html = renderToolResult({ result_type: rt, ...TOOL_RESULT_FIXTURES[rt] });
             expect(html, rt).toContain('tool-result');
             expect(html.length, rt).toBeGreaterThan(20);

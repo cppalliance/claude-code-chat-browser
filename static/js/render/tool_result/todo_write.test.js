@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderTodoWriteResult } from './todo_write.js';
-import { mountToolResult, expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
+import { renderToolResult } from '../registry.js';
+import { expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
 
 describe('renderTodoWriteResult', () => {
     it('renders todo items with emoji status icons', () => {
@@ -28,7 +29,7 @@ describe('renderTodoWriteResult', () => {
     });
 
     it('escapes HTML in todo content', () => {
-        const html = mountToolResult({
+        const html = renderToolResult({
             result_type: 'todo_write',
             todos: [{ status: 'pending', content: XSS_SCRIPT }],
         });

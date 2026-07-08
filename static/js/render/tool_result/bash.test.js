@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderBashResult } from './bash.js';
-import { mountToolResult, expectNoRawHtml, XSS_IMG } from '../test_helpers.js';
+import { renderToolResult } from '../registry.js';
+import { expectNoRawHtml, XSS_IMG } from '../test_helpers.js';
 
 describe('renderBashResult', () => {
     it('renders success status with stdout', () => {
@@ -33,7 +34,7 @@ describe('renderBashResult', () => {
     });
 
     it('escapes HTML in stdout and stderr', () => {
-        const html = mountToolResult({
+        const html = renderToolResult({
             result_type: 'bash',
             exit_code: 0,
             stdout: XSS_IMG,

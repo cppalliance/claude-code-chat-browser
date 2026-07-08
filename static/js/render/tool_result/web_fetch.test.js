@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderWebFetchResult } from './web_fetch.js';
-import { mountToolResult, expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
+import { renderToolResult } from '../registry.js';
+import { expectNoRawHtml, XSS_SCRIPT } from '../test_helpers.js';
 
 describe('renderWebFetchResult', () => {
     it('renders url and status code in summary', () => {
@@ -23,7 +24,7 @@ describe('renderWebFetchResult', () => {
     });
 
     it('escapes HTML in url via registry', () => {
-        const html = mountToolResult({
+        const html = renderToolResult({
             result_type: 'web_fetch',
             url: XSS_SCRIPT,
             status_code: 404,

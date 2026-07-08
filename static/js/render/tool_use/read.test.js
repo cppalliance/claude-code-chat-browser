@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderReadUse } from './read.js';
-import { mountToolUse, expectNoRawHtml, expectEscaped, XSS_SCRIPT } from '../test_helpers.js';
+import { renderToolUse } from '../registry.js';
+import { expectNoRawHtml, expectEscaped, XSS_SCRIPT } from '../test_helpers.js';
 
 describe('renderReadUse', () => {
     it('renders file path in summary and body', () => {
@@ -19,7 +20,7 @@ describe('renderReadUse', () => {
     });
 
     it('escapes HTML in file path', () => {
-        const html = mountToolUse({
+        const html = renderToolUse({
             name: 'Read',
             input: { file_path: XSS_SCRIPT },
         });
