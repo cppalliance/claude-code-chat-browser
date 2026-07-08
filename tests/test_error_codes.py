@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
 
 import pytest
 
 from api.error_codes import ErrorCode
+from api.search import _IndexSearchOutcome
 from tests.conftest import assert_error_response
 
 
@@ -79,18 +79,16 @@ def test_bulk_export_empty_includes_export_nothing_code(client_empty):
 
 
 def test_search_index_unavailable_code(client_single, monkeypatch):
+    def _raise_live_scan_failure(*_args, **_kwargs):
+        raise RuntimeError("live scan failed")
+
     monkeypatch.setattr(
         "api.search._search_via_index",
-        lambda *_args, **_kwargs: SimpleNamespace(
-            hits=None,
-            fts_exhausted=False,
-            index_locked_without_hits=True,
+        lambda *_args, **_kwargs: _IndexSearchOutcome(
+            None, False, index_locked_without_hits=True
         ),
     )
-    monkeypatch.setattr(
-        "api.search._search_live_scan",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("live scan failed")),
-    )
+    monkeypatch.setattr("api.search._search_live_scan", _raise_live_scan_failure)
     resp = client_single.get("/api/search?q=test")
     assert resp.status_code == 503
     body_text = json.dumps(resp.get_json())
