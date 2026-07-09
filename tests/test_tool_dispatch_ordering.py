@@ -1,8 +1,8 @@
-"""Structural ordering invariants for ``_TOOL_RESULT_DISPATCH``.
+"""Structural priority invariants for ``_TOOL_RESULT_DISPATCH``.
 
-First matching predicate wins; misordering silently misclassifies tool results.
-Invariants are declared as ``(before, after, reason)`` triples — add a row to
-``ORDERING_INVARIANTS`` when inserting a predicate that must sit above another.
+When multiple predicates match, the highest ``priority`` wins. Invariants are
+declared as ``(before, after, reason)`` triples — add a row to
+``ORDERING_INVARIANTS`` when a new predicate must outrank another on overlap.
 """
 
 from collections.abc import Callable
@@ -17,7 +17,7 @@ from models.tool_results import (
     is_task_message_tool_result,
     is_task_retrieval_tool_result,
 )
-from utils.tool_dispatch import _TOOL_RESULT_DISPATCH
+from utils.tool_dispatch import _TOOL_RESULT_DISPATCH, ToolResultDispatchEntry
 
 Predicate = Callable[..., bool]
 
@@ -25,22 +25,22 @@ ORDERING_INVARIANTS: list[tuple[Predicate, Predicate, str]] = [
     (
         is_plan_tool_result,
         is_file_write_tool_result,
-        "plan blobs may carry filePath + content; plan must win before file_write",
+        "plan blobs may carry filePath + content; plan must outrank file_write",
     ),
     (
         is_task_message_tool_result,
         is_task_retrieval_tool_result,
-        "task_message is broad (task_id or message); must precede narrower task_retrieval",
+        "task_message is broad (task_id or message); must outrank task_retrieval",
     ),
     (
         is_task_message_tool_result,
         is_task_completed_tool_result,
-        "task_message is broad (task_id or message); must precede narrower task_completed",
+        "task_message is broad (task_id or message); must outrank task_completed",
     ),
     (
         is_task_message_tool_result,
         is_task_async_tool_result,
-        "task_message is broad (task_id or message); must precede narrower task_async",
+        "task_message is broad (task_id or message); must outrank task_async",
     ),
 ]
 
@@ -52,12 +52,10 @@ ORDERING_INVARIANT_IDS = [
 ]
 
 
-def _predicate_index(predicate: Predicate) -> int:
-    for i, entry in enumerate(_TOOL_RESULT_DISPATCH):
-        pred = entry[0]
-        # Identity match: dispatch table must store bare function refs (not wrappers).
-        if pred is predicate:
-            return i
+def _entry_for(predicate: Predicate) -> ToolResultDispatchEntry:
+    for entry in _TOOL_RESULT_DISPATCH:
+        if entry.predicate is predicate:
+            return entry
     raise ValueError(f"predicate {predicate.__name__} not found in _TOOL_RESULT_DISPATCH")
 
 
@@ -71,10 +69,10 @@ def test_tool_dispatch_ordering_invariant(
     after: Predicate,
     reason: str,
 ) -> None:
-    before_idx = _predicate_index(before)
-    after_idx = _predicate_index(after)
-    assert before_idx < after_idx, (
-        f"_TOOL_RESULT_DISPATCH ordering violation: "
-        f"{before.__name__} (index {before_idx}) must precede "
-        f"{after.__name__} (index {after_idx}). Reason: {reason}"
+    before_entry = _entry_for(before)
+    after_entry = _entry_for(after)
+    assert before_entry.priority > after_entry.priority, (
+        f"_TOOL_RESULT_DISPATCH priority violation: "
+        f"{before.__name__} (priority {before_entry.priority}) must outrank "
+        f"{after.__name__} (priority {after_entry.priority}). Reason: {reason}"
     )

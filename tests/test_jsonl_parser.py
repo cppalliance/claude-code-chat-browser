@@ -241,7 +241,7 @@ class TestParseToolResult:
         assert r["result_type"] == "plan"
 
     def test_plan_with_content_not_classified_as_file_write(self):
-        """plan is registered before file_write in _TOOL_RESULT_DISPATCH."""
+        """plan outranks file_write on overlapping toolUseResult blobs."""
         r = _parse_tool_result(
             {
                 "plan": [],

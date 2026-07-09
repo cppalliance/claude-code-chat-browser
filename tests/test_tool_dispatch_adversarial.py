@@ -1,13 +1,14 @@
 """Behavioral adversarial fixtures for ``_TOOL_RESULT_DISPATCH`` predicate overlap.
 
-Structural tuple-position guards live in ``test_tool_dispatch_ordering.py``.
+Structural priority guards live in ``test_tool_dispatch_ordering.py``.
 These tests construct ``toolUseResult`` JSON that satisfies multiple predicates
-and assert the classified winner via ``_parse_tool_result`` (first match wins).
+and assert the classified winner via ``_parse_tool_result`` (highest priority).
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 
 import pytest
 
@@ -118,19 +119,19 @@ def test_task_retrieval_narrow_shape_without_task_message_keys() -> None:
     assert result.get("task_id") == "task-narrow"
 
 
-def test_inverted_plan_file_write_dispatch_misclassifies_overlap(
+def test_inverted_plan_file_write_priority_misclassifies_overlap(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Regression: swapping plan below file_write flips the overlap winner."""
-    table = list(_TOOL_RESULT_DISPATCH)
-    plan_idx = next(
-        i for i, (pred, _) in enumerate(table) if pred.__name__ == "is_plan_tool_result"
+    """Regression: giving file_write higher priority than plan flips the overlap winner."""
+    table = tuple(
+        replace(entry, priority=1)
+        if entry.id == "file_write"
+        else replace(entry, priority=0)
+        if entry.id == "plan"
+        else entry
+        for entry in _TOOL_RESULT_DISPATCH
     )
-    write_idx = next(
-        i for i, (pred, _) in enumerate(table) if pred.__name__ == "is_file_write_tool_result"
-    )
-    table[plan_idx], table[write_idx] = table[write_idx], table[plan_idx]
-    monkeypatch.setattr(tool_dispatch, "_TOOL_RESULT_DISPATCH", tuple(table))
+    monkeypatch.setattr(tool_dispatch, "_TOOL_RESULT_DISPATCH", table)
 
     result = _parse_tool_result(PLAN_FILE_WRITE_OVERLAP)
     assert result is not None

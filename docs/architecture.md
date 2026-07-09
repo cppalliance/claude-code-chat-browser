@@ -71,13 +71,13 @@
 
 ## Dispatch table
 
-In `utils/tool_dispatch.py`, tool results are classified through `_parse_tool_result`, a **predicate-ordered dispatch table** (not a simple `if tool_name == ...` chain). **Order is load-bearing**: the first matching predicate wins. Tests in `tests/test_jsonl_parser.py` and `tests/test_real_session_fixtures.py` guard ordering regressions.
+In `utils/tool_dispatch.py`, tool results are classified through `_parse_tool_result`, a **priority-based dispatch table**. Every matching predicate is considered; the entry with the highest `priority` wins (ties favor earlier registration). Overlap exceptions are explicit priorities, not tuple position — see `tests/test_tool_dispatch_ordering.py` and `tests/test_tool_dispatch_adversarial.py`.
 
 When adding a new tool renderer:
 
-1. Add a `(predicate, builder)` pair to `_TOOL_RESULT_DISPATCH` in `utils/tool_dispatch.py`, preserving existing predicate order unless you also update fixtures and ordering tests (`tests/test_jsonl_parser.py`, `tests/test_real_session_fixtures.py`). Order is **not** “specific before generic” in general — the first match wins. `is_task_message_tool_result` is the intentional broad-before-narrow exception (`task_id` or `message` before retrieval/completed/async).
+1. Add a `ToolResultDispatchEntry` to `_TOOL_RESULT_DISPATCH` in `utils/tool_dispatch.py`. Set `priority` higher than any overlapping predicate it must beat, and add a row to `ORDERING_INVARIANTS` in `tests/test_tool_dispatch_ordering.py` when overlaps exist. Documented exceptions: `plan` (priority 1) over `file_write` (0); `task_message` (1) over `task_retrieval` / `task_completed` / `task_async` (0).
 2. Add or extend a JSONL fixture under `tests/fixtures/` (especially for overlaps with existing predicates).
-3. Run `pytest tests/test_jsonl_parser.py tests/test_real_session_fixtures.py -v`.
+3. Run `pytest tests/test_tool_dispatch_ordering.py tests/test_tool_dispatch_adversarial.py tests/test_jsonl_parser.py tests/test_real_session_fixtures.py -v`.
 
 ## Export state machine
 
