@@ -5,7 +5,14 @@ import re
 from datetime import datetime
 from typing import Any
 
-from models.session import MessageDict, SessionDict, ToolUseDict
+from models.session import (
+    AssistantMessageDict,
+    MessageDict,
+    SessionDict,
+    SystemMessageDict,
+    ToolUseDict,
+    UserMessageDict,
+)
 from models.stats import SessionStatsDict
 from utils.jsonl_helpers import strip_system_tags
 from utils.session_stats import format_duration
@@ -189,18 +196,17 @@ def _build_summary(session: SessionDict, stats: SessionStatsDict) -> str:
 def _build_body(messages: list[MessageDict]) -> str:
     parts = []
     for msg in messages:
-        role = msg["role"]
-        if role == "user":
+        if msg["role"] == "user":
             parts.append(_render_user(msg))
-        elif role == "assistant":
+        elif msg["role"] == "assistant":
             parts.append(_render_assistant(msg))
-        elif role == "system":
+        elif msg["role"] == "system":
             parts.append(_render_system(msg))
         # Skip progress messages in MD (too noisy)
     return "\n".join(parts)
 
 
-def _render_user(msg: MessageDict) -> str:
+def _render_user(msg: UserMessageDict) -> str:
     lines = []
     lines.append("### User\n")
 
@@ -233,7 +239,7 @@ def _render_user(msg: MessageDict) -> str:
     return "\n".join(lines)
 
 
-def _render_assistant(msg: MessageDict) -> str:
+def _render_assistant(msg: AssistantMessageDict) -> str:
     lines = []
     lines.append("### Assistant\n")
 
@@ -440,7 +446,7 @@ def _render_tool_result(parsed: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _render_system(msg: MessageDict) -> str:
+def _render_system(msg: SystemMessageDict) -> str:
     lines = []
     subtype = msg.get("subtype", "")
     content = msg.get("content", "")

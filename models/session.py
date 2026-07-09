@@ -1,6 +1,6 @@
 """Parsed session shapes from jsonl_parser."""
 
-from typing import Any, Literal, NotRequired, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict, Union
 
 from models.record_data import RecordDataUnion
 from models.tool_results import ToolNameLiteral, ToolResultUnion
@@ -26,30 +26,64 @@ class MessageUsageDict(TypedDict, total=False):
 SystemSubtypeLiteral = Literal["compact_boundary", "init"]
 
 
-class MessageDict(TypedDict):
-    role: RoleLiteral
-    uuid: NotRequired[str | None]
-    parent_uuid: NotRequired[str | None]
-    timestamp: NotRequired[str | None]
+class BaseMessageDict(TypedDict, total=False):
+    """Fields shared across every parsed message role."""
+
+    uuid: str | None
+    parent_uuid: str | None
+    timestamp: str | None
+    is_sidechain: bool
+
+
+class UserMessageDict(BaseMessageDict):
+    role: Literal["user"]
     text: NotRequired[str]
-    content: NotRequired[str]
     images: NotRequired[list[Any] | None]
-    is_sidechain: NotRequired[bool]
     tool_result: NotRequired[ToolResultUnion | None]
     tool_result_parsed: NotRequired[dict[str, object] | None]
     slug: NotRequired[str | None]
+
+
+class AssistantMessageDict(BaseMessageDict):
+    role: Literal["assistant"]
+    text: NotRequired[str]
     model: NotRequired[str]
     stop_reason: NotRequired[str]
     thinking: NotRequired[str | None]
     tool_uses: NotRequired[list[ToolUseDict] | None]
     is_api_error: NotRequired[bool]
     usage: NotRequired[MessageUsageDict]
+
+
+class SystemMessageDict(BaseMessageDict):
+    role: Literal["system"]
+    text: NotRequired[str]
     subtype: NotRequired[str]
+    content: NotRequired[str]
     level: NotRequired[str]
-    data: NotRequired[RecordDataUnion]
+
+
+class ResultMessageDict(BaseMessageDict):
+    role: Literal["result"]
+    text: NotRequired[str]
+    content: NotRequired[str]
+
+
+class ProgressMessageDict(BaseMessageDict):
+    role: Literal["progress"]
     progress_type: NotRequired[str]
+    data: NotRequired[RecordDataUnion]
     tool_use_id: NotRequired[str | None]
     parent_tool_use_id: NotRequired[str | None]
+
+
+MessageDict = Union[
+    UserMessageDict,
+    AssistantMessageDict,
+    SystemMessageDict,
+    ResultMessageDict,
+    ProgressMessageDict,
+]
 
 
 class SessionMetadataDict(TypedDict):

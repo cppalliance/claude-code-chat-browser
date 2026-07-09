@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from models.session import SessionDict, SessionMetadataDict
+from models.session import MessageDict, SessionDict, SessionMetadataDict
 from models.stats import SessionStatsDict
 
 
@@ -39,11 +39,11 @@ def _serialize_metadata(meta: SessionMetadataDict) -> dict[str, Any]:
     return result
 
 
-def _serialize_messages(messages: list[Any]) -> list[dict[str, Any]]:
+def _serialize_messages(messages: list[MessageDict]) -> list[dict[str, Any]]:
     """Same set-to-list cleanup, but for each message dict."""
-    out = []
+    out: list[dict[str, Any]] = []
     for msg in messages:
-        clean = {}
+        clean: dict[str, Any] = {}
         for key, val in msg.items():
             if isinstance(val, set):
                 clean[key] = sorted(val)

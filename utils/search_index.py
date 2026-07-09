@@ -371,13 +371,33 @@ def combine_searchable_text(
 
 def message_searchable_text(msg: MessageDict) -> str:
     """Searchable text for one parsed session message (live-scan path)."""
-    text = msg.get("text", "") or msg.get("content", "")
-    if not isinstance(text, str):
-        text = ""
+    role = msg["role"]
+    text = ""
+    content = ""
+    tool_result: object = None
+    progress_data: object = None
+
+    if role == "user":
+        raw_text = msg.get("text", "")
+        text = raw_text if isinstance(raw_text, str) else ""
+        tool_result = msg.get("tool_result")
+    elif role == "assistant":
+        raw_text = msg.get("text", "")
+        text = raw_text if isinstance(raw_text, str) else ""
+    elif role == "system":
+        raw_content = msg.get("content", "")
+        content = raw_content if isinstance(raw_content, str) else ""
+    elif role == "result":
+        raw_text = msg.get("text", "") or msg.get("content", "") or ""
+        text = raw_text if isinstance(raw_text, str) else ""
+    elif role == "progress":
+        progress_data = msg.get("data")
+
     return combine_searchable_text(
         text=text,
-        tool_result=msg.get("tool_result"),
-        progress_data=msg.get("data") if msg.get("role") == "progress" else None,
+        content=content,
+        tool_result=tool_result,
+        progress_data=progress_data,
     )
 
 

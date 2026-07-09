@@ -10,12 +10,18 @@ from typing import Any, cast, get_args
 
 from models.record_data import RecordDataUnion
 from models.session import (
+    AssistantMessageDict,
+    BaseMessageDict,
     MessageDict,
+    ProgressMessageDict,
+    ResultMessageDict,
     RoleLiteral,
     SessionDict,
     SessionMetadataBuilderDict,
     SessionMetadataDict,
+    SystemMessageDict,
     ToolUseDict,
+    UserMessageDict,
 )
 from models.tool_results import ToolResultUnion, is_tool_result_dict
 from utils.jsonl_helpers import (
@@ -50,6 +56,16 @@ def _coerce_role(raw: str) -> RoleLiteral:
     return "system"
 
 
+def _fallback_common_fields(entry: dict[str, Any]) -> BaseMessageDict:
+    """uuid/parent/timestamp/is_sidechain shared by every fallback message shape."""
+    return {
+        "uuid": entry.get("uuid"),
+        "parent_uuid": entry.get("parentUuid"),
+        "timestamp": entry.get("timestamp"),
+        "is_sidechain": entry.get("isSidechain", False),
+    }
+
+
 def _fallback_message(entry: dict[str, Any], role: RoleLiteral) -> MessageDict:
     """Minimal message for JSONL entry types without a dedicated processor."""
     raw_content = entry.get("content", "")
@@ -59,15 +75,59 @@ def _fallback_message(entry: dict[str, Any], role: RoleLiteral) -> MessageDict:
         text = _extract_text(_normalize_content(raw_content))
     else:
         text = ""
-    return {
-        "role": role,
-        "uuid": entry.get("uuid"),
-        "parent_uuid": entry.get("parentUuid"),
-        "timestamp": entry.get("timestamp"),
+    base = _fallback_common_fields(entry)
+    if role == "user":
+        user_msg: UserMessageDict = {
+            "role": "user",
+            "uuid": base["uuid"],
+            "parent_uuid": base["parent_uuid"],
+            "timestamp": base["timestamp"],
+            "is_sidechain": base["is_sidechain"],
+            "text": text,
+        }
+        return user_msg
+    if role == "assistant":
+        assistant_msg: AssistantMessageDict = {
+            "role": "assistant",
+            "uuid": base["uuid"],
+            "parent_uuid": base["parent_uuid"],
+            "timestamp": base["timestamp"],
+            "is_sidechain": base["is_sidechain"],
+            "text": text,
+        }
+        return assistant_msg
+    if role == "system":
+        system_msg: SystemMessageDict = {
+            "role": "system",
+            "uuid": base["uuid"],
+            "parent_uuid": base["parent_uuid"],
+            "timestamp": base["timestamp"],
+            "is_sidechain": base["is_sidechain"],
+            "text": text,
+            "content": text,
+        }
+        return system_msg
+    if role == "progress":
+        progress_msg: ProgressMessageDict = {
+            "role": "progress",
+            "uuid": base["uuid"],
+            "parent_uuid": base["parent_uuid"],
+            "timestamp": base["timestamp"],
+            "is_sidechain": base["is_sidechain"],
+            "progress_type": "",
+            "data": {},
+        }
+        return progress_msg
+    result_msg: ResultMessageDict = {
+        "role": "result",
+        "uuid": base["uuid"],
+        "parent_uuid": base["parent_uuid"],
+        "timestamp": base["timestamp"],
+        "is_sidechain": base["is_sidechain"],
         "text": text,
         "content": text,
-        "is_sidechain": entry.get("isSidechain", False),
     }
+    return result_msg
 
 
 def _safe_int(val: Any) -> int:
@@ -289,20 +349,19 @@ def _process_user(
             if tr_images:
                 images = (images or []) + tr_images
 
-    messages.append(
-        {
-            "role": "user",
-            "uuid": entry.get("uuid"),
-            "parent_uuid": entry.get("parentUuid"),
-            "timestamp": entry.get("timestamp"),
-            "text": text,
-            "images": images if images else None,
-            "is_sidechain": entry.get("isSidechain", False),
-            "tool_result": tool_result,
-            "tool_result_parsed": tool_result_parsed,
-            "slug": entry.get("slug"),
-        }
-    )
+    user_msg: UserMessageDict = {
+        "role": "user",
+        "uuid": entry.get("uuid"),
+        "parent_uuid": entry.get("parentUuid"),
+        "timestamp": entry.get("timestamp"),
+        "text": text,
+        "images": images if images else None,
+        "is_sidechain": entry.get("isSidechain", False),
+        "tool_result": tool_result,
+        "tool_result_parsed": tool_result_parsed,
+        "slug": entry.get("slug"),
+    }
+    messages.append(user_msg)
 
 
 def _process_assistant(
@@ -377,28 +436,27 @@ def _process_assistant(
             tool_uses.append(tool_use)
             track_tool_file_activity(tool_name, safe_input, metadata)
 
-    messages.append(
-        {
-            "role": "assistant",
-            "uuid": entry.get("uuid"),
-            "parent_uuid": entry.get("parentUuid"),
-            "timestamp": entry.get("timestamp"),
-            "model": model,
-            "stop_reason": stop_reason,
-            "text": "\n".join(text_parts),
-            "thinking": "\n\n".join(thinking_parts) if thinking_parts else None,
-            "tool_uses": tool_uses if tool_uses else None,
-            "is_sidechain": entry.get("isSidechain", False),
-            "is_api_error": entry.get("isApiErrorMessage", False),
-            "usage": {
-                "input_tokens": _safe_int(usage.get("input_tokens")),
-                "output_tokens": _safe_int(usage.get("output_tokens")),
-                "cache_read": _safe_int(usage.get("cache_read_input_tokens")),
-                "cache_creation": _safe_int(usage.get("cache_creation_input_tokens")),
-                "service_tier": tier if isinstance(tier, str) else None,
-            },
-        }
-    )
+    assistant_msg: AssistantMessageDict = {
+        "role": "assistant",
+        "uuid": entry.get("uuid"),
+        "parent_uuid": entry.get("parentUuid"),
+        "timestamp": entry.get("timestamp"),
+        "model": model,
+        "stop_reason": stop_reason,
+        "text": "\n".join(text_parts),
+        "thinking": "\n\n".join(thinking_parts) if thinking_parts else None,
+        "tool_uses": tool_uses if tool_uses else None,
+        "is_sidechain": entry.get("isSidechain", False),
+        "is_api_error": entry.get("isApiErrorMessage", False),
+        "usage": {
+            "input_tokens": _safe_int(usage.get("input_tokens")),
+            "output_tokens": _safe_int(usage.get("output_tokens")),
+            "cache_read": _safe_int(usage.get("cache_read_input_tokens")),
+            "cache_creation": _safe_int(usage.get("cache_creation_input_tokens")),
+            "service_tier": tier if isinstance(tier, str) else None,
+        },
+    }
+    messages.append(assistant_msg)
 
 
 def _process_system(
@@ -419,17 +477,16 @@ def _process_system(
                 }
             )
 
-    messages.append(
-        {
-            "role": "system",
-            "uuid": entry.get("uuid"),
-            "parent_uuid": entry.get("parentUuid"),
-            "timestamp": entry.get("timestamp"),
-            "subtype": subtype,
-            "content": entry.get("content", ""),
-            "is_sidechain": entry.get("isSidechain", False),
-        }
-    )
+    system_msg: SystemMessageDict = {
+        "role": "system",
+        "uuid": entry.get("uuid"),
+        "parent_uuid": entry.get("parentUuid"),
+        "timestamp": entry.get("timestamp"),
+        "subtype": subtype,
+        "content": entry.get("content", ""),
+        "is_sidechain": entry.get("isSidechain", False),
+    }
+    messages.append(system_msg)
 
 
 def _process_progress(entry: dict[str, Any], messages: list[MessageDict]) -> None:
@@ -439,16 +496,15 @@ def _process_progress(entry: dict[str, Any], messages: list[MessageDict]) -> Non
     data: RecordDataUnion = raw_data if isinstance(raw_data, dict) else {}
     progress_type = str(data.get("type", ""))
 
-    messages.append(
-        {
-            "role": "progress",
-            "uuid": entry.get("uuid"),
-            "parent_uuid": entry.get("parentUuid"),
-            "timestamp": entry.get("timestamp"),
-            "progress_type": progress_type,
-            "data": data,
-            "tool_use_id": entry.get("toolUseID"),
-            "parent_tool_use_id": entry.get("parentToolUseID"),
-            "is_sidechain": entry.get("isSidechain", False),
-        }
-    )
+    progress_msg: ProgressMessageDict = {
+        "role": "progress",
+        "uuid": entry.get("uuid"),
+        "parent_uuid": entry.get("parentUuid"),
+        "timestamp": entry.get("timestamp"),
+        "progress_type": progress_type,
+        "data": data,
+        "tool_use_id": entry.get("toolUseID"),
+        "parent_tool_use_id": entry.get("parentToolUseID"),
+        "is_sidechain": entry.get("isSidechain", False),
+    }
+    messages.append(progress_msg)
