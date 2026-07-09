@@ -105,7 +105,7 @@ The UI is a **hash-routed** SPA with ES modules under `static/js/`:
 
 - `app.js` — routing and boot
 - `projects.js`, `sessions.js`, `search.js`, `export.js` — route handlers
-- `render/registry.js` — **tool dispatch registry** for session UI: `TOOL_USE_RENDERERS` and `TOOL_RESULT_RENDERERS` map tool name / `result_type` → render function (one module per type under `render/tool_use/` and `render/tool_result/`). Parallels backend `utils/tool_dispatch.py` (backend uses ordered predicates; frontend uses direct key lookup + fallback).
+- `render/registry.js` — **tool dispatch registry** for session UI: `TOOL_USE_RENDERERS` and `TOOL_RESULT_RENDERERS` map tool name / `result_type` → render function (one module per type under `render/tool_use/` and `render/tool_result/`). Parallels backend `utils/tool_dispatch.py` (backend uses priority-based predicate matching; frontend uses direct key lookup + fallback).
 - `static/tool_types.json` — generated manifest of backend tool-use names (`python scripts/gen_tool_types_manifest.py` from `KNOWN_TOOL_TYPES`). Fetched non-blocking at boot by `render/tool_types_manifest.js` (`void initToolTypesManifest()` in `app.js`), which cross-checks `TOOL_USE_RENDERERS` and logs `console.warn` on drift.
 - `shared/markdown.js` — markdown + **DOMPurify** sanitization (do not render raw LLM HTML)
 - `shared/state.js`, `shared/utils.js`, `shared/theme.js` — shared UI state and helpers

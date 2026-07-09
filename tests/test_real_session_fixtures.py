@@ -142,11 +142,12 @@ def test_task_retrieval_not_misclassified_as_task_message() -> None:
 
 
 def test_task_completed_with_message_key_matches_task_message_first() -> None:
-    """Legacy dispatch: broad task_message runs before task_completed when ``message`` present.
+    """task_message outranks task_completed when ``message`` key is present.
 
     ``is_task_message_tool_result`` matches any dict with a ``message`` or ``task_id``
-    key. Future tool shapes that add ``message`` for status text (e.g. web-fetch) would
-    be misclassified as task until dispatch order is refined — this test locks that
+    key and holds priority 1, beating the narrower task predicates at priority 0.
+    Future tool shapes that add ``message`` for status text (e.g. web-fetch) would
+    be misclassified as task unless given higher priority — this test locks that
     known false-positive surface.
     """
     tr = {

@@ -187,7 +187,8 @@ def _tool_result_build_task_retrieval(
     tr: ToolResultDict, base: dict[str, object]
 ) -> dict[str, object]:
     result = dict(base)
-    task_obj = tr["task"] if isinstance(tr["task"], dict) else {}
+    raw_task = tr.get("task")
+    task_obj = raw_task if isinstance(raw_task, dict) else {}
     result["result_type"] = "task"
     result["retrieval_status"] = tr.get("retrieval_status")
     result["task_id"] = task_obj.get("task_id")
@@ -266,7 +267,23 @@ _TOOL_RESULT_DISPATCH: tuple[ToolResultDispatchEntry, ...] = (
     ToolResultDispatchEntry("user_input", is_user_input_tool_result, _tool_result_build_user_input),
 )
 
-_DISPATCH_ORDER = {entry.id: index for index, entry in enumerate(_TOOL_RESULT_DISPATCH)}
+
+def _validate_dispatch_ids(
+    table: tuple[ToolResultDispatchEntry, ...],
+) -> dict[str, int]:
+    """Fail fast on duplicate entry IDs and return the registration-order index."""
+    order: dict[str, int] = {}
+    for index, entry in enumerate(table):
+        if entry.id in order:
+            raise ValueError(
+                f"duplicate ToolResultDispatchEntry id {entry.id!r} "
+                f"(indices {order[entry.id]} and {index})"
+            )
+        order[entry.id] = index
+    return order
+
+
+_DISPATCH_ORDER = _validate_dispatch_ids(_TOOL_RESULT_DISPATCH)
 
 # Claude Code assistant tool_use ``name`` values coordinated across parser file
 # activity, Markdown export, and the SPA ``TOOL_USE_RENDERERS`` map.
@@ -343,9 +360,10 @@ def _winning_dispatch_entry(tr: ToolResultDict) -> ToolResultDispatchEntry | Non
     matches = _matching_dispatch_entries(tr)
     if not matches:
         return None
+    order = _validate_dispatch_ids(_TOOL_RESULT_DISPATCH)
     return max(
         matches,
-        key=lambda entry: (entry.priority, -_DISPATCH_ORDER[entry.id]),
+        key=lambda entry: (entry.priority, -order[entry.id]),
     )
 
 
