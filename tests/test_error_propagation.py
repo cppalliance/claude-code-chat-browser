@@ -210,9 +210,7 @@ class TestExportSessionErrorBody:
         app.register_blueprint(export_bp)
         return app.test_client()
 
-    def test_500_when_exclusion_raises_does_not_leak(
-        self, tmp_path, export_client, monkeypatch
-    ):
+    def test_500_when_exclusion_raises_does_not_leak(self, tmp_path, export_client, monkeypatch):
         _write_session(tmp_path, "proj", "abc", '{"type":"user","message":{}}')
         _patch_exclusion_raises(monkeypatch)
 
