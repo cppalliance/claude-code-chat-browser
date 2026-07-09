@@ -60,11 +60,10 @@ def _compute_commands_run(messages: list[MessageDict]) -> list[dict[str, Any]]:
     """Walk through messages and match up Bash tool_use calls with their
     subsequent tool_result entries to get exit codes and error status."""
     commands = []
-    # Build a map of tool_use_id -> command from assistant messages
-    pending_commands = {}
+    pending_commands: dict[str, dict[str, Any]] = {}
     for msg in messages:
-        tool_uses = msg.get("tool_uses") or []
-        if msg["role"] == "assistant" and tool_uses:
+        if msg["role"] == "assistant":
+            tool_uses = msg.get("tool_uses") or []
             for tu in tool_uses:
                 if tu["name"] == "Bash":
                     cmd = tu["input"].get("command", "")
@@ -73,11 +72,13 @@ def _compute_commands_run(messages: list[MessageDict]) -> list[dict[str, Any]]:
                             "command": cmd,
                             "timestamp": msg.get("timestamp"),
                         }
+            continue
 
-        # Match tool results back to commands
+        if msg["role"] != "user":
+            continue
+
         trp = msg.get("tool_result_parsed")
-        if msg["role"] == "user" and trp and trp.get("result_type") == "bash":
-            # Try to find matching command by sequential order
+        if trp and trp.get("result_type") == "bash":
             if pending_commands:
                 first_id = next(iter(pending_commands))
                 entry = pending_commands.pop(first_id)
