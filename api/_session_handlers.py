@@ -59,20 +59,19 @@ def resolve_loaded_session(
 
     try:
         session = get_cached_session(filepath)
+        rules = current_app.config.get("EXCLUSION_RULES") or []
+        if is_session_excluded(rules, session, project_name):
+            return error_response(
+                ErrorCode.SESSION_NOT_FOUND,
+                "Session not found",
+                404,
+            )
     except SESSION_LOAD_ERRORS:
         current_app.logger.exception(parse_log_action, session_id)
         return error_response(
             ErrorCode.PARSE_ERROR,
             "Failed to parse session",
             500,
-        )
-
-    rules = current_app.config.get("EXCLUSION_RULES") or []
-    if is_session_excluded(rules, session, project_name):
-        return error_response(
-            ErrorCode.SESSION_NOT_FOUND,
-            "Session not found",
-            404,
         )
 
     return LoadedSession(session=session, filepath=filepath)
