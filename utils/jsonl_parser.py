@@ -114,8 +114,6 @@ def _fallback_message(entry: dict[str, Any], role: RoleLiteral) -> MessageDict:
             "parent_uuid": base["parent_uuid"],
             "timestamp": base["timestamp"],
             "is_sidechain": base["is_sidechain"],
-            "progress_type": "",
-            "data": {},
         }
         return progress_msg
     result_msg: ResultMessageDict = {

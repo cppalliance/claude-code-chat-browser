@@ -3,7 +3,7 @@
 from models.session import MessageDict, UserMessageDict
 
 user_msg: UserMessageDict = {"role": "user", "text": "hello"}
-_ = user_msg["thinking"]
+_ = user_msg["thinking"]  # expect: typeddict-item thinking
 
 union_msg: MessageDict = {"role": "user", "text": "hello"}
-_ = union_msg["thinking"]
+_ = union_msg["thinking"]  # expect: typeddict-item thinking

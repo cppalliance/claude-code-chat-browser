@@ -385,8 +385,8 @@ def message_searchable_text(msg: MessageDict) -> str:
         raw_text = msg.get("text", "")
         text = raw_text if isinstance(raw_text, str) else ""
     elif role == "system":
-        raw_content = msg.get("content", "")
-        content = raw_content if isinstance(raw_content, str) else ""
+        raw_text = msg.get("text", "") or msg.get("content", "") or ""
+        text = raw_text if isinstance(raw_text, str) else ""
     elif role == "result":
         raw_text = msg.get("text", "") or msg.get("content", "") or ""
         text = raw_text if isinstance(raw_text, str) else ""
