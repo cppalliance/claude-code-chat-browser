@@ -44,6 +44,13 @@ ORDERING_INVARIANTS: list[tuple[Predicate, Predicate, str]] = [
     ),
 ]
 
+ORDERING_INVARIANT_IDS = [
+    "plan_before_file_write",
+    "task_message_before_task_retrieval",
+    "task_message_before_task_completed",
+    "task_message_before_task_async",
+]
+
 
 def _predicate_index(predicate: Predicate) -> int:
     for i, entry in enumerate(_TOOL_RESULT_DISPATCH):
@@ -57,12 +64,7 @@ def _predicate_index(predicate: Predicate) -> int:
 @pytest.mark.parametrize(
     "before,after,reason",
     ORDERING_INVARIANTS,
-    ids=[
-        "plan_before_file_write",
-        "task_message_before_task_retrieval",
-        "task_message_before_task_completed",
-        "task_message_before_task_async",
-    ],
+    ids=ORDERING_INVARIANT_IDS,
 )
 def test_tool_dispatch_ordering_invariant(
     before: Predicate,
