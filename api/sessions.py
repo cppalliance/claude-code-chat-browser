@@ -1,101 +1,47 @@
 """Session detail and stats endpoints."""
 
-import json
-import os
-
-from flask import Blueprint, current_app
+from flask import Blueprint
 
 from api._flask_types import FlaskReturn, json_response
-from api.error_codes import ErrorCode, error_response
-from utils.exclusion_rules import is_session_excluded
-from utils.session_cache import get_cached_session
-from utils.session_path import get_claude_projects_dir, safe_join
-from utils.session_stats import compute_stats
+from api._session_handlers import (
+    LoadedSession,
+    compute_stats_or_error,
+    resolve_loaded_session,
+)
 
 sessions_bp = Blueprint("sessions", __name__)
 
-_PARSE_ERRORS = (
-    json.JSONDecodeError,
-    KeyError,
-    ValueError,
-    OSError,
-    FileNotFoundError,
-)
+
+def _missing_session_message(session_id: str) -> str:
+    return f"Session {session_id} not found"
 
 
 @sessions_bp.route("/api/sessions/<path:project_name>/<session_id>")
 def get_session(project_name: str, session_id: str) -> FlaskReturn:
-    base = current_app.config.get("CLAUDE_PROJECTS_DIR") or get_claude_projects_dir()
-    try:
-        filepath = safe_join(base, project_name, f"{session_id}.jsonl")
-    except ValueError:
-        return error_response(ErrorCode.INVALID_PATH, "Invalid path", 400)
-
-    if not os.path.isfile(filepath):
-        return error_response(
-            ErrorCode.SESSION_NOT_FOUND,
-            f"Session {session_id} not found",
-            404,
-        )
-
-    try:
-        session = get_cached_session(filepath)
-        rules = current_app.config.get("EXCLUSION_RULES") or []
-        if is_session_excluded(rules, session, project_name):
-            return error_response(
-                ErrorCode.SESSION_NOT_FOUND,
-                "Session not found",
-                404,
-            )
-        return json_response(session)
-    except _PARSE_ERRORS:
-        current_app.logger.exception("Failed to parse session %s", session_id)
-        return error_response(
-            ErrorCode.PARSE_ERROR,
-            "Failed to parse session",
-            500,
-        )
+    loaded = resolve_loaded_session(
+        project_name,
+        session_id,
+        missing_file_message=_missing_session_message,
+    )
+    if isinstance(loaded, LoadedSession):
+        return json_response(loaded.session)
+    return loaded
 
 
 @sessions_bp.route("/api/sessions/<path:project_name>/<session_id>/stats")
 def get_session_stats(project_name: str, session_id: str) -> FlaskReturn:
-    base = current_app.config.get("CLAUDE_PROJECTS_DIR") or get_claude_projects_dir()
-    try:
-        filepath = safe_join(base, project_name, f"{session_id}.jsonl")
-    except ValueError:
-        return error_response(ErrorCode.INVALID_PATH, "Invalid path", 400)
-
-    if not os.path.isfile(filepath):
-        return error_response(
-            ErrorCode.SESSION_NOT_FOUND,
-            f"Session {session_id} not found",
-            404,
+    loaded = resolve_loaded_session(
+        project_name,
+        session_id,
+        missing_file_message=_missing_session_message,
+    )
+    if isinstance(loaded, LoadedSession):
+        stats = compute_stats_or_error(
+            loaded.session,
+            session_id,
+            log_action="Failed to compute stats for %s",
         )
-
-    try:
-        session = get_cached_session(filepath)
-        rules = current_app.config.get("EXCLUSION_RULES") or []
-        if is_session_excluded(rules, session, project_name):
-            return error_response(
-                ErrorCode.SESSION_NOT_FOUND,
-                "Session not found",
-                404,
-            )
-    except _PARSE_ERRORS:
-        current_app.logger.exception("Failed to parse session %s", session_id)
-        return error_response(
-            ErrorCode.PARSE_ERROR,
-            "Failed to parse session",
-            500,
-        )
-
-    try:
-        stats = compute_stats(session)
-        return json_response(stats)
-    except _PARSE_ERRORS:
-        current_app.logger.exception("Failed to compute stats for %s", session_id)
-        return error_response(
-            ErrorCode.INTERNAL_ERROR,
-            "Failed to compute session stats",
-            500,
-        )
+        if isinstance(stats, dict):
+            return json_response(stats)
+        return stats
+    return loaded

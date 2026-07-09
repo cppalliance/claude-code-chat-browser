@@ -32,6 +32,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from flask import Flask
 
+from api.export_api import export_bp
 from api.projects import projects_bp
 from api.search import _IndexSearchOutcome
 from api.sessions import sessions_bp
@@ -94,6 +95,13 @@ def _write_session(tmp_path, project: str, session_id: str, content: str):
     return p
 
 
+def _patch_exclusion_raises(monkeypatch):
+    def _boom(*_args, **_kwargs):
+        raise ValueError("internal_exclusion_secret")
+
+    monkeypatch.setattr("api._session_handlers.is_session_excluded", _boom)
+
+
 # ---------------------------------------------------------------------------
 # /api/sessions/<project>/<id>
 # ---------------------------------------------------------------------------
@@ -110,7 +118,7 @@ class TestGetSessionErrorBody:
         def _boom(*args, **kwargs):
             raise KeyError("internal_secret_field_id")
 
-        monkeypatch.setattr("api.sessions.get_cached_session", _boom)
+        monkeypatch.setattr("api._session_handlers.get_cached_session", _boom)
 
         resp = client.get("/api/sessions/proj/abc")
         assert resp.status_code == 500
@@ -120,6 +128,18 @@ class TestGetSessionErrorBody:
         # The exception's args include "internal_secret_field_id" — must not
         # appear in the response body.
         assert "internal_secret_field_id" not in json.dumps(body)
+        _assert_no_class_name_leak(json.dumps(body))
+
+    def test_500_when_exclusion_raises_does_not_leak(self, tmp_path, client, monkeypatch):
+        _write_session(tmp_path, "proj", "abc", '{"type":"user","message":{}}')
+        _patch_exclusion_raises(monkeypatch)
+
+        resp = client.get("/api/sessions/proj/abc")
+        assert resp.status_code == 500
+        body = resp.get_json()
+        assert body.get("error") == "Failed to parse session"
+        assert body.get("code") == "PARSE_ERROR"
+        assert "internal_exclusion_secret" not in json.dumps(body)
         _assert_no_class_name_leak(json.dumps(body))
 
     def test_404_on_missing_file_keeps_session_id_safe(self, tmp_path, client):
@@ -152,7 +172,7 @@ class TestGetSessionStatsErrorBody:
         def _boom(*args, **kwargs):
             raise ValueError("invalid literal: '/private/path/secret.json'")
 
-        monkeypatch.setattr("api.sessions.get_cached_session", _boom)
+        monkeypatch.setattr("api._session_handlers.get_cached_session", _boom)
 
         resp = client.get("/api/sessions/proj/abc/stats")
         assert resp.status_code == 500
@@ -161,6 +181,45 @@ class TestGetSessionStatsErrorBody:
         assert body.get("code") == "PARSE_ERROR"
         # The exception value contains a fake-secret path — must not leak.
         assert "/private/path" not in json.dumps(body)
+        _assert_no_class_name_leak(json.dumps(body))
+
+    def test_500_when_exclusion_raises_does_not_leak(self, tmp_path, client, monkeypatch):
+        _write_session(tmp_path, "proj", "abc", '{"type":"user","message":{}}')
+        _patch_exclusion_raises(monkeypatch)
+
+        resp = client.get("/api/sessions/proj/abc/stats")
+        assert resp.status_code == 500
+        body = resp.get_json()
+        assert body.get("error") == "Failed to parse session"
+        assert body.get("code") == "PARSE_ERROR"
+        assert "internal_exclusion_secret" not in json.dumps(body)
+        _assert_no_class_name_leak(json.dumps(body))
+
+
+# ---------------------------------------------------------------------------
+# /api/export/session
+# ---------------------------------------------------------------------------
+
+
+class TestExportSessionErrorBody:
+    @pytest.fixture
+    def export_client(self, tmp_path):
+        app = Flask(__name__)
+        app.config["TESTING"] = True
+        app.config["CLAUDE_PROJECTS_DIR"] = str(tmp_path)
+        app.register_blueprint(export_bp)
+        return app.test_client()
+
+    def test_500_when_exclusion_raises_does_not_leak(self, tmp_path, export_client, monkeypatch):
+        _write_session(tmp_path, "proj", "abc", '{"type":"user","message":{}}')
+        _patch_exclusion_raises(monkeypatch)
+
+        resp = export_client.get("/api/export/session/proj/abc")
+        assert resp.status_code == 500
+        body = resp.get_json()
+        assert body.get("error") == "Failed to parse session"
+        assert body.get("code") == "PARSE_ERROR"
+        assert "internal_exclusion_secret" not in json.dumps(body)
         _assert_no_class_name_leak(json.dumps(body))
 
 

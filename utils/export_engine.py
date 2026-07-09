@@ -18,17 +18,12 @@ from utils.export_day_filter import collect_sessions_for_latest_activity_day
 from utils.json_exporter import session_to_json
 from utils.jsonl_parser import parse_session
 from utils.md_exporter import session_to_markdown
+from utils.session_errors import SESSION_LOAD_ERRORS
 from utils.session_path import list_sessions
 from utils.session_stats import compute_stats
 from utils.slugify import slugify
 
-EXPORT_ERRORS = (
-    json.JSONDecodeError,
-    KeyError,
-    ValueError,
-    OSError,
-    FileNotFoundError,
-)
+EXPORT_ERRORS = SESSION_LOAD_ERRORS
 
 PathLayout = Literal["api", "cli"]
 ManifestStyle = Literal["api", "cli"]

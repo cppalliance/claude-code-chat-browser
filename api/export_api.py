@@ -2,7 +2,6 @@
 
 import io
 import json
-import os
 import zipfile
 from datetime import datetime
 from typing import Any
@@ -10,15 +9,14 @@ from typing import Any
 from flask import Blueprint, current_app, request, send_file
 
 from api._flask_types import FlaskReturn, json_response
+from api._session_handlers import (
+    LoadedSession,
+    compute_stats_or_error,
+    resolve_loaded_session,
+)
 from api.error_codes import ErrorCode, error_response
 from models.export import ExportStateDict
-from utils.exclusion_rules import is_session_excluded
-from utils.export_engine import (
-    EXPORT_ERRORS as _EXPORT_ERRORS,
-    ExportFailure,
-    ZipSink,
-    run_bulk_export,
-)
+from utils.export_engine import ExportFailure, ZipSink, run_bulk_export
 from utils.export_state_store import (
     EXPORT_STATE_FILE,
     atomic_write_export_state,
@@ -27,9 +25,7 @@ from utils.export_state_store import (
 )
 from utils.json_exporter import session_to_json
 from utils.md_exporter import session_to_markdown
-from utils.session_cache import get_cached_session
-from utils.session_path import get_claude_projects_dir, list_projects, safe_join
-from utils.session_stats import compute_stats
+from utils.session_path import get_claude_projects_dir, list_projects
 from utils.slugify import slugify
 
 export_bp = Blueprint("export", __name__)
@@ -222,67 +218,41 @@ def bulk_export() -> FlaskReturn:
 
 @export_bp.route("/api/export/session/<path:project_name>/<session_id>")
 def export_session(project_name: str, session_id: str) -> FlaskReturn:
-    base = current_app.config.get("CLAUDE_PROJECTS_DIR") or get_claude_projects_dir()
-    try:
-        filepath = safe_join(base, project_name, f"{session_id}.jsonl")
-    except ValueError:
-        return error_response(ErrorCode.INVALID_PATH, "Invalid path", 400)
-
-    if not os.path.isfile(filepath):
-        return error_response(
-            ErrorCode.SESSION_NOT_FOUND,
-            "Session not found",
-            404,
-        )
-
-    fmt = request.args.get("format", "md")
-    try:
-        session = get_cached_session(filepath)
-    except _EXPORT_ERRORS:
-        current_app.logger.exception("Failed to parse session %s for export", session_id)
-        return error_response(
-            ErrorCode.PARSE_ERROR,
-            "Failed to parse session",
-            500,
-        )
-
-    rules = current_app.config.get("EXCLUSION_RULES") or []
-    if is_session_excluded(rules, session, project_name):
-        return error_response(
-            ErrorCode.SESSION_NOT_FOUND,
-            "Session not found",
-            404,
-        )
-
-    try:
-        stats = compute_stats(session)
-    except _EXPORT_ERRORS:
-        current_app.logger.exception("Failed to compute stats for export %s", session_id)
-        return error_response(
-            ErrorCode.INTERNAL_ERROR,
-            "Failed to compute session stats",
-            500,
-        )
-
-    title_slug = slugify(session["title"], default="session")
-
-    if fmt == "json":
-        content = session_to_json(session, stats)
-        buf = io.BytesIO(content.encode("utf-8"))
-        buf.seek(0)
-        return send_file(
-            buf,
-            mimetype="application/json",
-            as_attachment=True,
-            download_name=f"{title_slug}.json",  # type: ignore[call-arg]
-        )
-
-    md = session_to_markdown(session, stats)
-    buf = io.BytesIO(md.encode("utf-8"))
-    buf.seek(0)
-    return send_file(
-        buf,
-        mimetype="text/markdown",
-        as_attachment=True,
-        download_name=f"{title_slug}.md",  # type: ignore[call-arg]
+    loaded = resolve_loaded_session(
+        project_name,
+        session_id,
+        missing_file_message="Session not found",
+        parse_log_action="Failed to parse session %s for export",
     )
+    if isinstance(loaded, LoadedSession):
+        fmt = request.args.get("format", "md")
+        stats = compute_stats_or_error(
+            loaded.session,
+            session_id,
+            log_action="Failed to compute stats for export %s",
+        )
+        if isinstance(stats, dict):
+            title_slug = slugify(loaded.session["title"], default="session")
+
+            if fmt == "json":
+                content = session_to_json(loaded.session, stats)
+                buf = io.BytesIO(content.encode("utf-8"))
+                buf.seek(0)
+                return send_file(
+                    buf,
+                    mimetype="application/json",
+                    as_attachment=True,
+                    download_name=f"{title_slug}.json",  # type: ignore[call-arg]
+                )
+
+            md = session_to_markdown(loaded.session, stats)
+            buf = io.BytesIO(md.encode("utf-8"))
+            buf.seek(0)
+            return send_file(
+                buf,
+                mimetype="text/markdown",
+                as_attachment=True,
+                download_name=f"{title_slug}.md",  # type: ignore[call-arg]
+            )
+        return stats
+    return loaded

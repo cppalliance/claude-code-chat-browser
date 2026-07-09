@@ -66,7 +66,7 @@ def test_session_detail_parse_failure_returns_500_without_leak(client, monkeypat
     def _boom(*_args, **_kwargs):
         raise KeyError("internal_secret_field_id")
 
-    monkeypatch.setattr("api.sessions.get_cached_session", _boom)
+    monkeypatch.setattr("api._session_handlers.get_cached_session", _boom)
     resp = client.get("/api/sessions/test-project/session_abc123")
     assert resp.status_code == 500
     body_text = resp.get_data(as_text=True)
