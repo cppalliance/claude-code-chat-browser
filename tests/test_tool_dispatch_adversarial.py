@@ -92,6 +92,8 @@ _INVARIANT_BEHAVIOR: dict[str, tuple[dict[str, object], AssertWinner]] = {
     ),
 }
 
+_INVARIANT_PREDICATES = dict(zip(ORDERING_INVARIANT_IDS, ORDERING_INVARIANTS, strict=True))
+
 
 @pytest.mark.parametrize(
     "fixture_id",
@@ -99,6 +101,9 @@ _INVARIANT_BEHAVIOR: dict[str, tuple[dict[str, object], AssertWinner]] = {
 )
 def test_adversarial_overlap_classifies_documented_winner(fixture_id: str) -> None:
     blob, assert_winner = _INVARIANT_BEHAVIOR[fixture_id]
+    before, after, _ = _INVARIANT_PREDICATES[fixture_id]
+    assert before(blob), f"{fixture_id}: fixture no longer matches {before.__name__}"
+    assert after(blob), f"{fixture_id}: fixture no longer matches {after.__name__}"
     result = _parse_tool_result(blob)
     assert result is not None
     assert_winner(result)
