@@ -13,7 +13,7 @@ import os
 import pytest
 
 from utils.jsonl_parser import parse_session
-from utils.tool_dispatch import _TOOL_RESULT_DISPATCH, _parse_tool_result
+from utils.tool_dispatch import _TOOL_RESULT_DISPATCH, _parse_tool_result, _winning_dispatch_entry
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -89,7 +89,7 @@ def test_real_session_minimal_has_bash_tool_result() -> None:
 
 
 def test_real_session_all_tool_types_covers_dispatch_predicates() -> None:
-    hit: set[int] = set()
+    hit: set[str] = set()
     path = _fixture_path("real_session_all_tool_types.jsonl")
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -100,14 +100,10 @@ def test_real_session_all_tool_types_covers_dispatch_predicates() -> None:
             tr = entry.get("toolUseResult")
             if not isinstance(tr, dict):
                 continue
-            matched = False
-            for i, (pred, _) in enumerate(_TOOL_RESULT_DISPATCH):
-                if pred(tr):
-                    hit.add(i)
-                    matched = True
-                    break
-            assert matched, f"toolUseResult matched no predicate: {list(tr.keys())}"
-    assert hit == set(range(len(_TOOL_RESULT_DISPATCH)))
+            winner = _winning_dispatch_entry(tr)
+            assert winner is not None, f"toolUseResult matched no predicate: {list(tr.keys())}"
+            hit.add(winner.id)
+    assert hit == {entry.id for entry in _TOOL_RESULT_DISPATCH}
 
 
 def test_real_session_nested_tools_has_sidechain_and_tool_use() -> None:
@@ -146,12 +142,13 @@ def test_task_retrieval_not_misclassified_as_task_message() -> None:
 
 
 def test_task_completed_with_message_key_matches_task_message_first() -> None:
-    """Legacy dispatch: broad task_message runs before task_completed when ``message`` present.
+    """task_message outranks task_completed when ``message`` key is present.
 
     ``is_task_message_tool_result`` matches any dict with a ``message`` or ``task_id``
-    key. Future tool shapes that add ``message`` for status text (e.g. web-fetch) would
-    be misclassified as task until dispatch order is refined — this test locks that
-    known false-positive surface.
+    key and is registered before the narrower task predicates, so registration order
+    picks it on overlap. Future tool shapes that add ``message`` for status text
+    (e.g. web-fetch) would be misclassified as task unless dispatch is refined —
+    this test locks that known false-positive surface.
     """
     tr = {
         "agentId": "agent-sanitized",

@@ -1,18 +1,21 @@
 """Tool-result classification for Claude Code JSONL toolUseResult blobs.
 
-Dispatch registry: **first matching predicate wins** (legacy if/elif parity).
-Order is load-bearing — do not sort alphabetically or "more specific first"
-without replaying tests and real session fixtures.
+Dispatch registry: among **all matching predicates**, the entry with the highest
+``priority`` wins (ties favor earlier registration). Default priority is 0.
+Use ``priority`` when a shape must beat a **later** overlapping entry without
+moving registration order. Documented overlap exception:
 
-Notably ``task_message`` is broad (``task_id`` or ``message``) and sits before
-``task_retrieval`` / ``task_completed`` / ``task_async``.
+- ``plan`` (priority 1) over ``file_write`` (0) when both match — plan blobs may
+  carry ``filePath`` + ``content``.
 
-To add a shape: append ``(pred, build)`` at the end, or insert only after
-verifying predicates above would not steal intended matches.
+``task_message`` stays at default priority and relies on registration order
+(before ``task_retrieval`` / ``task_completed`` / ``task_async``) because its
+predicate is broad (``task_id`` or ``message``) and must not beat earlier shapes.
 
-Ordering invariants are enforced structurally by
-``tests/test_tool_dispatch_ordering.py`` — add a ``(before, after, reason)``
-tuple there when a new predicate must sit above another.
+To add a shape: append a ``ToolResultDispatchEntry`` with predicate, builder,
+and priority. If the new predicate overlaps an existing one, set priority higher
+than the shapes it must beat and add a row to ``ORDERING_INVARIANTS`` in
+``tests/test_tool_dispatch_ordering.py``.
 
 Predicates live in ``models.tool_results`` (single source of truth for narrowing).
 
@@ -22,8 +25,9 @@ Adding a new Claude Code **tool use** name (e.g. ``"Read"``, ``"Bash"``):
    side effects); ``KNOWN_TOOL_TYPES`` is derived from its keys.
 2. Add the name to ``ToolNameLiteral`` in ``models/tool_results.py`` and, if the
    tool has a distinct ``toolUseResult`` JSON shape, add the TypedDict, predicate,
-   and ``(predicate, builder)`` pair in ``_TOOL_RESULT_DISPATCH`` (respect ordering
-   — see notes above and ``tests/test_tool_dispatch_ordering.py``).
+   and ``ToolResultDispatchEntry`` in ``_TOOL_RESULT_DISPATCH`` (set ``priority``
+   when overlapping another predicate — see notes above and
+   ``tests/test_tool_dispatch_ordering.py``).
 3. Add a Markdown branch in ``utils/md_exporter.py`` ``_render_tool_use``.
 4. Add ``TOOL_USE_RENDERERS`` entry in ``static/js/render/registry.js``.
 5. Run ``pytest tests/test_tool_dispatch_sync.py -v`` — it fails with the
@@ -33,7 +37,8 @@ See ``CONTRIBUTING.md`` § "Adding a new tool type".
 """
 
 from collections.abc import Callable
-from typing import Any, cast
+from dataclasses import dataclass
+from typing import Any
 
 from models.session import SessionMetadataBuilderDict
 from models.tool_results import (
@@ -56,6 +61,20 @@ from models.tool_results import (
     is_web_fetch_tool_result,
     is_web_search_tool_result,
 )
+
+_DISPATCH_PRIORITY_DEFAULT = 0
+# Overlap winners: broad predicates that must beat narrower shapes on the same blob.
+_DISPATCH_PRIORITY_OVERLAP = 1
+
+
+@dataclass(frozen=True, slots=True)
+class ToolResultDispatchEntry:
+    """One toolUseResult classifier: predicate, builder, and overlap priority."""
+
+    id: str
+    predicate: Callable[[ToolResultDict], bool]
+    build: Callable[[ToolResultDict, dict[str, object]], dict[str, object]]
+    priority: int = _DISPATCH_PRIORITY_DEFAULT
 
 
 def _tool_result_build_bash(tr: ToolResultDict, base: dict[str, object]) -> dict[str, object]:
@@ -170,7 +189,8 @@ def _tool_result_build_task_retrieval(
     tr: ToolResultDict, base: dict[str, object]
 ) -> dict[str, object]:
     result = dict(base)
-    task_obj = tr["task"] if isinstance(tr["task"], dict) else {}
+    raw_task = tr.get("task")
+    task_obj = raw_task if isinstance(raw_task, dict) else {}
     result["result_type"] = "task"
     result["retrieval_status"] = tr.get("retrieval_status")
     result["task_id"] = task_obj.get("task_id")
@@ -216,25 +236,55 @@ def _tool_result_build_user_input(tr: ToolResultDict, base: dict[str, object]) -
     return result
 
 
-# Registry order is load-bearing (see module docstring).
-# ``plan`` before ``file_write``: plan blobs may carry ``filePath`` + ``content``.
-_TOOL_RESULT_DISPATCH = (
-    (is_bash_tool_result, _tool_result_build_bash),
-    (is_file_edit_tool_result, _tool_result_build_file_edit),
-    (is_plan_tool_result, _tool_result_build_plan),
-    (is_file_write_tool_result, _tool_result_build_file_write),
-    (is_glob_tool_result, _tool_result_build_glob),
-    (is_grep_tool_result, _tool_result_build_grep),
-    (is_read_tool_result, _tool_result_build_file_read),
-    (is_web_search_tool_result, _tool_result_build_web_search),
-    (is_web_fetch_tool_result, _tool_result_build_web_fetch),
-    (is_task_message_tool_result, _tool_result_build_task_message),
-    (is_task_retrieval_tool_result, _tool_result_build_task_retrieval),
-    (is_task_completed_tool_result, _tool_result_build_task_completed),
-    (is_task_async_tool_result, _tool_result_build_task_async),
-    (is_todo_write_tool_result, _tool_result_build_todo_write),
-    (is_user_input_tool_result, _tool_result_build_user_input),
+# Registration order is tie-break only when priorities are equal.
+_TOOL_RESULT_DISPATCH: tuple[ToolResultDispatchEntry, ...] = (
+    ToolResultDispatchEntry("bash", is_bash_tool_result, _tool_result_build_bash),
+    ToolResultDispatchEntry("file_edit", is_file_edit_tool_result, _tool_result_build_file_edit),
+    ToolResultDispatchEntry(
+        "plan",
+        is_plan_tool_result,
+        _tool_result_build_plan,
+        priority=_DISPATCH_PRIORITY_OVERLAP,
+    ),
+    ToolResultDispatchEntry("file_write", is_file_write_tool_result, _tool_result_build_file_write),
+    ToolResultDispatchEntry("glob", is_glob_tool_result, _tool_result_build_glob),
+    ToolResultDispatchEntry("grep", is_grep_tool_result, _tool_result_build_grep),
+    ToolResultDispatchEntry("read", is_read_tool_result, _tool_result_build_file_read),
+    ToolResultDispatchEntry("web_search", is_web_search_tool_result, _tool_result_build_web_search),
+    ToolResultDispatchEntry("web_fetch", is_web_fetch_tool_result, _tool_result_build_web_fetch),
+    ToolResultDispatchEntry(
+        "task_message",
+        is_task_message_tool_result,
+        _tool_result_build_task_message,
+    ),
+    ToolResultDispatchEntry(
+        "task_retrieval", is_task_retrieval_tool_result, _tool_result_build_task_retrieval
+    ),
+    ToolResultDispatchEntry(
+        "task_completed", is_task_completed_tool_result, _tool_result_build_task_completed
+    ),
+    ToolResultDispatchEntry("task_async", is_task_async_tool_result, _tool_result_build_task_async),
+    ToolResultDispatchEntry("todo_write", is_todo_write_tool_result, _tool_result_build_todo_write),
+    ToolResultDispatchEntry("user_input", is_user_input_tool_result, _tool_result_build_user_input),
 )
+
+
+def _validate_dispatch_ids(
+    table: tuple[ToolResultDispatchEntry, ...],
+) -> dict[str, int]:
+    """Fail fast on duplicate entry IDs and return the registration-order index."""
+    order: dict[str, int] = {}
+    for index, entry in enumerate(table):
+        if entry.id in order:
+            raise ValueError(
+                f"duplicate ToolResultDispatchEntry id {entry.id!r} "
+                f"(indices {order[entry.id]} and {index})"
+            )
+        order[entry.id] = index
+    return order
+
+
+_DISPATCH_ORDER = _validate_dispatch_ids(_TOOL_RESULT_DISPATCH)
 
 # Claude Code assistant tool_use ``name`` values coordinated across parser file
 # activity, Markdown export, and the SPA ``TOOL_USE_RENDERERS`` map.
@@ -303,27 +353,42 @@ def track_tool_file_activity(
         handler(tool_input, metadata)
 
 
+def _matching_dispatch_entries(tr: ToolResultDict) -> list[ToolResultDispatchEntry]:
+    return [entry for entry in _TOOL_RESULT_DISPATCH if entry.predicate(tr)]
+
+
+def _winning_dispatch_entry(tr: ToolResultDict) -> ToolResultDispatchEntry | None:
+    matches = _matching_dispatch_entries(tr)
+    if not matches:
+        return None
+    order = _validate_dispatch_ids(_TOOL_RESULT_DISPATCH)
+    return max(
+        matches,
+        key=lambda entry: (entry.priority, -order[entry.id]),
+    )
+
+
 def _parse_tool_result(
     tool_result: ToolResultUnion | None, slug: str | None = None
 ) -> dict[str, object] | None:
     """Figure out what kind of tool result this is (bash, file edit, glob, etc.)
     by looking at which keys are present, since the JSONL doesn't always tag them.
 
-    Classification uses ``_TOOL_RESULT_DISPATCH``: ordered ``(predicate, builder)``
-    pairs; the **first** predicate that matches wins (parity with the historical
-    ``if``/``elif`` chain — order is not strictly “specific before generic”).
+    Classification uses ``_TOOL_RESULT_DISPATCH``: every matching predicate is
+    considered; the entry with the highest ``priority`` wins (ties favor earlier
+    registration). Set ``priority`` above overlapping shapes instead of relying on
+    tuple position — see module docstring for documented overlap exceptions.
 
-    Append a new pair at the end to register a shape, or insert mid-table only
-    after checking interactions with broader predicates above (see notes on the
-    tuple)."""
+    Append a new ``ToolResultDispatchEntry`` to register a shape. If it overlaps an
+    existing predicate, raise its ``priority`` and add a row to
+    ``ORDERING_INVARIANTS`` in ``tests/test_tool_dispatch_ordering.py``."""
     if not is_tool_result_dict(tool_result):
         return None
 
     base: dict[str, object] = {"slug": slug}
-    for pred, build in _TOOL_RESULT_DISPATCH:
-        if pred(tool_result):
-            # Builders take ToolResultDict; cast after pred (heterogeneous tuple, no union narrow).
-            return build(cast(ToolResultDict, tool_result), base)
+    winner = _winning_dispatch_entry(tool_result)
+    if winner is not None:
+        return winner.build(tool_result, base)
 
     result = dict(base)
     result["result_type"] = "unknown"
