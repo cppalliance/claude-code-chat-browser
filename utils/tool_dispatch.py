@@ -2,13 +2,15 @@
 
 Dispatch registry: among **all matching predicates**, the entry with the highest
 ``priority`` wins (ties favor earlier registration). Default priority is 0.
-Documented overlap exceptions use priority 1 so contributors set priority on
-new shapes instead of reasoning about full tuple position:
+Use ``priority`` when a shape must beat a **later** overlapping entry without
+moving registration order. Documented overlap exception:
 
-- ``plan`` (1) over ``file_write`` (0) when both match — plan blobs may carry
-  ``filePath`` + ``content``.
-- ``task_message`` (1) over ``task_retrieval`` / ``task_completed`` /
-  ``task_async`` (0) — ``task_message`` is broad (``task_id`` or ``message``).
+- ``plan`` (priority 1) over ``file_write`` (0) when both match — plan blobs may
+  carry ``filePath`` + ``content``.
+
+``task_message`` stays at default priority and relies on registration order
+(before ``task_retrieval`` / ``task_completed`` / ``task_async``) because its
+predicate is broad (``task_id`` or ``message``) and must not beat earlier shapes.
 
 To add a shape: append a ``ToolResultDispatchEntry`` with predicate, builder,
 and priority. If the new predicate overlaps an existing one, set priority higher
@@ -254,7 +256,6 @@ _TOOL_RESULT_DISPATCH: tuple[ToolResultDispatchEntry, ...] = (
         "task_message",
         is_task_message_tool_result,
         _tool_result_build_task_message,
-        priority=_DISPATCH_PRIORITY_OVERLAP,
     ),
     ToolResultDispatchEntry(
         "task_retrieval", is_task_retrieval_tool_result, _tool_result_build_task_retrieval

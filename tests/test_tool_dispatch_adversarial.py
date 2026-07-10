@@ -1,8 +1,7 @@
 """Behavioral adversarial fixtures for ``_TOOL_RESULT_DISPATCH`` predicate overlap.
 
-Structural priority guards live in ``test_tool_dispatch_ordering.py``.
-These tests construct ``toolUseResult`` JSON that satisfies multiple predicates
-and assert the classified winner via ``_parse_tool_result`` (highest priority).
+Overlap blobs and invariant tables live in ``test_tool_dispatch_ordering.py``.
+These tests assert classified output via ``_parse_tool_result``.
 """
 
 from __future__ import annotations
@@ -12,43 +11,30 @@ from dataclasses import replace
 
 import pytest
 
-from tests.test_tool_dispatch_ordering import ORDERING_INVARIANT_IDS, ORDERING_INVARIANTS
+from models.tool_results import is_file_write_tool_result, is_task_message_tool_result
+from tests.test_tool_dispatch_ordering import (
+    ORDERING_INVARIANT_IDS,
+    ORDERING_INVARIANTS,
+    OVERLAP_BLOBS,
+)
 from utils import tool_dispatch
-from utils.tool_dispatch import _TOOL_RESULT_DISPATCH, _parse_tool_result
+from utils.tool_dispatch import _TOOL_RESULT_DISPATCH, _parse_tool_result, _winning_dispatch_entry
 
-# Overlap blobs: keys chosen so both predicates in each ORDERING_INVARIANTS pair match.
-PLAN_FILE_WRITE_OVERLAP: dict[str, object] = {
-    "plan": {"name": "sprint-plan", "steps": ["index", "search", "render"]},
-    "filePath": ".cursor/plans/week28.md",
-    "content": "Plan body that would also satisfy file_write.",
-}
-
-TASK_MESSAGE_RETRIEVAL_OVERLAP: dict[str, object] = {
-    "task_id": "task-overlap-retrieval",
-    "message": "polling retrieval",
-    "retrieval_status": "found",
-    "task": {"task_id": "task-overlap-retrieval", "description": "subagent scan"},
-}
-
-TASK_MESSAGE_COMPLETED_OVERLAP: dict[str, object] = {
-    "agentId": "agent-overlap-completed",
-    "totalDurationMs": 3200,
-    "totalTokens": 900,
-    "status": "completed",
-    "message": "task finished",
-}
-
-TASK_MESSAGE_ASYNC_OVERLAP: dict[str, object] = {
-    "agentId": "agent-overlap-async",
-    "isAsync": True,
-    "description": "explore auth handlers",
-    "message": "task launched",
-}
+PLAN_FILE_WRITE_OVERLAP = OVERLAP_BLOBS["plan_before_file_write"]
+TASK_MESSAGE_RETRIEVAL_OVERLAP = OVERLAP_BLOBS["task_message_before_task_retrieval"]
+TASK_MESSAGE_COMPLETED_OVERLAP = OVERLAP_BLOBS["task_message_before_task_completed"]
+TASK_MESSAGE_ASYNC_OVERLAP = OVERLAP_BLOBS["task_message_before_task_async"]
 
 # Narrow retrieval shape: only the downstream predicate matches (no task_id/message).
 TASK_RETRIEVAL_NARROW: dict[str, object] = {
     "retrieval_status": "pending",
     "task": {"task_id": "task-narrow", "description": "wait for result"},
+}
+
+FILE_WRITE_TASK_MESSAGE_OVERLAP: dict[str, object] = {
+    "message": "status line on a write result",
+    "filePath": "/tmp/example.txt",
+    "content": "file body",
 }
 
 AssertWinner = Callable[[dict[str, object]], None]
@@ -119,6 +105,19 @@ def test_task_retrieval_narrow_shape_without_task_message_keys() -> None:
     assert result.get("task_id") == "task-narrow"
 
 
+def test_file_write_beats_task_message_when_both_match() -> None:
+    """Regression: broad task_message must not outrank earlier shapes via priority."""
+    blob = FILE_WRITE_TASK_MESSAGE_OVERLAP
+    assert is_file_write_tool_result(blob)
+    assert is_task_message_tool_result(blob)
+    winner = _winning_dispatch_entry(blob)
+    assert winner is not None
+    assert winner.id == "file_write"
+    result = _parse_tool_result(blob)
+    assert result is not None
+    assert result["result_type"] == "file_write"
+
+
 def test_inverted_plan_file_write_priority_misclassifies_overlap(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -146,3 +145,4 @@ def test_ordering_invariants_have_adversarial_coverage() -> None:
     assert len(ORDERING_INVARIANTS) == len(ORDERING_INVARIANT_IDS)
     assert len(ORDERING_INVARIANT_IDS) == len(_INVARIANT_BEHAVIOR)
     assert set(_INVARIANT_BEHAVIOR.keys()) == set(ORDERING_INVARIANT_IDS)
+    assert set(OVERLAP_BLOBS.keys()) == set(ORDERING_INVARIANT_IDS)

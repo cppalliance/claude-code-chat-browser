@@ -75,7 +75,7 @@ In `utils/tool_dispatch.py`, tool results are classified through `_parse_tool_re
 
 When adding a new tool renderer:
 
-1. Add a `ToolResultDispatchEntry` to `_TOOL_RESULT_DISPATCH` in `utils/tool_dispatch.py`. Set `priority` higher than any overlapping predicate it must beat, and add a row to `ORDERING_INVARIANTS` in `tests/test_tool_dispatch_ordering.py` when overlaps exist. Documented exceptions: `plan` (priority 1) over `file_write` (0); `task_message` (1) over `task_retrieval` / `task_completed` / `task_async` (0).
+1. Add a `ToolResultDispatchEntry` to `_TOOL_RESULT_DISPATCH` in `utils/tool_dispatch.py`. Set `priority` higher than any overlapping predicate it must beat without relying on registration order, and add a row to `ORDERING_INVARIANTS` in `tests/test_tool_dispatch_ordering.py` when overlaps exist. Documented exception: `plan` (priority 1) over `file_write` (0). Broad predicates like `task_message` use registration order instead of elevated priority.
 2. Add or extend a JSONL fixture under `tests/fixtures/` (especially for overlaps with existing predicates).
 3. Run `pytest tests/test_tool_dispatch_ordering.py tests/test_tool_dispatch_adversarial.py tests/test_jsonl_parser.py tests/test_real_session_fixtures.py -v`.
 
