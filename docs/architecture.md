@@ -75,9 +75,10 @@ In `utils/tool_dispatch.py`, tool results are classified through `_parse_tool_re
 
 When adding a new tool renderer:
 
-1. Add a `ToolResultDispatchEntry` to `_TOOL_RESULT_DISPATCH` in `utils/tool_dispatch.py`. Set `priority` higher than any overlapping predicate it must beat without relying on registration order, and add a row to `ORDERING_INVARIANTS` in `tests/test_tool_dispatch_ordering.py` when overlaps exist. Documented exception: `plan` (priority 1) over `file_write` (0). Broad predicates like `task_message` use registration order instead of elevated priority.
-2. Add or extend a JSONL fixture under `tests/fixtures/` (especially for overlaps with existing predicates).
-3. Run `pytest tests/test_tool_dispatch_ordering.py tests/test_tool_dispatch_adversarial.py tests/test_jsonl_parser.py tests/test_real_session_fixtures.py -v`.
+1. **Preferred:** add a registration record under `tool_types/` and run `python scripts/scaffold_tool_type.py --record tool_types/<name>.json`. The generator emits `_TOOL_RESULT_DISPATCH` entries, TypedDict/guards, Markdown branches, JS module stubs, `registry.js` map entries, a parser fixture, and regenerates `static/tool_types.json`. See `CONTRIBUTING.md` § "Adding a new tool type" for the before/after workflow.
+2. **Manual (legacy):** add a `ToolResultDispatchEntry` to `_TOOL_RESULT_DISPATCH` in `utils/tool_dispatch.py`. Set `priority` higher than any overlapping predicate it must beat without relying on registration order, and add a row to `ORDERING_INVARIANTS` in `tests/test_tool_dispatch_ordering.py` when overlaps exist. Documented exception: `plan` (priority 1) over `file_write` (0). Broad predicates like `task_message` use registration order instead of elevated priority.
+3. Add or extend a JSONL fixture under `tests/fixtures/` (especially for overlaps with existing predicates).
+4. Run `pytest tests/test_tool_dispatch_ordering.py tests/test_tool_dispatch_adversarial.py tests/test_jsonl_parser.py tests/test_real_session_fixtures.py tests/test_scaffold_tool_type.py -v`.
 
 ## Export state machine
 
