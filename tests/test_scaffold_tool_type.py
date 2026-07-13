@@ -18,7 +18,7 @@ from models.tool_type_registry import (
     pascal_to_snake,
     snake_to_pascal,
 )
-from scripts.scaffold_tool_type import ScaffoldEmitter, main
+from scripts.scaffold_tool_type import ScaffoldEmitter, ScaffoldPaths, main
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _IGNORE = shutil.ignore_patterns(
@@ -138,6 +138,7 @@ def test_dry_run_reports_planned_artifact_count(capsys: pytest.CaptureFixture[st
 
 def test_write_record_only_writes_json_without_codegen(tmp_path: Path) -> None:
     repo = _mirror_repo(tmp_path)
+    snapshot = _snapshot_emitter_targets(repo)
     code = main(
         [
             "--name",
@@ -152,26 +153,24 @@ def test_write_record_only_writes_json_without_codegen(tmp_path: Path) -> None:
     assert record_path.is_file()
     loaded = ToolTypeRecord.load(record_path)
     assert loaded.name == "RecordOnlyTool"
-    dispatch = (repo / "utils" / "tool_dispatch.py").read_text(encoding="utf-8")
-    assert "RecordOnlyTool" not in dispatch
-    assert not (repo / "static" / "js" / "render" / "tool_use" / "record_only_tool.js").exists()
+    _assert_emitter_targets_unchanged(repo, snapshot, allowed_new={record_path})
 
 
 def test_emit_anchor_miss_in_tool_results_leaves_repo_unchanged(tmp_path: Path) -> None:
     repo = _mirror_repo(tmp_path)
     tool_results = repo / "models" / "tool_results.py"
-    dispatch = repo / "utils" / "tool_dispatch.py"
-    corrupt = tool_results.read_text(encoding="utf-8").replace(
+    original = tool_results.read_text(encoding="utf-8")
+    corrupt = original.replace(
         '    "WebSearch",\n]',
         '    "WebSearch",\n    "Legacy",\n]',
     )
+    assert corrupt != original, "fixture corruption must change tool_results.py"
     tool_results.write_text(corrupt, encoding="utf-8")
-    dispatch_before = dispatch.read_text(encoding="utf-8")
+    snapshot = _snapshot_emitter_targets(repo)
     record = ToolTypeRecord.from_cli_name("example_tool")
     with pytest.raises(ValueError, match="replacement anchor not found"):
         ScaffoldEmitter(repo).emit(record)
-    assert tool_results.read_text(encoding="utf-8") == corrupt
-    assert dispatch.read_text(encoding="utf-8") == dispatch_before
+    _assert_emitter_targets_unchanged(repo, snapshot)
 
 
 def test_dry_run_main_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
@@ -279,3 +278,54 @@ def _mirror_repo(tmp_path: Path) -> Path:
     dest = tmp_path / "repo"
     shutil.copytree(_REPO_ROOT, dest, ignore=_IGNORE)
     return dest
+
+
+def _emitter_target_paths(repo: Path) -> list[Path]:
+    paths = ScaffoldPaths.from_root(repo)
+    targets: set[Path] = {
+        paths.tool_dispatch,
+        paths.tool_results,
+        paths.md_exporter,
+        paths.registry_js,
+        paths.ordering_test,
+        paths.tool_types_manifest,
+    }
+    for directory in (
+        paths.tool_use_dir,
+        paths.tool_result_dir,
+        paths.fixtures_dir,
+        paths.records_dir,
+    ):
+        if directory.is_dir():
+            targets.update(p for p in directory.rglob("*") if p.is_file())
+    return sorted(targets)
+
+
+def _snapshot_emitter_targets(repo: Path) -> dict[Path, str]:
+    return {path: path.read_text(encoding="utf-8") for path in _emitter_target_paths(repo)}
+
+
+def _assert_emitter_targets_unchanged(
+    repo: Path,
+    snapshot: dict[Path, str],
+    *,
+    allowed_new: set[Path] | None = None,
+) -> None:
+    allowed = allowed_new or set()
+    for path, content in snapshot.items():
+        assert path.read_text(encoding="utf-8") == content, (
+            f"emitter modified existing file: {path.relative_to(repo)}"
+        )
+    paths = ScaffoldPaths.from_root(repo)
+    for directory in (
+        paths.tool_use_dir,
+        paths.tool_result_dir,
+        paths.fixtures_dir,
+        paths.records_dir,
+    ):
+        if not directory.is_dir():
+            continue
+        for path in directory.rglob("*"):
+            if path.is_file() and path not in snapshot and path not in allowed:
+                msg = f"emitter created unexpected file: {path.relative_to(repo)}"
+                raise AssertionError(msg)
