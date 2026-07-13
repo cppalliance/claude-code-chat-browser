@@ -160,10 +160,15 @@ Claude Code assistant `tool_use` blocks carry a `name` string (e.g. `"Read"`, `"
 1. **One edit:** create or update a JSON record under `tool_types/` (see `tool_types/README.md`).
 2. **One command:** `python scripts/scaffold_tool_type.py --record tool_types/<name>.json`  
    Or from scratch: `python scripts/scaffold_tool_type.py --name my_tool`
-3. **Complete stubs:** field mapping in the dispatch builder, render HTML in JS modules, overlap fixtures when `priority > 0`.
-4. **Verify:** `pytest tests/test_tool_dispatch_sync.py tests/test_tool_dispatch_ordering.py tests/test_tool_dispatch_adversarial.py -q`
+3. **Complete stubs:** field mapping in the dispatch builder and render HTML in JS modules. When `result` is registered, also finish overlap fixtures when `priority > 0`.
+4. **Verify:**
 
-The generator emits coordinated stubs across all seven sites and writes the registration record. Hand-editing drops from seven sites to the record plus finishing TODO stubs (typically 2–3 files).
+   ```bash
+   pytest tests/test_scaffold_tool_type.py tests/test_tool_dispatch_sync.py tests/test_tool_dispatch_ordering.py tests/test_tool_dispatch_adversarial.py tests/test_jsonl_parser.py tests/test_real_session_fixtures.py -q
+   npm test
+   ```
+
+The generator emits coordinated stubs across all seven sites when `result` is registered (dispatch table, TypedDict/guards, Markdown branches, JS use/result modules, `registry.js`, parser fixture, and `static/tool_types.json`). Use-only tools (`--no-result`) omit result dispatch, TypedDict/guard, parser fixture, and overlap-fixture artifacts. Hand-editing drops from seven sites to the record plus finishing TODO stubs (typically 2–3 files).
 
 Dry-run preview: `python scripts/scaffold_tool_type.py --name example_tool --dry-run`
 

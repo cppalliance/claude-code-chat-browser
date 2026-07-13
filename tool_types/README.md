@@ -18,10 +18,13 @@ Each JSON file here is the **single source of truth** when adding a new Claude C
    python scripts/scaffold_tool_type.py --record tool_types/my_tool.json
    ```
 
-4. Complete the emitted TODO stubs (builder field mapping, render HTML), then run:
+4. Complete the emitted TODO stubs (builder field mapping, render HTML). When `result` is registered, also add overlap fixtures when `priority > 0`.
+
+5. Verify:
 
    ```bash
-   pytest tests/test_tool_dispatch_sync.py tests/test_tool_dispatch_ordering.py -q
+   pytest tests/test_scaffold_tool_type.py tests/test_tool_dispatch_sync.py tests/test_tool_dispatch_ordering.py tests/test_tool_dispatch_adversarial.py tests/test_jsonl_parser.py tests/test_real_session_fixtures.py -q
+   npm test
    ```
 
 ## Record schema
@@ -37,7 +40,7 @@ Each JSON file here is the **single source of truth** when adding a new Claude C
 | `result.typed_dict_fields` | `{name, type}` entries for the TypedDict |
 | `result.predicate_keys` | Keys tested by the `is_*_tool_result` guard |
 | `result.predicate_mode` | `all` (default) or `any` |
-| `result.priority` | Overlap priority (`1` when beating another predicate) |
+| `result.priority` | Relative priority among overlapping predicates (dispatch selects the highest matching priority; `0` is the default) |
 | `result.overlap_invariants` | Rows for `tests/test_tool_dispatch_ordering.py` |
 | `result.overlap_invariants[].before_guard` | Optional explicit guard import (defaults to `is_<dispatch_id>_tool_result`) |
 | `result.overlap_invariants[].after_guard` | Optional explicit guard import when dispatch id does not match guard naming |

@@ -147,6 +147,9 @@ class ToolResultRecord:
         if not isinstance(priority, int):
             msg = "result.priority must be an int"
             raise ValueError(msg)
+        if priority < 0:
+            msg = "result.priority must be a non-negative int"
+            raise ValueError(msg)
         inv_raw = raw.get("overlap_invariants", [])
         if not isinstance(inv_raw, list):
             msg = "result.overlap_invariants must be a list"
@@ -263,11 +266,7 @@ class ToolTypeRecord:
                             if inv.before_guard is not None
                             else {}
                         ),
-                        **(
-                            {"after_guard": inv.after_guard}
-                            if inv.after_guard is not None
-                            else {}
-                        ),
+                        **({"after_guard": inv.after_guard} if inv.after_guard is not None else {}),
                     }
                     for inv in self.result.overlap_invariants
                 ],
@@ -288,11 +287,17 @@ class ToolTypeRecord:
 
     @property
     def guard_name(self) -> str:
-        return f"is_{self.snake_name}_tool_result"
+        if self.result is None:
+            msg = "guard_name requires result registration"
+            raise ValueError(msg)
+        return guard_name_for_dispatch_id(self.result.dispatch_id)
 
     @property
     def builder_name(self) -> str:
-        return f"_tool_result_build_{self.snake_name}"
+        if self.result is None:
+            msg = "builder_name requires result registration"
+            raise ValueError(msg)
+        return builder_name_for_dispatch_id(self.result.dispatch_id)
 
 
 def snake_to_pascal(snake: str) -> str:
@@ -336,6 +341,11 @@ def guard_name_for_dispatch_id(dispatch_id: str) -> str:
     return f"is_{dispatch_id}_tool_result"
 
 
+def builder_name_for_dispatch_id(dispatch_id: str) -> str:
+    _validate_dispatch_id(dispatch_id)
+    return f"_tool_result_build_{dispatch_id}"
+
+
 def _validate_dispatch_id(dispatch_id: str) -> None:
     if not _DISPATCH_ID_RE.fullmatch(dispatch_id):
         msg = (
@@ -343,6 +353,8 @@ def _validate_dispatch_id(dispatch_id: str) -> None:
             "(e.g. example_tool); guard names derive from is_<dispatch_id>_tool_result"
         )
         raise ValueError(msg)
+
+
 def _dispatch_id_to_camel(dispatch_id: str) -> str:
     parts = dispatch_id.split("_")
     if not parts:

@@ -105,6 +105,75 @@ def test_guard_name_for_dispatch_id() -> None:
     assert guard_name_for_dispatch_id("example_tool") == "is_example_tool_tool_result"
 
 
+def test_guard_and_builder_names_use_dispatch_id() -> None:
+    record = ToolTypeRecord.from_mapping(
+        {
+            "name": "MyTool",
+            "result": {"dispatch_id": "custom_dispatch"},
+        }
+    )
+    assert record.guard_name == "is_custom_dispatch_tool_result"
+    assert record.builder_name == "_tool_result_build_custom_dispatch"
+    assert js_render_result_name(record) == "renderCustomDispatchResult"
+
+
+def test_from_mapping_rejects_negative_priority() -> None:
+    with pytest.raises(ValueError, match="non-negative"):
+        ToolTypeRecord.from_mapping(
+            {
+                "name": "BadTool",
+                "result": {"dispatch_id": "bad_tool", "priority": -1},
+            }
+        )
+
+
+def test_dry_run_reports_planned_artifact_count(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["--name", "example_tool", "--dry-run"])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "artifacts planned)" in out
+    count = int(out.rsplit("(", 1)[-1].split(" artifacts", 1)[0])
+    assert count > 0
+
+
+def test_write_record_only_writes_json_without_codegen(tmp_path: Path) -> None:
+    repo = _mirror_repo(tmp_path)
+    code = main(
+        [
+            "--name",
+            "record_only_tool",
+            "--write-record-only",
+            "--root",
+            str(repo),
+        ]
+    )
+    assert code == 0
+    record_path = repo / "tool_types" / "record_only_tool.json"
+    assert record_path.is_file()
+    loaded = ToolTypeRecord.load(record_path)
+    assert loaded.name == "RecordOnlyTool"
+    dispatch = (repo / "utils" / "tool_dispatch.py").read_text(encoding="utf-8")
+    assert "RecordOnlyTool" not in dispatch
+    assert not (repo / "static" / "js" / "render" / "tool_use" / "record_only_tool.js").exists()
+
+
+def test_emit_anchor_miss_in_tool_results_leaves_repo_unchanged(tmp_path: Path) -> None:
+    repo = _mirror_repo(tmp_path)
+    tool_results = repo / "models" / "tool_results.py"
+    dispatch = repo / "utils" / "tool_dispatch.py"
+    corrupt = tool_results.read_text(encoding="utf-8").replace(
+        '    "WebSearch",\n]',
+        '    "WebSearch",\n    "Legacy",\n]',
+    )
+    tool_results.write_text(corrupt, encoding="utf-8")
+    dispatch_before = dispatch.read_text(encoding="utf-8")
+    record = ToolTypeRecord.from_cli_name("example_tool")
+    with pytest.raises(ValueError, match="replacement anchor not found"):
+        ScaffoldEmitter(repo).emit(record)
+    assert tool_results.read_text(encoding="utf-8") == corrupt
+    assert dispatch.read_text(encoding="utf-8") == dispatch_before
+
+
 def test_dry_run_main_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
     code = main(["--name", "example_tool", "--dry-run"])
     assert code == 0

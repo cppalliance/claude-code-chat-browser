@@ -133,6 +133,7 @@ class ScaffoldEmitter:
             rel = path.relative_to(self.root)
             if self.dry_run:
                 self.stdout.write(f"--- would write {rel} ({len(content)} bytes) ---\n")
+                self._written.append(path)
                 continue
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
@@ -157,7 +158,8 @@ class ScaffoldEmitter:
                 )
                 guard = record.guard_name
                 if f"    {guard}," not in text:
-                    text = text.replace(
+                    text = self._replace_once(
+                        text,
                         "    is_web_search_tool_result,\n)",
                         f"    is_web_search_tool_result,\n    {guard},\n)",
                     )
@@ -188,7 +190,7 @@ class ScaffoldEmitter:
         priority = record.result.priority
         if priority > 0:
             return (
-                f'    ToolResultDispatchEntry(\n'
+                f"    ToolResultDispatchEntry(\n"
                 f'        "{record.result.dispatch_id}",\n'
                 f"        {record.guard_name},\n"
                 f"        {record.builder_name},\n"
@@ -215,11 +217,13 @@ class ScaffoldEmitter:
                     member,
                 )
                 anchor = '    return "questions" in tr and "answers" in tr\n\n\n'
-                text = text.replace(
+                text = self._replace_once(
+                    text,
                     anchor + "# Tool names on assistant",
                     anchor + f"{self._render_guard(record)}\n\n\n# Tool names on assistant",
                 )
-            text = text.replace(
+            text = self._replace_once(
+                text,
                 '    "WebSearch",\n]',
                 f'    "WebSearch",\n    "{record.name}",\n]',
             )
@@ -258,13 +262,15 @@ class ScaffoldEmitter:
             unknown_branch = (
                 '    else:\n        lines.append(f">\\n> Input (unknown tool type): `{str(inp)}`")'
             )
-            text = text.replace(
+            text = self._replace_once(
+                text,
                 unknown_branch,
                 use_branch + unknown_branch,
             )
             if record.result is not None:
                 result_branch = self._render_md_tool_result(record)
-                text = text.replace(
+                text = self._replace_once(
+                    text,
                     '    elif rt == "plan":',
                     result_branch + '    elif rt == "plan":',
                 )
@@ -276,7 +282,7 @@ class ScaffoldEmitter:
         keys = record.use_input_keys or ("input",)
         lines = [f'    elif name == "{record.name}":']
         for key in keys:
-            lines.append(f'        lines.append(f">\\n> {key}: {{inp.get({key!r}, \'\')}}")')
+            lines.append(f"        lines.append(f\">\\n> {key}: {{inp.get({key!r}, '')}}\")")
         return "\n".join(lines) + "\n"
 
     def _render_md_tool_result(self, record: ToolTypeRecord) -> str:
@@ -327,7 +333,8 @@ export function {fn}(parsed) {{
 
         def transform(text: str) -> str:
             if use_import.strip() not in text:
-                text = text.replace(
+                text = self._replace_once(
+                    text,
                     "import { renderToolUseFallback }",
                     use_import + "import { renderToolUseFallback }",
                 )
@@ -343,7 +350,8 @@ export function {fn}(parsed) {{
                 module = f"./tool_result/{record.result.dispatch_id}.js"
                 result_import = f"import {{ {result_fn} }} from '{module}';\n"
                 if result_import.strip() not in text:
-                    text = text.replace(
+                    text = self._replace_once(
+                        text,
                         "import { renderToolResultFallback }",
                         result_import + "import { renderToolResultFallback }",
                     )
@@ -368,15 +376,24 @@ export function {fn}(parsed) {{
                 before_guard = inv.resolved_before_guard()
                 after_guard = inv.resolved_after_guard()
                 if before_guard not in text:
-                    replacement = (
-                        f"    is_task_async_tool_result,\n"
-                        f"    {before_guard},\n"
-                        f"    {after_guard},\n)"
-                    )
-                    text = text.replace(
+                    text = self._replace_once(
+                        text,
                         "    is_task_async_tool_result,\n)",
-                        replacement,
+                        f"    is_task_async_tool_result,\n    {before_guard},\n)",
                     )
+                if after_guard not in text:
+                    if before_guard in text:
+                        text = self._replace_once(
+                            text,
+                            f"    {before_guard},\n)",
+                            f"    {before_guard},\n    {after_guard},\n)",
+                        )
+                    else:
+                        text = self._replace_once(
+                            text,
+                            "    is_task_async_tool_result,\n)",
+                            f"    is_task_async_tool_result,\n    {after_guard},\n)",
+                        )
                 row = (
                     f"    (\n"
                     f"        {before_guard},\n"
@@ -452,6 +469,13 @@ export function {fn}(parsed) {{
             line_start = text.rfind("\n", 0, idx) + 1
             return text[:line_start] + insertion + text[line_start:]
         return text[:idx] + insertion + text[idx:]
+
+    @staticmethod
+    def _replace_once(text: str, anchor: str, replacement: str) -> str:
+        if anchor not in text:
+            msg = f"scaffold replacement anchor not found: {anchor!r}"
+            raise ValueError(msg)
+        return text.replace(anchor, replacement, 1)
 
 
 def _parse_handlers_from_text(text: str) -> frozenset[str]:
@@ -565,7 +589,12 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(f"Scaffolded {record.name}: {len(written)} files updated")
         print("Next: complete TODO stubs, then run:")
-        print("  pytest tests/test_tool_dispatch_sync.py tests/test_tool_dispatch_ordering.py -q")
+        print(
+            "  pytest tests/test_scaffold_tool_type.py tests/test_tool_dispatch_sync.py "
+            "tests/test_tool_dispatch_ordering.py tests/test_tool_dispatch_adversarial.py "
+            "tests/test_jsonl_parser.py tests/test_real_session_fixtures.py -q"
+        )
+        print("  npm test")
     return 0
 
 
