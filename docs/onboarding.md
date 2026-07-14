@@ -125,7 +125,7 @@ Recent commit history is concentrated on a small set of identities. If those mai
 
 **Mitigations in this repo:**
 
-- **[`.github/CODEOWNERS`](../.github/CODEOWNERS)** — @clean6378-max-it and @timon0305 for development and code review; @wpak-ai for final approval and merge.
+- **[`.github/CODEOWNERS`](../.github/CODEOWNERS)** — @clean6378-max-it and @timon0305 for code review routing. Final merge approval (@wpak-ai) is enforced via branch protection.
 - **This onboarding path** — lowers the ramp for additional contributors to run gates and ship safely.
 
 If you are joining as a reviewer, read the [suggested reading order](#suggested-reading-order) and run the [full local gate](#5-run-the-full-local-gate) once on `master` before approving your first PR.
