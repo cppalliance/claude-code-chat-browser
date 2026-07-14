@@ -1,16 +1,20 @@
 # Code owners — auto-requested as reviewers on matching paths.
 # Last match wins; see https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 #
-# Review expectation: PR authors wait for at least one CODEOWNERS approval before merge.
-# Do not self-merge without review, even on docs-only changes.
+# Roles:
+#   Development + code review: @clean6378-max-it (Chen), @timon0305 (Zilin)
+#   Final approval + merge:    @wpak-ai (Will Pak)
+#
+# PR authors do not self-merge. Get a code review from Chen or Zilin, then final
+# approval from Will before merge.
 
-# Default owner for the repository.
-*                       @clean6378-max-it
+# Default owners for the repository.
+*                       @clean6378-max-it @timon0305 @wpak-ai
 
 # Docs and contributor process
-/docs/                  @clean6378-max-it
-/CONTRIBUTING.md        @clean6378-max-it
-/README.md              @clean6378-max-it
+/docs/                  @clean6378-max-it @timon0305 @wpak-ai
+/CONTRIBUTING.md        @clean6378-max-it @timon0305 @wpak-ai
+/README.md              @clean6378-max-it @timon0305 @wpak-ai
 
 # CI and workflow changes
-/.github/               @clean6378-max-it
+/.github/               @clean6378-max-it @timon0305 @wpak-ai

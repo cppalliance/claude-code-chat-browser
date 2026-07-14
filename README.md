@@ -145,7 +145,7 @@ claude-code-chat-browser/
 
 See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for full setup, conventions, and where to change each layer. New contributors should follow **[`docs/onboarding.md`](docs/onboarding.md)** for a first-PR walkthrough and reading order.
 
-**Maintainer coverage:** commit activity is currently concentrated on a small set of identities (bus-factor risk). Mitigations: [`.github/CODEOWNERS`](.github/CODEOWNERS) for review routing and [`docs/onboarding.md`](docs/onboarding.md) so additional contributors can ramp quickly.
+**Maintainer coverage:** commit activity is currently concentrated on a small set of identities (bus-factor risk). Mitigations: [`.github/CODEOWNERS`](.github/CODEOWNERS) splits development/code review (@clean6378-max-it, @timon0305) from final approval and merge (@wpak-ai), plus [`docs/onboarding.md`](docs/onboarding.md) for contributor ramp-up.
 
 Quick start:
 

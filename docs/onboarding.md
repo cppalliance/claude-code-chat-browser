@@ -62,14 +62,14 @@ python app.py --port 5000
 
 ### 5. Run the full local gate
 
-CI runs these on Ubuntu, Windows, and macOS. Run them locally before opening a PR:
+Run these locally before opening a PR. In CI, **ruff** (`check` + `format --check`) runs on Ubuntu, Windows, and macOS. **mypy** runs only in the Ubuntu job; run it locally before Python-heavy changes. **pip-audit**, **pytest**, integration tests, and **Vitest** also run on all three platforms in CI.
 
 ```bash
-# Lint + format (required)
+# Lint + format (CI: Ubuntu + Windows + macOS)
 ruff check .
 ruff format --check .
 
-# Type check (Ubuntu CI job; run locally before Python-heavy changes)
+# Type check (CI: Ubuntu only)
 mypy -p api -p utils -p models -p scripts
 
 # Security audit (production deps)
@@ -102,7 +102,12 @@ Open a pull request against **`master`** on `cppalliance/claude-code-chat-browse
 
 ### 7. Review
 
-[`.github/CODEOWNERS`](../.github/CODEOWNERS) auto-requests reviewers on new PRs. **Do not self-merge** — wait for at least one approval. Address review feedback in follow-up commits on the same branch.
+[`.github/CODEOWNERS`](../.github/CODEOWNERS) auto-requests reviewers on new PRs. **Do not self-merge.**
+
+1. **Code review** from @clean6378-max-it (Chen) or @timon0305 (Zilin). They own development and technical review on this repo.
+2. **Final approval and merge** from @wpak-ai (Will Pak) after code review is done.
+
+Address review feedback in follow-up commits on the same branch.
 
 ## Good first issues
 
@@ -120,7 +125,7 @@ Recent commit history is concentrated on a small set of identities. If those mai
 
 **Mitigations in this repo:**
 
-- **[`.github/CODEOWNERS`](../.github/CODEOWNERS)** — routes review requests so PRs do not rely on ad-hoc pings.
-- **This onboarding path** — lowers the ramp for a second reviewer or contributor to run gates and ship safely.
+- **[`.github/CODEOWNERS`](../.github/CODEOWNERS)** — @clean6378-max-it and @timon0305 for development and code review; @wpak-ai for final approval and merge.
+- **This onboarding path** — lowers the ramp for additional contributors to run gates and ship safely.
 
 If you are joining as a reviewer, read the [suggested reading order](#suggested-reading-order) and run the [full local gate](#5-run-the-full-local-gate) once on `master` before approving your first PR.
