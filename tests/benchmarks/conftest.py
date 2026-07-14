@@ -51,14 +51,13 @@ def tracemalloc_peak() -> TracemallocPeak:
 def write_jsonl(path: Path, line_count: int, *, first_timestamp: str | None = None) -> Path:
     """Write a JSONL session file with *line_count* rows derived from the template fixture."""
     template = json.loads(TEMPLATE_LINE)
-    if first_timestamp is not None:
-        base_dt = datetime.fromisoformat(first_timestamp.replace("Z", "+00:00"))
-    else:
-        base_dt = _EXPORT_SESSION_BASE.replace(hour=10)
     with path.open("w", encoding="utf-8") as f:
         for i in range(line_count):
             entry = deepcopy(template)
-            entry["timestamp"] = (base_dt + timedelta(minutes=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            if i == 0 and first_timestamp is not None:
+                entry["timestamp"] = first_timestamp
+            else:
+                entry["timestamp"] = f"2026-06-12T10:{i % 60:02d}:00Z"
             if i % 3 == 1:
                 msg = entry.setdefault("message", {})
                 if isinstance(msg, dict) and "content" in msg:
@@ -80,11 +79,8 @@ def seed_search_corpus(
     """Create a multi-session project tree under *base_dir* for search benchmarks."""
     project = base_dir / "bench-project"
     project.mkdir(parents=True, exist_ok=True)
-    # Keep every message inside the default 30-day search window (see DEFAULT_SEARCH_WINDOW_DAYS).
-    anchor = datetime.now(UTC) - timedelta(days=1)
     for i in range(session_count):
-        first_ts = (anchor + timedelta(minutes=i * 30)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        write_jsonl(project / f"session_{i:04d}.jsonl", lines_per_session, first_timestamp=first_ts)
+        write_jsonl(project / f"session_{i:04d}.jsonl", lines_per_session)
     return base_dir
 
 
