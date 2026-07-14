@@ -12,7 +12,8 @@ def test_search_full_corpus(
     bench_client_search_corpus: FlaskClient,
 ) -> None:
     def _run() -> object:
-        return bench_client_search_corpus.get("/api/search?q=searchable&limit=50")
+        # Corpus uses fixed June timestamps; default 30-day search window would exclude them.
+        return bench_client_search_corpus.get("/api/search?q=searchable&limit=50&all_history=1")
 
     resp = benchmark(_run)
     assert resp.status_code == 200

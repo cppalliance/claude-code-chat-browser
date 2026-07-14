@@ -143,15 +143,34 @@ See [`docs/architecture.md`](docs/architecture.md) for data flow, export state m
 
 ## Adding a new tool type
 
-Claude Code assistant `tool_use` blocks carry a `name` string (e.g. `"Read"`, `"Bash"`). The browser coordinates that name across four sites; drift is caught by `tests/test_tool_dispatch_sync.py`.
+Claude Code assistant `tool_use` blocks carry a `name` string (e.g. `"Read"`, `"Bash"`). The browser coordinates that name across Python dispatch, Markdown export, and the SPA registry; drift is caught by `tests/test_tool_dispatch_sync.py`.
 
-1. **`utils/tool_dispatch.py`** — add the name to `_FILE_ACTIVITY_HANDLERS` (`None` if no file/bash/web side effects); `KNOWN_TOOL_TYPES` is derived from its keys. If the tool has a distinct `toolUseResult` JSON shape, add a `ToolResultDispatchEntry` to `_TOOL_RESULT_DISPATCH` (set `priority` when overlapping another predicate — see module docstring and `tests/test_tool_dispatch_ordering.py`).
-2. **`models/tool_results.py`** — add the name to `ToolNameLiteral` and, when the tool has a distinct result payload, add the TypedDict, type guard (`is_*_tool_result`), and union member on `ToolResultUnion`.
-3. **`utils/md_exporter.py`** — add an `elif name == "…"` branch in `_render_tool_use` (sync test parses these branches).
-4. **`static/js/render/registry.js`** — add a `TOOL_USE_RENDERERS` entry (and a `tool_use/*.js` renderer module).
-5. Regenerate **`static/tool_types.json`**: `python scripts/gen_tool_types_manifest.py`
-6. **Optional result UI** — if the backend emits a new `result_type`, add `TOOL_RESULT_RENDERERS` and a `tool_result/*.js` module.
-7. Run `pytest tests/test_tool_dispatch_sync.py -v` — failure names the site missing the new type.
+### Before (manual checklist — 7 coordinated sites)
+
+1. `utils/tool_dispatch.py` — `_FILE_ACTIVITY_HANDLERS` + `_TOOL_RESULT_DISPATCH`
+2. `models/tool_results.py` — `ToolNameLiteral`, TypedDict, `is_*` guard, union member
+3. `utils/md_exporter.py` — `_render_tool_use` / `_render_tool_result` branches
+4. `static/js/render/registry.js` — imports + `TOOL_USE_RENDERERS` + `TOOL_RESULT_RENDERERS`
+5. `static/js/render/tool_use/*.js` — renderer module
+6. `static/js/render/tool_result/*.js` — result renderer module (when applicable)
+7. `static/tool_types.json` — regenerate via `scripts/gen_tool_types_manifest.py`
+
+### After (registration record + generator)
+
+1. **One edit:** create or update a JSON record under `tool_types/` (see `tool_types/README.md`).
+2. **One command:** `python scripts/scaffold_tool_type.py --record tool_types/<name>.json`  
+   Or from scratch: `python scripts/scaffold_tool_type.py --name my_tool`
+3. **Complete stubs:** field mapping in the dispatch builder and render HTML in JS modules. When `result` is registered, also finish overlap fixtures when `priority > 0`.
+4. **Verify:**
+
+   ```bash
+   pytest tests/test_scaffold_tool_type.py tests/test_tool_dispatch_sync.py tests/test_tool_dispatch_ordering.py tests/test_tool_dispatch_adversarial.py tests/test_jsonl_parser.py tests/test_real_session_fixtures.py -q
+   npm test
+   ```
+
+The generator emits coordinated stubs across all seven sites when `result` is registered (dispatch table, TypedDict/guards, Markdown branches, JS use/result modules, `registry.js`, parser fixture, and `static/tool_types.json`). Use-only tools (`--no-result`) omit result dispatch, TypedDict/guard, parser fixture, and overlap-fixture artifacts. Hand-editing drops from seven sites to the record plus finishing TODO stubs (typically 2–3 files).
+
+Dry-run preview: `python scripts/scaffold_tool_type.py --name example_tool --dry-run`
 
 ## Getting help
 

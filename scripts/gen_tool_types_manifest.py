@@ -8,23 +8,28 @@ Run after adding a tool type to ``utils/tool_dispatch.py``::
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from utils.tool_types_manifest_io import (  # noqa: E402
+    load_known_tool_types_from_dispatch,
+    serialize_tool_types_manifest,
+)
+
 _MANIFEST_PATH = _REPO_ROOT / "static" / "tool_types.json"
 
 
-def write_tool_types_manifest(path: Path | None = None) -> int:
-    if str(_REPO_ROOT) not in sys.path:
-        sys.path.insert(0, str(_REPO_ROOT))
-    from utils.tool_dispatch import KNOWN_TOOL_TYPES
-
-    dest = path or _MANIFEST_PATH
-    payload = {"tool_types": sorted(KNOWN_TOOL_TYPES)}
-    dest.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    return len(KNOWN_TOOL_TYPES)
+def write_tool_types_manifest(path: Path | None = None, *, repo_root: Path | None = None) -> int:
+    root = (repo_root or _REPO_ROOT).resolve()
+    dest = path or root / "static" / "tool_types.json"
+    dispatch_path = root / "utils" / "tool_dispatch.py"
+    known = load_known_tool_types_from_dispatch(dispatch_path)
+    dest.write_text(serialize_tool_types_manifest(known), encoding="utf-8")
+    return len(known)
 
 
 def main() -> None:
