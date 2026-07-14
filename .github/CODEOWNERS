@@ -2,17 +2,9 @@
 # Last match wins; see https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 #
 # Review owners (development + code review): @clean6378-max-it (Chen), @timon0305 (Zilin)
+# Both are write collaborators on this repo.
 #
 # Final approval, merge sequencing, and no-self-merge rules are enforced by branch
 # protection / automation, not by listing additional owners here.
 
-# Default owners for the repository.
 *                       @clean6378-max-it @timon0305
-
-# Docs and contributor process
-/docs/                  @clean6378-max-it @timon0305
-/CONTRIBUTING.md        @clean6378-max-it @timon0305
-/README.md              @clean6378-max-it @timon0305
-
-# CI and workflow changes
-/.github/               @clean6378-max-it @timon0305

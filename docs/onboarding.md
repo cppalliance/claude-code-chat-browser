@@ -25,14 +25,12 @@ For API or export changes, also skim [`api/error_codes.py`](../api/error_codes.p
 
 ### 1. Fork and clone
 
-```powershell
+```bash
 # GitHub UI: fork cppalliance/claude-code-chat-browser to your account, then:
 git clone https://github.com/<your-user>/claude-code-chat-browser.git
 cd claude-code-chat-browser
 git remote add upstream https://github.com/cppalliance/claude-code-chat-browser.git
 ```
-
-On macOS/Linux, use the same `git clone` / `git remote add` commands in your shell.
 
 ### 2. Create a branch
 

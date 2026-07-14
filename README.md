@@ -145,8 +145,6 @@ claude-code-chat-browser/
 
 See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for full setup, conventions, and where to change each layer. New contributors should follow **[`docs/onboarding.md`](docs/onboarding.md)** for a first-PR walkthrough and reading order.
 
-**Maintainer coverage:** commit activity is currently concentrated on a small set of identities (bus-factor risk). Mitigations: [`.github/CODEOWNERS`](.github/CODEOWNERS) routes code review to @clean6378-max-it and @timon0305; final merge approval (@wpak-ai) is enforced via branch protection, plus [`docs/onboarding.md`](docs/onboarding.md) for contributor ramp-up.
-
 Quick start:
 
 ```bash
