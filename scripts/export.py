@@ -42,6 +42,7 @@ from utils.export_engine import (
     ZipSink,
     bulk_export_exit_code,
     dominant_failure_code,
+    failure_code_for_exception,
     failure_message_for_code,
     run_bulk_export,
     serialize_manifest_jsonl,
@@ -182,7 +183,10 @@ def cmd_list(args):
     project_filter = getattr(args, "project", None)
 
     if not os.path.isdir(base_dir):
-        _die(ErrorCode.INTERNAL_ERROR, detail=f"Claude Code projects directory not found: {base_dir}")
+        _die(
+            ErrorCode.INTERNAL_ERROR,
+            detail=f"Claude Code projects directory not found: {base_dir}",
+        )
 
     projects = list_projects(base_dir)
     if project_filter:
@@ -228,8 +232,13 @@ def _list_sessions(project: dict):
             tokens = meta["total_input_tokens"] + meta["total_output_tokens"]
             tools = meta["total_tool_calls"]
             print(f"  {ts:<12} {title:<50} {sid:>10} {tokens:>10,} {tools:>6}")
-        except Exception as e:
-            print(f"  Warning: failed to parse {s['id'][:10]}: {e}", file=sys.stderr)
+        except Exception as exc:
+            code = failure_code_for_exception(exc)
+            print(
+                f"  Warning: failed to parse {s['id'][:10]}: "
+                f"{code.value} — {failure_message_for_code(code)}",
+                file=sys.stderr,
+            )
             continue
 
 
@@ -241,7 +250,10 @@ def cmd_stats(args):
     fmt = getattr(args, "format", "text") or "text"
 
     if not os.path.isdir(base_dir):
-        _die(ErrorCode.INTERNAL_ERROR, detail=f"Claude Code projects directory not found: {base_dir}")
+        _die(
+            ErrorCode.INTERNAL_ERROR,
+            detail=f"Claude Code projects directory not found: {base_dir}",
+        )
 
     if session_id:
         _session_stats(session_id, base_dir, fmt)
@@ -366,9 +378,11 @@ def _aggregate_stats(base_dir: str, project_filter: str, fmt: str):
                 if cost is not None:
                     totals["total_cost"] += cost
                     totals["has_cost"] = True
-            except Exception as e:
+            except Exception as exc:
+                code = failure_code_for_exception(exc)
                 print(
-                    f"  Warning: failed to parse {s['id'][:10]} in {project['name']}: {e}",
+                    f"  Warning: failed to parse {s['id'][:10]} in {project['name']}: "
+                    f"{code.value} — {failure_message_for_code(code)}",
                     file=sys.stderr,
                 )
                 continue
@@ -446,7 +460,10 @@ def cmd_export(args):
     exclusion_rules_path = getattr(args, "exclude_rules", None)
 
     if not os.path.isdir(base_dir):
-        _die(ErrorCode.INTERNAL_ERROR, detail=f"Claude Code projects directory not found: {base_dir}")
+        _die(
+            ErrorCode.INTERNAL_ERROR,
+            detail=f"Claude Code projects directory not found: {base_dir}",
+        )
 
     rules = load_rules(resolve_exclusion_rules_path(exclusion_rules_path))
 
@@ -757,8 +774,15 @@ def _save_state(sessions: dict, count: int, out_dir: str):
         atomic_write_export_state(disk, STATE_FILE)
 
 
+def _cli_die_message(code: ErrorCode) -> str:
+    """Stable CLI stderr label (not export-scoped)."""
+    if code == ErrorCode.INTERNAL_ERROR:
+        return "Command failed"
+    return failure_message_for_code(code)
+
+
 def _die(code: ErrorCode, *, detail: str | None = None) -> None:
-    print(f"Error: {code.value} — {failure_message_for_code(code)}", file=sys.stderr)
+    print(f"Error: {code.value} — {_cli_die_message(code)}", file=sys.stderr)
     if detail:
         print(detail, file=sys.stderr)
     sys.exit(1)

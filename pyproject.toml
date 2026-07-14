@@ -5,6 +5,7 @@ packages = ["api", "utils", "models"]
 exclude = ["tests/"]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 addopts = "--cov=api --cov=utils --cov-report=term-missing --cov-report=xml:coverage.xml --benchmark-skip"
 testpaths = ["tests"]
 markers = [

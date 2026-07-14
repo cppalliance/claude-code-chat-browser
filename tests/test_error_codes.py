@@ -3,21 +3,15 @@
 from __future__ import annotations
 
 import json
-import sys
 import types
-from pathlib import Path
 
 import pytest
 
+import scripts.export as export_cli
 from api.error_codes import ErrorCode
 from api.search import _IndexSearchOutcome
 from tests.conftest import assert_error_response
 from tests.test_cli_e2e import _run_cli
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT))
-
-import scripts.export as export_cli
 
 
 @pytest.mark.parametrize(
@@ -108,6 +102,7 @@ def test_search_index_unavailable_code(client_single, monkeypatch):
     [
         (["export", "--base-dir"], "INTERNAL_ERROR"),
         (["stats", "--base-dir"], "INTERNAL_ERROR"),
+        (["list", "--base-dir"], "INTERNAL_ERROR"),
     ],
 )
 def test_cli_missing_projects_dir_surfaces_error_code(tmp_path, argv: list[str], code: str) -> None:
@@ -115,6 +110,8 @@ def test_cli_missing_projects_dir_surfaces_error_code(tmp_path, argv: list[str],
     proc = _run_cli([*argv, str(missing)])
     assert proc.returncode == 1
     assert code in proc.stderr
+    assert "Failed to export session" not in proc.stderr
+    assert "Command failed" in proc.stderr
     assert "Traceback" not in proc.stderr
 
 

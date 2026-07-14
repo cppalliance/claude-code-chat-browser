@@ -42,17 +42,12 @@ def _format_set_diff(expected: frozenset[str], actual: frozenset[str], site: str
     return "; ".join(parts)
 
 
-def _parse_frontend_tool_use_renderers(path: Path) -> frozenset[str]:
-    """Extract ``TOOL_USE_RENDERERS`` keys.
-
-    Assumes values are bare identifiers (``Bash: renderBashUse``). Brace-depth
-    parsing avoids truncating the object body if a value ever contains ``}``.
-    """
+def _parse_frontend_registry_keys(path: Path, marker: str) -> frozenset[str]:
+    """Extract object keys from a ``registry.js`` export block (brace-depth safe)."""
     text = path.read_text(encoding="utf-8")
-    marker = "export const TOOL_USE_RENDERERS = {"
     start = text.find(marker)
     if start == -1:
-        msg = f"Could not find TOOL_USE_RENDERERS in {path}"
+        msg = f"Could not find {marker!r} in {path}"
         raise ValueError(msg)
     i = start + len(marker)
     depth = 1
@@ -65,37 +60,21 @@ def _parse_frontend_tool_use_renderers(path: Path) -> frozenset[str]:
             depth -= 1
         i += 1
     if depth != 0:
-        msg = f"Unbalanced braces in TOOL_USE_RENDERERS in {path}"
+        msg = f"Unbalanced braces after {marker!r} in {path}"
         raise ValueError(msg)
     body = text[body_start : i - 1]
     keys = re.findall(r"^\s*(\w+)\s*:", body, re.MULTILINE)
     return frozenset(keys)
+
+
+def _parse_frontend_tool_use_renderers(path: Path) -> frozenset[str]:
+    """Extract ``TOOL_USE_RENDERERS`` keys."""
+    return _parse_frontend_registry_keys(path, "export const TOOL_USE_RENDERERS = {")
 
 
 def _parse_frontend_tool_result_renderers(path: Path) -> frozenset[str]:
-    """Extract ``TOOL_RESULT_RENDERERS`` keys (brace-depth safe)."""
-    text = path.read_text(encoding="utf-8")
-    marker = "export const TOOL_RESULT_RENDERERS = {"
-    start = text.find(marker)
-    if start == -1:
-        msg = f"Could not find TOOL_RESULT_RENDERERS in {path}"
-        raise ValueError(msg)
-    i = start + len(marker)
-    depth = 1
-    body_start = i
-    while i < len(text) and depth > 0:
-        ch = text[i]
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-        i += 1
-    if depth != 0:
-        msg = f"Unbalanced braces in TOOL_RESULT_RENDERERS in {path}"
-        raise ValueError(msg)
-    body = text[body_start : i - 1]
-    keys = re.findall(r"^\s*(\w+)\s*:", body, re.MULTILINE)
-    return frozenset(keys)
+    """Extract ``TOOL_RESULT_RENDERERS`` keys."""
+    return _parse_frontend_registry_keys(path, "export const TOOL_RESULT_RENDERERS = {")
 
 
 def _parse_dispatch_builder_result_types(path: Path) -> frozenset[str]:
