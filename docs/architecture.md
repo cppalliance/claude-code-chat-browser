@@ -151,6 +151,7 @@ No bundler step — modern browsers load modules directly. Frontend unit tests u
 
 ## Related documentation
 
+- [Contributor onboarding](onboarding.md)
 - [API reference](api-reference.md)
 - [Contributing](../CONTRIBUTING.md)
 - [README](../README.md)

@@ -1,0 +1,16 @@
+# Code owners — auto-requested as reviewers on matching paths.
+# Last match wins; see https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Review expectation: PR authors wait for at least one CODEOWNERS approval before merge.
+# Do not self-merge without review, even on docs-only changes.
+
+# Default owner for the repository.
+*                       @clean6378-max-it
+
+# Docs and contributor process
+/docs/                  @clean6378-max-it
+/CONTRIBUTING.md        @clean6378-max-it
+/README.md              @clean6378-max-it
+
+# CI and workflow changes
+/.github/               @clean6378-max-it
