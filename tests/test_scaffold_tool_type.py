@@ -95,8 +95,32 @@ def test_overlap_invariant_resolves_explicit_guards() -> None:
                     {
                         "before_dispatch_id": "plan",
                         "after_dispatch_id": "file_write",
-                        "before_guard": "is_plan_tool_result",
-                        "after_guard": "is_file_write_tool_result",
+                        "before_guard": "is_custom_plan_guard",
+                        "after_guard": "is_custom_write_guard",
+                        "reason": "test overlap",
+                        "fixture_id": "overlap_tool_fixture",
+                        "overlap_blob": {"plan": [], "filePath": "x", "content": "y"},
+                    }
+                ],
+            },
+        }
+    )
+    assert record.result is not None
+    inv = record.result.overlap_invariants[0]
+    assert inv.resolved_before_guard() == "is_custom_plan_guard"
+    assert inv.resolved_after_guard() == "is_custom_write_guard"
+
+
+def test_overlap_invariant_falls_back_to_dispatch_id_guards() -> None:
+    record = ToolTypeRecord.from_mapping(
+        {
+            "name": "OverlapTool",
+            "result": {
+                "dispatch_id": "overlap_tool",
+                "overlap_invariants": [
+                    {
+                        "before_dispatch_id": "plan",
+                        "after_dispatch_id": "file_write",
                         "reason": "test overlap",
                         "fixture_id": "overlap_tool_fixture",
                         "overlap_blob": {"plan": [], "filePath": "x", "content": "y"},
@@ -230,6 +254,26 @@ def test_dry_run_main_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
     out = capsys.readouterr().out
     assert "ExampleTool" in out
     assert "would write" in out
+
+
+def test_main_rejects_invalid_cli_name(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["--name", "NotSnake", "--dry-run"])
+    assert code == 1
+    err = capsys.readouterr().err
+    assert "scaffold_tool_type:" in err
+    assert "invalid snake_case name" in err
+
+
+def test_main_rejects_invalid_record_json(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bad_record = tmp_path / "bad.json"
+    bad_record.write_text("{not json", encoding="utf-8")
+    code = main(["--record", str(bad_record), "--dry-run"])
+    assert code == 1
+    err = capsys.readouterr().err
+    assert "scaffold_tool_type:" in err
+    assert "invalid JSON" in err
 
 
 def test_scaffold_rejects_duplicate_name(tmp_path: Path) -> None:

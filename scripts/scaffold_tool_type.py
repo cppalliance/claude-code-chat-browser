@@ -34,6 +34,10 @@ from models.tool_type_registry import (  # noqa: E402
     js_render_result_name,
     js_render_use_name,
 )
+from utils.tool_types_manifest_io import (  # noqa: E402
+    parse_file_activity_handler_names,
+    serialize_tool_types_manifest,
+)
 
 _FILE_ACTIVITY_HANDLER = {
     "none": "None",
@@ -125,7 +129,7 @@ class ScaffoldEmitter:
 
     def _guard_not_present(self, record: ToolTypeRecord) -> None:
         dispatch_text = self.paths.tool_dispatch.read_text(encoding="utf-8")
-        known = _parse_handlers_from_text(dispatch_text)
+        known = parse_file_activity_handler_names(dispatch_text)
         if record.name in known:
             msg = f"tool type {record.name!r} already present in _FILE_ACTIVITY_HANDLERS"
             raise ValueError(msg)
@@ -439,9 +443,8 @@ export function {fn}(parsed) {{
         if self.paths.tool_dispatch not in plan.pending:
             msg = "internal error: tool_dispatch was not staged before manifest"
             raise ValueError(msg)
-        known = _parse_handlers_from_text(plan.pending[self.paths.tool_dispatch])
-        payload = {"tool_types": sorted(known)}
-        plan.stage(self.paths.tool_types_manifest, json.dumps(payload, indent=2) + "\n")
+        known = parse_file_activity_handler_names(plan.pending[self.paths.tool_dispatch])
+        plan.stage(self.paths.tool_types_manifest, serialize_tool_types_manifest(known))
 
     def _plan_record(self, record: ToolTypeRecord, plan: _EmitPlan) -> None:
         path = self.paths.records_dir / f"{record.snake_name}.json"
@@ -483,36 +486,6 @@ export function {fn}(parsed) {{
             raise ValueError(f"closing delimiter not found for block: {block_start!r}")
         close_pos = search_from + match.start()
         return text[:close_pos] + "\n" + entry + text[close_pos:]
-
-
-def _parse_handlers_from_text(text: str) -> frozenset[str]:
-    marker = "_FILE_ACTIVITY_HANDLERS: dict"
-    start = text.find(marker)
-    if start == -1:
-        msg = f"could not find {marker} in staged tool_dispatch.py"
-        raise ValueError(msg)
-    brace_start = text.find("{", start)
-    if brace_start == -1:
-        msg = "could not find opening brace for _FILE_ACTIVITY_HANDLERS"
-        raise ValueError(msg)
-    depth = 0
-    i = brace_start
-    while i < len(text):
-        ch = text[i]
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                body = text[brace_start + 1 : i]
-                keys = re.findall(r'"([^"]+)":', body)
-                if not keys:
-                    msg = "no tool names found in staged _FILE_ACTIVITY_HANDLERS"
-                    raise ValueError(msg)
-                return frozenset(keys)
-        i += 1
-    msg = "unbalanced braces in staged _FILE_ACTIVITY_HANDLERS"
-    raise ValueError(msg)
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -571,38 +544,41 @@ def _resolve_record(args: argparse.Namespace) -> ToolTypeRecord:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parse_args(argv)
-    record = _resolve_record(args)
-    root = args.root.resolve()
-
-    if args.write_record_only:
-        out = args.record or root / "tool_types" / f"{record.snake_name}.json"
-        if args.dry_run:
-            print(f"Would write record to {out}")
-            return 0
-        record.save(out)
-        print(f"Wrote {out}")
-        return 0
-
-    emitter = ScaffoldEmitter(root, dry_run=args.dry_run)
     try:
+        args = _parse_args(argv)
+        record = _resolve_record(args)
+        root = args.root.resolve()
+
+        if args.write_record_only:
+            out = args.record or root / "tool_types" / f"{record.snake_name}.json"
+            if args.dry_run:
+                print(f"Would write record to {out}")
+                return 0
+            record.save(out)
+            print(f"Wrote {out}")
+            return 0
+
+        emitter = ScaffoldEmitter(root, dry_run=args.dry_run)
         written = emitter.emit(record)
+
+        if args.dry_run:
+            print(f"Dry run complete for {record.name} ({len(written)} artifacts planned)")
+        else:
+            print(f"Scaffolded {record.name}: {len(written)} files updated")
+            print("Next: complete TODO stubs, then run:")
+            print(
+                "  pytest tests/test_scaffold_tool_type.py tests/test_tool_dispatch_sync.py "
+                "tests/test_tool_dispatch_ordering.py tests/test_tool_dispatch_adversarial.py "
+                "tests/test_jsonl_parser.py tests/test_real_session_fixtures.py -q"
+            )
+            print("  npm test")
+        return 0
+    except json.JSONDecodeError as exc:
+        print(f"scaffold_tool_type: invalid JSON: {exc}", file=sys.stderr)
+        return 1
     except ValueError as exc:
         print(f"scaffold_tool_type: {exc}", file=sys.stderr)
         return 1
-
-    if args.dry_run:
-        print(f"Dry run complete for {record.name} ({len(written)} artifacts planned)")
-    else:
-        print(f"Scaffolded {record.name}: {len(written)} files updated")
-        print("Next: complete TODO stubs, then run:")
-        print(
-            "  pytest tests/test_scaffold_tool_type.py tests/test_tool_dispatch_sync.py "
-            "tests/test_tool_dispatch_ordering.py tests/test_tool_dispatch_adversarial.py "
-            "tests/test_jsonl_parser.py tests/test_real_session_fixtures.py -q"
-        )
-        print("  npm test")
-    return 0
 
 
 if __name__ == "__main__":
