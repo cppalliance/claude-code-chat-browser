@@ -32,7 +32,7 @@ _ALLOWED_PY_TYPES = frozenset(
     }
 )
 
-_DISPATCH_ID_RE = re.compile(r"[a-z][a-z0-9_]*")
+_DISPATCH_ID_RE = re.compile(r"[a-z]([a-z0-9]+(_[a-z0-9]+)*)?")
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +47,9 @@ class TypedDictField:
         name = raw.get("name")
         if not isinstance(name, str) or not name:
             msg = "typed_dict_fields entries require a non-empty string 'name'"
+            raise ValueError(msg)
+        if not name.isidentifier():
+            msg = f"typed_dict_fields 'name' must be a valid Python identifier, got {name!r}"
             raise ValueError(msg)
         py_type = raw.get("type", "object")
         if not isinstance(py_type, str):
@@ -144,7 +147,7 @@ class ToolResultRecord:
             msg = "result.predicate_mode must be 'all' or 'any'"
             raise ValueError(msg)
         priority = raw.get("priority", 0)
-        if not isinstance(priority, int):
+        if isinstance(priority, bool) or not isinstance(priority, int):
             msg = "result.priority must be an int"
             raise ValueError(msg)
         if priority < 0:
@@ -301,7 +304,7 @@ class ToolTypeRecord:
 
 
 def snake_to_pascal(snake: str) -> str:
-    if not re.fullmatch(r"[a-z][a-z0-9_]*", snake):
+    if not re.fullmatch(r"[a-z]([a-z0-9]+(_[a-z0-9]+)*)?", snake):
         msg = f"invalid snake_case name: {snake!r}"
         raise ValueError(msg)
     return "".join(part.capitalize() for part in snake.split("_"))
@@ -357,6 +360,4 @@ def _validate_dispatch_id(dispatch_id: str) -> None:
 
 def _dispatch_id_to_camel(dispatch_id: str) -> str:
     parts = dispatch_id.split("_")
-    if not parts:
-        return "value"
     return parts[0] + "".join(part.capitalize() for part in parts[1:])

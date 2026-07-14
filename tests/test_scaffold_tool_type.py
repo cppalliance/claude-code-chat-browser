@@ -75,6 +75,16 @@ def test_from_mapping_rejects_invalid_dispatch_id() -> None:
         )
 
 
+def test_from_mapping_rejects_trailing_underscore_dispatch_id() -> None:
+    with pytest.raises(ValueError, match="snake_case"):
+        ToolTypeRecord.from_mapping(
+            {
+                "name": "BadTool",
+                "result": {"dispatch_id": "bad_"},
+            }
+        )
+
+
 def test_overlap_invariant_resolves_explicit_guards() -> None:
     record = ToolTypeRecord.from_mapping(
         {
@@ -127,6 +137,47 @@ def test_from_mapping_rejects_negative_priority() -> None:
         )
 
 
+def test_from_mapping_rejects_bool_priority() -> None:
+    with pytest.raises(ValueError, match="must be an int"):
+        ToolTypeRecord.from_mapping(
+            {
+                "name": "BadTool",
+                "result": {"dispatch_id": "bad_tool", "priority": True},
+            }
+        )
+
+
+def test_from_mapping_rejects_non_identifier_field_name() -> None:
+    with pytest.raises(ValueError, match="valid Python identifier"):
+        ToolTypeRecord.from_mapping(
+            {
+                "name": "BadTool",
+                "result": {
+                    "dispatch_id": "bad_tool",
+                    "typed_dict_fields": [{"name": "not valid", "type": "str"}],
+                },
+            }
+        )
+
+
+def test_append_to_block_inserts_before_closing_paren() -> None:
+    text = "from foo import (\n    bar,\n)\n"
+    result = ScaffoldEmitter._append_to_block(text, "from foo import (", "    baz,")
+    assert "    baz,\n)" in result
+    assert result.index("bar,") < result.index("baz,")
+
+
+def test_append_to_block_raises_on_missing_block() -> None:
+    with pytest.raises(ValueError, match="block not found"):
+        ScaffoldEmitter._append_to_block("some text", "nonexistent(", "    x,")
+
+
+def test_append_to_block_raises_on_missing_close() -> None:
+    text = "from foo import (bar)"
+    with pytest.raises(ValueError, match="closing delimiter not found"):
+        ScaffoldEmitter._append_to_block(text, "from foo import (", "    baz,")
+
+
 def test_dry_run_reports_planned_artifact_count(capsys: pytest.CaptureFixture[str]) -> None:
     code = main(["--name", "example_tool", "--dry-run"])
     assert code == 0
@@ -161,14 +212,14 @@ def test_emit_anchor_miss_in_tool_results_leaves_repo_unchanged(tmp_path: Path) 
     tool_results = repo / "models" / "tool_results.py"
     original = tool_results.read_text(encoding="utf-8")
     corrupt = original.replace(
-        '    "WebSearch",\n]',
-        '    "WebSearch",\n    "Legacy",\n]',
+        "# Dict passed into dispatch predicates",
+        "# Dict handed to dispatch predicates",
     )
     assert corrupt != original, "fixture corruption must change tool_results.py"
     tool_results.write_text(corrupt, encoding="utf-8")
     snapshot = _snapshot_emitter_targets(repo)
     record = ToolTypeRecord.from_cli_name("example_tool")
-    with pytest.raises(ValueError, match="replacement anchor not found"):
+    with pytest.raises(ValueError, match="marker not found"):
         ScaffoldEmitter(repo).emit(record)
     _assert_emitter_targets_unchanged(repo, snapshot)
 
@@ -244,6 +295,13 @@ def test_scaffold_emits_declared_priority(tmp_path: Path) -> None:
     ScaffoldEmitter(repo).emit(record)
     dispatch = (repo / "utils" / "tool_dispatch.py").read_text(encoding="utf-8")
     assert "priority=2," in dispatch
+
+
+def test_scaffold_two_result_tools_passes_dispatch_sync(tmp_path: Path) -> None:
+    repo = _mirror_repo(tmp_path)
+    ScaffoldEmitter(repo).emit(ToolTypeRecord.from_cli_name("alpha_tool"))
+    ScaffoldEmitter(repo).emit(ToolTypeRecord.from_cli_name("beta_tool"))
+    _assert_dispatch_sync(repo)
 
 
 def test_scaffold_in_temp_passes_dispatch_sync(tmp_path: Path) -> None:

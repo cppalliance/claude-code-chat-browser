@@ -107,6 +107,7 @@ class ScaffoldEmitter:
 
     def emit(self, record: ToolTypeRecord) -> list[Path]:
         self._guard_not_present(record)
+        self._written = []
         plan = _EmitPlan()
         self._plan_tool_results(record, plan)
         self._plan_tool_dispatch(record, plan)
@@ -124,7 +125,8 @@ class ScaffoldEmitter:
 
     def _guard_not_present(self, record: ToolTypeRecord) -> None:
         dispatch_text = self.paths.tool_dispatch.read_text(encoding="utf-8")
-        if f'"{record.name}"' in dispatch_text and f'"{record.name}":' in dispatch_text:
+        known = _parse_handlers_from_text(dispatch_text)
+        if record.name in known:
             msg = f"tool type {record.name!r} already present in _FILE_ACTIVITY_HANDLERS"
             raise ValueError(msg)
 
@@ -148,7 +150,7 @@ class ScaffoldEmitter:
                 text = self._insert_before(
                     text,
                     "# Registration order is tie-break only when priorities are equal.",
-                    self._render_dispatch_builder(record) + "\n",
+                    self._render_dispatch_builder(record) + "\n\n\n",
                 )
                 text = self._insert_before(
                     text,
@@ -158,10 +160,10 @@ class ScaffoldEmitter:
                 )
                 guard = record.guard_name
                 if f"    {guard}," not in text:
-                    text = self._replace_once(
+                    text = self._append_to_block(
                         text,
-                        "    is_web_search_tool_result,\n)",
-                        f"    is_web_search_tool_result,\n    {guard},\n)",
+                        "from models.tool_results import (",
+                        f"    {guard},",
                     )
             entry = f'    "{record.name}": {handler},\n'
             text = self._insert_before(text, "}\nKNOWN_TOOL_TYPES", entry, marker_in_prev_line=True)
@@ -173,7 +175,6 @@ class ScaffoldEmitter:
         assert record.result is not None
         sig = "tr: ToolResultDict, base: dict[str, object]"
         lines = [
-            "",
             f"def {record.builder_name}({sig}) -> dict[str, object]:",
             "    # TODO: map toolUseResult fields to parsed result keys.",
             "    result = dict(base)",
@@ -208,7 +209,7 @@ class ScaffoldEmitter:
                 text = self._insert_before(
                     text,
                     "# Dict passed into dispatch predicates",
-                    self._render_typed_dict(record) + "\n\n",
+                    self._render_typed_dict(record) + "\n\n\n",
                 )
                 member = f"    | {record.typed_dict_class}\n"
                 text = self._insert_before(
@@ -216,17 +217,17 @@ class ScaffoldEmitter:
                     "    | ToolResultWithContentDict",
                     member,
                 )
-                anchor = '    return "questions" in tr and "answers" in tr\n\n\n'
-                text = self._replace_once(
+                text = self._insert_before(
                     text,
-                    anchor + "# Tool names on assistant",
-                    anchor + f"{self._render_guard(record)}\n\n\n# Tool names on assistant",
+                    "# Tool names on assistant",
+                    self._render_guard(record) + "\n\n\n",
                 )
-            text = self._replace_once(
-                text,
-                '    "WebSearch",\n]',
-                f'    "WebSearch",\n    "{record.name}",\n]',
-            )
+            if f'    "{record.name}",' not in text:
+                text = self._append_to_block(
+                    text,
+                    "ToolNameLiteral = Literal[",
+                    f'    "{record.name}",',
+                )
             return text
 
         plan.stage_patch(self.paths.tool_results, transform)
@@ -375,25 +376,18 @@ export function {fn}(parsed) {{
             for inv in record.result.overlap_invariants:
                 before_guard = inv.resolved_before_guard()
                 after_guard = inv.resolved_after_guard()
-                if before_guard not in text:
-                    text = self._replace_once(
+                if f"    {before_guard}," not in text:
+                    text = self._append_to_block(
                         text,
-                        "    is_task_async_tool_result,\n)",
-                        f"    is_task_async_tool_result,\n    {before_guard},\n)",
+                        "from models.tool_results import (",
+                        f"    {before_guard},",
                     )
-                if after_guard not in text:
-                    if before_guard in text:
-                        text = self._replace_once(
-                            text,
-                            f"    {before_guard},\n)",
-                            f"    {before_guard},\n    {after_guard},\n)",
-                        )
-                    else:
-                        text = self._replace_once(
-                            text,
-                            "    is_task_async_tool_result,\n)",
-                            f"    is_task_async_tool_result,\n    {after_guard},\n)",
-                        )
+                if f"    {after_guard}," not in text:
+                    text = self._append_to_block(
+                        text,
+                        "from models.tool_results import (",
+                        f"    {after_guard},",
+                    )
                 row = (
                     f"    (\n"
                     f"        {before_guard},\n"
@@ -476,6 +470,19 @@ export function {fn}(parsed) {{
             msg = f"scaffold replacement anchor not found: {anchor!r}"
             raise ValueError(msg)
         return text.replace(anchor, replacement, 1)
+
+    @staticmethod
+    def _append_to_block(text: str, block_start: str, entry: str) -> str:
+        """Append *entry* before the closing ``)`` or ``]`` of *block_start*."""
+        idx = text.find(block_start)
+        if idx == -1:
+            raise ValueError(f"scaffold block not found: {block_start!r}")
+        search_from = idx + len(block_start)
+        match = re.search(r"\n[)\]]", text[search_from:])
+        if not match:
+            raise ValueError(f"closing delimiter not found for block: {block_start!r}")
+        close_pos = search_from + match.start()
+        return text[:close_pos] + "\n" + entry + text[close_pos:]
 
 
 def _parse_handlers_from_text(text: str) -> frozenset[str]:

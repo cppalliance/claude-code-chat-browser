@@ -9,22 +9,43 @@ Run after adding a tool type to ``utils/tool_dispatch.py``::
 from __future__ import annotations
 
 import json
-import sys
+import re
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _MANIFEST_PATH = _REPO_ROOT / "static" / "tool_types.json"
 
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-
-from scripts.scaffold_tool_type import _parse_handlers_from_text  # noqa: E402
-
 
 def _load_known_tool_types(repo_root: Path) -> frozenset[str]:
     path = repo_root / "utils" / "tool_dispatch.py"
     text = path.read_text(encoding="utf-8")
-    return _parse_handlers_from_text(text)
+    marker = "_FILE_ACTIVITY_HANDLERS: dict"
+    start = text.find(marker)
+    if start == -1:
+        msg = f"could not find {marker} in {path}"
+        raise ValueError(msg)
+    brace_start = text.find("{", start)
+    if brace_start == -1:
+        msg = f"could not find opening brace for {marker} in {path}"
+        raise ValueError(msg)
+    depth = 0
+    i = brace_start
+    while i < len(text):
+        ch = text[i]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                body = text[brace_start + 1 : i]
+                keys = re.findall(r'"([^"]+)":', body)
+                if not keys:
+                    msg = f"no tool names found in {marker} in {path}"
+                    raise ValueError(msg)
+                return frozenset(keys)
+        i += 1
+    msg = f"unbalanced braces in {marker} in {path}"
+    raise ValueError(msg)
 
 
 def write_tool_types_manifest(path: Path | None = None, *, repo_root: Path | None = None) -> int:
