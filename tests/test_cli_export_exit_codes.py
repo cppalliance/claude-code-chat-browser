@@ -15,7 +15,7 @@ sys.path.insert(0, str(REPO_ROOT))
 import scripts.export as export
 from models.error_codes import ErrorCode
 from tests.test_cli_e2e import _run_cli, _seed_base_dir
-from utils.export_engine import BulkExportResult, ExportFailure
+from utils.export_engine import BulkExportResult, ExportFailure, bulk_export_exit_code, dominant_failure_code
 from utils.jsonl_parser import parse_session
 
 _SUMMARY_RE = re.compile(
@@ -93,6 +93,8 @@ def test_cli_export_partial_failure_exits_two(tmp_path, monkeypatch, capsys):
     captured = capsys.readouterr()
     assert _SUMMARY_RE.search(captured.err), captured.err
     assert "Exported 1 of 2 sessions (1 failed)" in captured.err
+    assert "PARSE_ERROR" in captured.err
+    assert "simulated corrupt jsonl" not in captured.err
     assert len(list(out_dir.rglob("*.md"))) == 1
 
 
@@ -166,6 +168,7 @@ def test_since_last_early_return_exits_one_on_failure(tmp_path, monkeypatch, cap
     assert exc_info.value.code == 1
     captured = capsys.readouterr()
     assert "Exported 0 of 1 sessions (1 failed)" in captured.err
+    assert "PARSE_ERROR" in captured.err
 
 
 def test_cli_export_incremental_noop_no_stderr_summary(tmp_path):
@@ -214,5 +217,44 @@ def test_cli_export_total_failure_exits_one(tmp_path, monkeypatch, capsys):
     assert exc_info.value.code == 1
     captured = capsys.readouterr()
     assert "Exported 0 of 2 sessions (2 failed)" in captured.err
+    assert "PARSE_ERROR" in captured.err
+    assert "simulated corrupt jsonl" not in captured.err
     assert "Nothing to export." in captured.out
     assert list(out_dir.rglob("*.md")) == []
+
+
+@pytest.mark.parametrize(
+    "result,expected_exit",
+    [
+        (BulkExportResult(), 0),
+        (
+            BulkExportResult(
+                exported_session_count=2,
+                failures=[
+                    ExportFailure("a", "Failed to parse session", ErrorCode.PARSE_ERROR),
+                ],
+            ),
+            2,
+        ),
+        (
+            BulkExportResult(
+                failures=[
+                    ExportFailure("a", "Failed to parse session", ErrorCode.PARSE_ERROR),
+                    ExportFailure("b", "Failed to export session", ErrorCode.INTERNAL_ERROR),
+                ],
+            ),
+            1,
+        ),
+    ],
+)
+def test_bulk_export_exit_code_mapping(result: BulkExportResult, expected_exit: int) -> None:
+    assert bulk_export_exit_code(result) == expected_exit
+
+
+def test_dominant_failure_code_picks_most_common() -> None:
+    failures = [
+        ExportFailure("a", "Failed to parse session", ErrorCode.PARSE_ERROR),
+        ExportFailure("b", "Failed to parse session", ErrorCode.PARSE_ERROR),
+        ExportFailure("c", "Failed to export session", ErrorCode.INTERNAL_ERROR),
+    ]
+    assert dominant_failure_code(failures) == ErrorCode.PARSE_ERROR
