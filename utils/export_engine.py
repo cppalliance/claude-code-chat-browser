@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import posixpath
 import zipfile
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
-from collections import Counter
 from typing import Any, Callable, Literal, Protocol
 
 from models.error_codes import ErrorCode
@@ -95,24 +95,6 @@ def failure_message_for_code(code: ErrorCode) -> str:
     return "Export failed"
 
 
-def dominant_failure_code(failures: list[ExportFailure]) -> ErrorCode:
-    """Return the most common structured failure code in a bulk export run."""
-    if not failures:
-        msg = "failures must not be empty"
-        raise ValueError(msg)
-    counts = Counter(item.code for item in failures)
-    return counts.most_common(1)[0][0]
-
-
-def bulk_export_exit_code(result: BulkExportResult) -> int:
-    """Map structured bulk-export failures to CLI POSIX exit code (0/1/2)."""
-    if not result.failures:
-        return 0
-    if result.exported_session_count == 0:
-        return 1
-    return 2
-
-
 @dataclass
 class BulkExportResult:
     """Outcome of a bulk export run."""
@@ -134,6 +116,24 @@ class BulkExportResult:
     def failure_count(self) -> int:
         """Number of per-session failures (derived from :attr:`failures`)."""
         return len(self.failures)
+
+
+def dominant_failure_code(failures: list[ExportFailure]) -> ErrorCode:
+    """Return the most common structured failure code in a bulk export run."""
+    if not failures:
+        msg = "failures must not be empty"
+        raise ValueError(msg)
+    counts = Counter(item.code for item in failures)
+    return counts.most_common(1)[0][0]
+
+
+def bulk_export_exit_code(result: BulkExportResult) -> int:
+    """Map structured bulk-export failures to CLI POSIX exit code (0/1/2)."""
+    if not result.failures:
+        return 0
+    if result.exported_session_count == 0:
+        return 1
+    return 2
 
 
 class ExportSink(Protocol):

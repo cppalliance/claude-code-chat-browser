@@ -3,19 +3,20 @@
 from __future__ import annotations
 
 import re
-import sys
 import types
 from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT))
-
 import scripts.export as export
 from models.error_codes import ErrorCode
 from tests.test_cli_e2e import _run_cli, _seed_base_dir
-from utils.export_engine import BulkExportResult, ExportFailure, bulk_export_exit_code, dominant_failure_code
+from utils.export_engine import (
+    BulkExportResult,
+    ExportFailure,
+    bulk_export_exit_code,
+    dominant_failure_code,
+)
 from utils.jsonl_parser import parse_session
 
 _SUMMARY_RE = re.compile(
