@@ -68,7 +68,7 @@ ruff check .
 ruff format --check .
 
 # Type check (CI: Ubuntu only)
-mypy -p api -p utils -p models -p scripts
+mypy -p api -p utils -p models
 
 # Security audit (production deps)
 pip-audit -r requirements.txt
@@ -81,7 +81,7 @@ pytest tests/test_api_integration.py -v
 
 # Frontend — only if you changed static/js/
 npm ci
-npm test
+npm run test:coverage
 ```
 
 Fix formatting with `ruff format .` when `ruff format --check` fails.

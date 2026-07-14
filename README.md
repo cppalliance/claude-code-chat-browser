@@ -145,12 +145,14 @@ claude-code-chat-browser/
 
 See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for full setup, conventions, and where to change each layer. New contributors should follow **[`docs/onboarding.md`](docs/onboarding.md)** for a first-PR walkthrough and reading order.
 
+Maintainer coverage is concentrated; see [`docs/onboarding.md`](docs/onboarding.md#maintainer-coverage-bus-factor) and [`.github/CODEOWNERS`](.github/CODEOWNERS) for risk and mitigations.
+
 Quick start:
 
 ```bash
 pip install -r requirements-dev.txt
 pytest
-npm ci && npm test   # only if you changed static/js/
+npm ci && npm run test:coverage   # only if you changed static/js/
 ```
 
 `requirements.txt` carries only the runtime dep (Flask); `requirements-dev.txt` pulls it in via `-r` and adds pytest (+ coverage). Frontend tests use vitest (`package.json`).
