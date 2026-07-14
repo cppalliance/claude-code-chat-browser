@@ -5,6 +5,10 @@ Sites (each compared to ``KNOWN_TOOL_TYPES`` in ``utils/tool_dispatch.py``):
 - ``utils/md_exporter.py`` — ``_render_tool_use`` if/elif branches (parsed)
 - ``models/tool_results.py`` — ``ToolNameLiteral``
 - ``static/js/render/registry.js`` — ``TOOL_USE_RENDERERS`` keys (parsed)
+
+``result_type`` values from ``_TOOL_RESULT_DISPATCH`` builders must match:
+- ``static/js/render/registry.js`` — ``TOOL_RESULT_RENDERERS`` keys (parsed)
+- ``utils/md_exporter.py`` — ``_render_tool_result`` if/elif branches (parsed)
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from utils.tool_dispatch import KNOWN_TOOL_TYPES
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _FRONTEND_REGISTRY = _REPO_ROOT / "static" / "js" / "render" / "registry.js"
 _MD_EXPORTER = _REPO_ROOT / "utils" / "md_exporter.py"
+_TOOL_DISPATCH = _REPO_ROOT / "utils" / "tool_dispatch.py"
 _TOOL_TYPES_MANIFEST = _REPO_ROOT / "static" / "tool_types.json"
 
 
@@ -65,6 +70,55 @@ def _parse_frontend_tool_use_renderers(path: Path) -> frozenset[str]:
     body = text[body_start : i - 1]
     keys = re.findall(r"^\s*(\w+)\s*:", body, re.MULTILINE)
     return frozenset(keys)
+
+
+def _parse_frontend_tool_result_renderers(path: Path) -> frozenset[str]:
+    """Extract ``TOOL_RESULT_RENDERERS`` keys (brace-depth safe)."""
+    text = path.read_text(encoding="utf-8")
+    marker = "export const TOOL_RESULT_RENDERERS = {"
+    start = text.find(marker)
+    if start == -1:
+        msg = f"Could not find TOOL_RESULT_RENDERERS in {path}"
+        raise ValueError(msg)
+    i = start + len(marker)
+    depth = 1
+    body_start = i
+    while i < len(text) and depth > 0:
+        ch = text[i]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+        i += 1
+    if depth != 0:
+        msg = f"Unbalanced braces in TOOL_RESULT_RENDERERS in {path}"
+        raise ValueError(msg)
+    body = text[body_start : i - 1]
+    keys = re.findall(r"^\s*(\w+)\s*:", body, re.MULTILINE)
+    return frozenset(keys)
+
+
+def _parse_dispatch_builder_result_types(path: Path) -> frozenset[str]:
+    """Extract ``result_type`` literals from tool-result dispatch builders."""
+    text = path.read_text(encoding="utf-8")
+    types = set(re.findall(r'result\["result_type"\]\s*=\s*"([^"]+)"', text))
+    types.discard("unknown")
+    return frozenset(types)
+
+
+def _parse_md_exporter_tool_result_handlers(path: Path) -> frozenset[str]:
+    """Extract ``result_type`` values handled by ``_render_tool_result`` branches."""
+    text = path.read_text(encoding="utf-8")
+    match = re.search(
+        r"def _render_tool_result\(.*?(?=\ndef _render_system)",
+        text,
+        re.DOTALL,
+    )
+    if not match:
+        msg = f"Could not find _render_tool_result in {path}"
+        raise ValueError(msg)
+    body = match.group(0)
+    return frozenset(re.findall(r'(?:if|elif) rt == "([^"]+)"', body))
 
 
 def _parse_md_exporter_tool_use_handlers(path: Path) -> frozenset[str]:
@@ -149,3 +203,32 @@ def test_frontend_registry_matches_known_tool_types() -> None:
 
 def test_known_tool_types_nonempty() -> None:
     assert KNOWN_TOOL_TYPES
+
+
+def test_dispatch_builder_result_types_match_frontend_registry() -> None:
+    """``TOOL_RESULT_RENDERERS`` keys must match dispatch builder ``result_type`` values."""
+    site = "static/js/render/registry.js (TOOL_RESULT_RENDERERS)"
+    try:
+        expected = _parse_dispatch_builder_result_types(_TOOL_DISPATCH)
+        actual = _parse_frontend_tool_result_renderers(_FRONTEND_REGISTRY)
+    except ValueError as exc:
+        pytest.fail(f"{site}: {exc}")
+    if actual != expected:
+        pytest.fail(_format_set_diff(expected, actual, site))
+
+
+def test_dispatch_builder_result_types_match_md_exporter() -> None:
+    """``_render_tool_result`` branches must match dispatch builder ``result_type`` values."""
+    site = "utils/md_exporter.py (_render_tool_result branches)"
+    try:
+        expected = _parse_dispatch_builder_result_types(_TOOL_DISPATCH)
+        actual = _parse_md_exporter_tool_result_handlers(_MD_EXPORTER)
+    except ValueError as exc:
+        pytest.fail(f"{site}: {exc}")
+    if actual != expected:
+        pytest.fail(_format_set_diff(expected, actual, site))
+
+
+def test_dispatch_builder_result_types_nonempty() -> None:
+    expected = _parse_dispatch_builder_result_types(_TOOL_DISPATCH)
+    assert expected

@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
+from pathlib import Path
 
 import pytest
 
 from api.error_codes import ErrorCode
 from api.search import _IndexSearchOutcome
 from tests.conftest import assert_error_response
+from tests.test_cli_e2e import _run_cli
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
+import scripts.export as export_cli
 
 
 @pytest.mark.parametrize(
@@ -92,3 +101,39 @@ def test_search_index_unavailable_code(client_single, monkeypatch):
     body_text = json.dumps(resp.get_json())
     assert_error_response(resp, expected_code=ErrorCode.SEARCH_INDEX_UNAVAILABLE)
     assert "live scan failed" not in body_text
+
+
+@pytest.mark.parametrize(
+    "argv,code",
+    [
+        (["export", "--base-dir"], "INTERNAL_ERROR"),
+        (["stats", "--base-dir"], "INTERNAL_ERROR"),
+    ],
+)
+def test_cli_missing_projects_dir_surfaces_error_code(tmp_path, argv: list[str], code: str) -> None:
+    missing = tmp_path / "missing-claude-dir"
+    proc = _run_cli([*argv, str(missing)])
+    assert proc.returncode == 1
+    assert code in proc.stderr
+    assert "Traceback" not in proc.stderr
+
+
+def test_cli_export_session_not_found_surfaces_code(tmp_path, capsys) -> None:
+    base = tmp_path / "projects"
+    base.mkdir()
+    with pytest.raises(SystemExit) as exc_info:
+        export_cli.cmd_export(
+            types.SimpleNamespace(
+                base_dir=str(base),
+                out=str(tmp_path / "out"),
+                since="all",
+                no_zip=True,
+                project=None,
+                format="md",
+                session="missing-session-id",
+                exclude_rules=None,
+            )
+        )
+    assert exc_info.value.code == 1
+    captured = capsys.readouterr()
+    assert "SESSION_NOT_FOUND" in captured.err

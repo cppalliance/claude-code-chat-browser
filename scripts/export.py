@@ -31,13 +31,18 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 sys.path.insert(0, REPO_ROOT)
 
+from models.error_codes import ErrorCode
 from utils.exclusion_rules import load_rules, resolve_exclusion_rules_path
 from utils.export_engine import (
     BulkExportResult,
+    ExportFailure,
     ExportFormat,
     NoopSink,
     SinceMode,
     ZipSink,
+    bulk_export_exit_code,
+    dominant_failure_code,
+    failure_message_for_code,
     run_bulk_export,
     serialize_manifest_jsonl,
 )
@@ -177,7 +182,7 @@ def cmd_list(args):
     project_filter = getattr(args, "project", None)
 
     if not os.path.isdir(base_dir):
-        _die(f"Claude Code projects directory not found: {base_dir}")
+        _die(ErrorCode.INTERNAL_ERROR, detail=f"Claude Code projects directory not found: {base_dir}")
 
     projects = list_projects(base_dir)
     if project_filter:
@@ -236,7 +241,7 @@ def cmd_stats(args):
     fmt = getattr(args, "format", "text") or "text"
 
     if not os.path.isdir(base_dir):
-        _die(f"Claude Code projects directory not found: {base_dir}")
+        _die(ErrorCode.INTERNAL_ERROR, detail=f"Claude Code projects directory not found: {base_dir}")
 
     if session_id:
         _session_stats(session_id, base_dir, fmt)
@@ -248,7 +253,7 @@ def _session_stats(session_id: str, base_dir: str, fmt: str):
     """Detailed breakdown for one session: tokens, files, commands, cost."""
     filepath = _find_session(session_id, base_dir)
     if not filepath:
-        _die(f"Session not found: {session_id}")
+        _die(ErrorCode.SESSION_NOT_FOUND, detail=session_id)
 
     session = parse_session(filepath)
     stats = compute_stats(session)
@@ -406,22 +411,27 @@ def _aggregate_stats(base_dir: str, project_filter: str, fmt: str):
 
 
 def _exit_bulk_export(result: BulkExportResult) -> None:
-    """Map bulk-export counts to process exit code (CLI wrapper only).
+    """Map structured bulk-export failures to process exit code (CLI wrapper only).
 
     Prints a summary to stderr on any failure, stdout on clean success.
     Raises SystemExit(1) for total failure, SystemExit(2) for partial.
     """
     n = result.exported_session_count
-    k = result.failure_count
+    failures = result.failures
+    k = len(failures)
     # "attempted" = exported + failed; excludes untitled/excluded/mtime-skipped
     m = n + k
     if n > 0 or k > 0:
         dest = sys.stderr if k > 0 else sys.stdout
         print(f"Exported {n} of {m} sessions ({k} failed)", file=dest)
-    if n == 0 and k > 0:  # total failure
-        sys.exit(1)
-    elif k > 0:  # partial failure
-        sys.exit(2)
+    exit_code = bulk_export_exit_code(result)
+    if exit_code != 0:
+        code = dominant_failure_code(failures)
+        print(
+            f"  {code.value}: {failure_message_for_code(code)}",
+            file=sys.stderr,
+        )
+        sys.exit(exit_code)
 
 
 def cmd_export(args):
@@ -436,7 +446,7 @@ def cmd_export(args):
     exclusion_rules_path = getattr(args, "exclude_rules", None)
 
     if not os.path.isdir(base_dir):
-        _die(f"Claude Code projects directory not found: {base_dir}")
+        _die(ErrorCode.INTERNAL_ERROR, detail=f"Claude Code projects directory not found: {base_dir}")
 
     rules = load_rules(resolve_exclusion_rules_path(exclusion_rules_path))
 
@@ -447,7 +457,7 @@ def cmd_export(args):
     if session_filter:
         filepath = _find_session(session_filter, base_dir)
         if not filepath:
-            _die(f"Session not found: {session_filter}")
+            _die(ErrorCode.SESSION_NOT_FOUND, detail=session_filter)
         session = parse_session(filepath)
         stats = compute_stats(session)
         _export_single(session, stats, fmt, out_dir)
@@ -465,8 +475,12 @@ def cmd_export(args):
 
     skipped_mtime_unchanged = 0
 
-    def _on_export_error(sid: str, exc: Exception) -> None:
-        print(f"  Warning: failed to export {sid}: {exc}", file=sys.stderr)
+    def _on_export_error(failure: ExportFailure) -> None:
+        print(
+            f"  Warning: failed to export {failure.session_id}: "
+            f"{failure.code.value} — {failure.message}",
+            file=sys.stderr,
+        )
 
     collect_sink = NoopSink()
     export_result = run_bulk_export(
@@ -694,8 +708,11 @@ def _find_session(session_id: str, base_dir: str) -> str | None:
         return matches[0]["path"]
     if len(matches) > 1:
         _die(
-            f"Ambiguous prefix '{session_id}' matches {len(matches)} sessions:\n"
-            + "\n".join(f"  {m['id']}" for m in matches)
+            ErrorCode.SESSION_NOT_FOUND,
+            detail=(
+                f"Ambiguous prefix '{session_id}' matches {len(matches)} sessions:\n"
+                + "\n".join(f"  {m['id']}" for m in matches)
+            ),
         )
     return None
 
@@ -740,8 +757,10 @@ def _save_state(sessions: dict, count: int, out_dir: str):
         atomic_write_export_state(disk, STATE_FILE)
 
 
-def _die(msg: str):
-    print(f"Error: {msg}", file=sys.stderr)
+def _die(code: ErrorCode, *, detail: str | None = None) -> None:
+    print(f"Error: {code.value} — {failure_message_for_code(code)}", file=sys.stderr)
+    if detail:
+        print(detail, file=sys.stderr)
     sys.exit(1)
 
 

@@ -146,8 +146,13 @@ def bulk_export() -> FlaskReturn:
 
     buf = io.BytesIO()
 
-    def _on_export_error(sid: str, exc: Exception) -> None:
-        current_app.logger.warning("Failed to export %s: %s", sid[:10], exc)
+    def _on_export_error(failure: ExportFailure) -> None:
+        current_app.logger.warning(
+            "Failed to export %s: %s — %s",
+            failure.session_id[:10],
+            failure.code.value,
+            failure.message,
+        )
 
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         result = run_bulk_export(

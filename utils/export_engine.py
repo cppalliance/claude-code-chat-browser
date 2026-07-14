@@ -7,6 +7,7 @@ import posixpath
 import zipfile
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
+from collections import Counter
 from typing import Any, Callable, Literal, Protocol
 
 from models.error_codes import ErrorCode
@@ -87,7 +88,29 @@ def failure_message_for_code(code: ErrorCode) -> str:
         return "Failed to parse session"
     if code == ErrorCode.INTERNAL_ERROR:
         return "Failed to export session"
+    if code == ErrorCode.SESSION_NOT_FOUND:
+        return "Session not found"
+    if code == ErrorCode.EXPORT_ALL_FAILED:
+        return "All sessions failed to export"
     return "Export failed"
+
+
+def dominant_failure_code(failures: list[ExportFailure]) -> ErrorCode:
+    """Return the most common structured failure code in a bulk export run."""
+    if not failures:
+        msg = "failures must not be empty"
+        raise ValueError(msg)
+    counts = Counter(item.code for item in failures)
+    return counts.most_common(1)[0][0]
+
+
+def bulk_export_exit_code(result: BulkExportResult) -> int:
+    """Map structured bulk-export failures to CLI POSIX exit code (0/1/2)."""
+    if not result.failures:
+        return 0
+    if result.exported_session_count == 0:
+        return 1
+    return 2
 
 
 @dataclass
@@ -280,7 +303,7 @@ def run_bulk_export(
     fmt: ExportFormat = "md",
     path_layout: PathLayout = "api",
     manifest_style: ManifestStyle | None = None,
-    on_export_error: Callable[[str, Exception], None] | None = None,
+    on_export_error: Callable[[ExportFailure], None] | None = None,
 ) -> BulkExportResult:
     """Run the shared bulk-export session loop.
 
@@ -305,15 +328,14 @@ def run_bulk_export(
         phase: Literal["parse", "export"] = "parse",
     ) -> None:
         code = failure_code_for_exception(exc, phase=phase)
-        result.failures.append(
-            ExportFailure(
-                session_id=sid,
-                message=failure_message_for_code(code),
-                code=code,
-            )
+        failure = ExportFailure(
+            session_id=sid,
+            message=failure_message_for_code(code),
+            code=code,
         )
+        result.failures.append(failure)
         if on_export_error is not None:
-            on_export_error(sid, exc)
+            on_export_error(failure)
 
     def _export_parsed(
         project: ProjectDict,
