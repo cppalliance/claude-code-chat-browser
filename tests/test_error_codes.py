@@ -149,4 +149,4 @@ def test_cli_ambiguous_session_prefix_surfaces_code(tmp_path) -> None:
     proc = _run_cli(["stats", "--base-dir", str(base), "--session", "session_aaa"])
     assert proc.returncode == 1
     assert "SESSION_AMBIGUOUS_PREFIX" in proc.stderr
-    assert "SESSION_NOT_FOUND" not in proc.stderr.split("SESSION_AMBIGUOUS_PREFIX")[0]
+    assert "SESSION_NOT_FOUND" not in proc.stderr

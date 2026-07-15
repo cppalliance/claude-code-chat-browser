@@ -78,9 +78,9 @@ def _parse_frontend_tool_result_renderers(path: Path) -> frozenset[str]:
 
 
 def _parse_top_level_function_body(text: str, func_name: str) -> str:
-    """Slice a module-level ``def`` through the next top-level ``def`` (if any)."""
+    """Slice a module-level ``def`` through the next top-level ``def`` or EOF."""
     match = re.search(
-        rf"^def {re.escape(func_name)}\(.*?(?=^\ndef )",
+        rf"^def {re.escape(func_name)}\(.*?(?=^\ndef |\Z)",
         text,
         re.DOTALL | re.MULTILINE,
     )
