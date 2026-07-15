@@ -77,10 +77,24 @@ def _parse_frontend_tool_result_renderers(path: Path) -> frozenset[str]:
     return _parse_frontend_registry_keys(path, "export const TOOL_RESULT_RENDERERS = {")
 
 
+def _parse_top_level_function_body(text: str, func_name: str) -> str:
+    """Slice a module-level ``def`` through the next top-level ``def`` (if any)."""
+    match = re.search(
+        rf"^def {re.escape(func_name)}\(.*?(?=^\ndef )",
+        text,
+        re.DOTALL | re.MULTILINE,
+    )
+    if not match:
+        msg = f"Could not find {func_name!r} in module"
+        raise ValueError(msg)
+    return match.group(0)
+
+
 def _parse_dispatch_builder_result_types(path: Path) -> frozenset[str]:
     """Extract ``result_type`` literals from tool-result dispatch builders."""
     text = path.read_text(encoding="utf-8")
     types = set(re.findall(r'result\["result_type"\]\s*=\s*"([^"]+)"', text))
+    # "unknown" is the dispatch fallback when no builder sets result_type; no renderer.
     types.discard("unknown")
     return frozenset(types)
 
@@ -88,30 +102,14 @@ def _parse_dispatch_builder_result_types(path: Path) -> frozenset[str]:
 def _parse_md_exporter_tool_result_handlers(path: Path) -> frozenset[str]:
     """Extract ``result_type`` values handled by ``_render_tool_result`` branches."""
     text = path.read_text(encoding="utf-8")
-    match = re.search(
-        r"def _render_tool_result\(.*?(?=\ndef _render_system)",
-        text,
-        re.DOTALL,
-    )
-    if not match:
-        msg = f"Could not find _render_tool_result in {path}"
-        raise ValueError(msg)
-    body = match.group(0)
+    body = _parse_top_level_function_body(text, "_render_tool_result")
     return frozenset(re.findall(r'(?:if|elif) rt == "([^"]+)"', body))
 
 
 def _parse_md_exporter_tool_use_handlers(path: Path) -> frozenset[str]:
     """Extract tool names handled by ``_render_tool_use`` if/elif branches."""
     text = path.read_text(encoding="utf-8")
-    match = re.search(
-        r"def _render_tool_use\(.*?(?=\ndef _render_tool_result)",
-        text,
-        re.DOTALL,
-    )
-    if not match:
-        msg = f"Could not find _render_tool_use in {path}"
-        raise ValueError(msg)
-    body = match.group(0)
+    body = _parse_top_level_function_body(text, "_render_tool_use")
     names = set(re.findall(r'(?:if|elif) name == "([^"]+)"', body))
     for tuple_match in re.finditer(r"elif name in \(([^)]+)\)", body):
         names.update(re.findall(r'"([^"]+)"', tuple_match.group(1)))
