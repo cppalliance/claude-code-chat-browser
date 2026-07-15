@@ -71,10 +71,10 @@ def _parse_frontend_registry_keys(path: Path, marker: str) -> frozenset[str]:
 def adjacent_top_level_defs_source() -> str:
     """Module text with no blank line between two top-level ``def`` blocks."""
     return (
-        'def _render_tool_result(parsed):\n'
+        "def _render_tool_result(parsed):\n"
         '    rt = "bash"\n'
         '    if rt == "bash":\n'
-        '        pass\n'
+        "        pass\n"
         "def _render_system(msg):\n"
         '    return "next"\n'
     )
@@ -116,11 +116,7 @@ def test_parse_top_level_function_body_stops_at_adjacent_def(
 
 
 def test_parse_top_level_function_body_stops_at_eof() -> None:
-    source = (
-        "def _render_tool_result(parsed):\n"
-        '    if rt == "grep":\n'
-        "        pass\n"
-    )
+    source = 'def _render_tool_result(parsed):\n    if rt == "grep":\n        pass\n'
     body = _parse_top_level_function_body(source, "_render_tool_result")
     handlers = frozenset(re.findall(r'(?:if|elif) rt == "([^"]+)"', body))
     assert handlers == frozenset({"grep"})
