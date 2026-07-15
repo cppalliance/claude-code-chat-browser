@@ -67,6 +67,19 @@ def _parse_frontend_registry_keys(path: Path, marker: str) -> frozenset[str]:
     return frozenset(keys)
 
 
+@pytest.fixture
+def adjacent_top_level_defs_source() -> str:
+    """Module text with no blank line between two top-level ``def`` blocks."""
+    return (
+        'def _render_tool_result(parsed):\n'
+        '    rt = "bash"\n'
+        '    if rt == "bash":\n'
+        '        pass\n'
+        "def _render_system(msg):\n"
+        '    return "next"\n'
+    )
+
+
 def _parse_frontend_tool_use_renderers(path: Path) -> frozenset[str]:
     """Extract ``TOOL_USE_RENDERERS`` keys."""
     return _parse_frontend_registry_keys(path, "export const TOOL_USE_RENDERERS = {")
@@ -80,7 +93,7 @@ def _parse_frontend_tool_result_renderers(path: Path) -> frozenset[str]:
 def _parse_top_level_function_body(text: str, func_name: str) -> str:
     """Slice a module-level ``def`` through the next top-level ``def`` or EOF."""
     match = re.search(
-        rf"^def {re.escape(func_name)}\(.*?(?=^\ndef |\Z)",
+        rf"^def {re.escape(func_name)}\(.*?(?=^def |\Z)",
         text,
         re.DOTALL | re.MULTILINE,
     )
@@ -88,6 +101,29 @@ def _parse_top_level_function_body(text: str, func_name: str) -> str:
         msg = f"Could not find {func_name!r} in module"
         raise ValueError(msg)
     return match.group(0)
+
+
+def test_parse_top_level_function_body_stops_at_adjacent_def(
+    adjacent_top_level_defs_source: str,
+) -> None:
+    body = _parse_top_level_function_body(
+        adjacent_top_level_defs_source,
+        "_render_tool_result",
+    )
+    handlers = frozenset(re.findall(r'(?:if|elif) rt == "([^"]+)"', body))
+    assert handlers == frozenset({"bash"})
+    assert "_render_system" not in body
+
+
+def test_parse_top_level_function_body_stops_at_eof() -> None:
+    source = (
+        "def _render_tool_result(parsed):\n"
+        '    if rt == "grep":\n'
+        "        pass\n"
+    )
+    body = _parse_top_level_function_body(source, "_render_tool_result")
+    handlers = frozenset(re.findall(r'(?:if|elif) rt == "([^"]+)"', body))
+    assert handlers == frozenset({"grep"})
 
 
 def _parse_dispatch_builder_result_types(path: Path) -> frozenset[str]:
