@@ -2,6 +2,8 @@
 
 Thanks for considering a patch. This repo is a small Flask app plus a hash-routed SPA and a CLI export script. Keep changes focused and tested.
 
+**New contributors:** start with [`docs/onboarding.md`](docs/onboarding.md) for a first-PR walkthrough, suggested reading order, full CI gate commands, and good-first-issue pointers.
+
 ## Development setup
 
 ### Prerequisites

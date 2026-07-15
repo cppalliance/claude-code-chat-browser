@@ -1,0 +1,10 @@
+# Code owners — auto-requested as reviewers on matching paths.
+# Last match wins; see https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Review owners (development + code review): @clean6378-max-it (Chen), @timon0305 (Zilin)
+# Both are write collaborators on this repo.
+#
+# Final approval, merge sequencing, and no-self-merge rules are enforced by branch
+# protection / automation, not by listing additional owners here.
+
+*                       @clean6378-max-it @timon0305
