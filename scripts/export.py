@@ -24,7 +24,7 @@ import os
 import sys
 import zipfile
 from datetime import datetime
-from typing import cast
+from typing import NoReturn, cast
 
 # Allow running from repo root or scripts/ directory
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -182,11 +182,7 @@ def cmd_list(args):
     base_dir = getattr(args, "base_dir", None) or get_claude_projects_dir()
     project_filter = getattr(args, "project", None)
 
-    if not os.path.isdir(base_dir):
-        _die(
-            ErrorCode.INTERNAL_ERROR,
-            detail=f"Claude Code projects directory not found: {base_dir}",
-        )
+    _require_projects_dir(base_dir)
 
     projects = list_projects(base_dir)
     if project_filter:
@@ -249,11 +245,7 @@ def cmd_stats(args):
     session_id = getattr(args, "session", None)
     fmt = getattr(args, "format", "text") or "text"
 
-    if not os.path.isdir(base_dir):
-        _die(
-            ErrorCode.INTERNAL_ERROR,
-            detail=f"Claude Code projects directory not found: {base_dir}",
-        )
+    _require_projects_dir(base_dir)
 
     if session_id:
         _session_stats(session_id, base_dir, fmt)
@@ -459,11 +451,7 @@ def cmd_export(args):
     session_filter = getattr(args, "session", None)
     exclusion_rules_path = getattr(args, "exclude_rules", None)
 
-    if not os.path.isdir(base_dir):
-        _die(
-            ErrorCode.INTERNAL_ERROR,
-            detail=f"Claude Code projects directory not found: {base_dir}",
-        )
+    _require_projects_dir(base_dir)
 
     rules = load_rules(resolve_exclusion_rules_path(exclusion_rules_path))
 
@@ -725,7 +713,7 @@ def _find_session(session_id: str, base_dir: str) -> str | None:
         return matches[0]["path"]
     if len(matches) > 1:
         _die(
-            ErrorCode.SESSION_NOT_FOUND,
+            ErrorCode.SESSION_AMBIGUOUS_PREFIX,
             detail=(
                 f"Ambiguous prefix '{session_id}' matches {len(matches)} sessions:\n"
                 + "\n".join(f"  {m['id']}" for m in matches)
@@ -774,6 +762,14 @@ def _save_state(sessions: dict, count: int, out_dir: str):
         atomic_write_export_state(disk, STATE_FILE)
 
 
+def _require_projects_dir(base_dir: str) -> None:
+    if not os.path.isdir(base_dir):
+        _die(
+            ErrorCode.PROJECTS_DIR_NOT_FOUND,
+            detail=f"Claude Code projects directory not found: {base_dir}",
+        )
+
+
 def _cli_die_message(code: ErrorCode) -> str:
     """Stable CLI stderr label (not export-scoped)."""
     if code == ErrorCode.INTERNAL_ERROR:
@@ -781,7 +777,7 @@ def _cli_die_message(code: ErrorCode) -> str:
     return failure_message_for_code(code)
 
 
-def _die(code: ErrorCode, *, detail: str | None = None) -> None:
+def _die(code: ErrorCode, *, detail: str | None = None) -> NoReturn:
     print(f"Error: {code.value} — {_cli_die_message(code)}", file=sys.stderr)
     if detail:
         print(detail, file=sys.stderr)

@@ -11,7 +11,7 @@ import scripts.export as export_cli
 from api.error_codes import ErrorCode
 from api.search import _IndexSearchOutcome
 from tests.conftest import assert_error_response
-from tests.test_cli_e2e import _run_cli
+from tests.test_cli_e2e import FIXTURES, _run_cli
 
 
 @pytest.mark.parametrize(
@@ -100,9 +100,9 @@ def test_search_index_unavailable_code(client_single, monkeypatch):
 @pytest.mark.parametrize(
     "argv,code",
     [
-        (["export", "--base-dir"], "INTERNAL_ERROR"),
-        (["stats", "--base-dir"], "INTERNAL_ERROR"),
-        (["list", "--base-dir"], "INTERNAL_ERROR"),
+        (["export", "--base-dir"], "PROJECTS_DIR_NOT_FOUND"),
+        (["stats", "--base-dir"], "PROJECTS_DIR_NOT_FOUND"),
+        (["list", "--base-dir"], "PROJECTS_DIR_NOT_FOUND"),
     ],
 )
 def test_cli_missing_projects_dir_surfaces_error_code(tmp_path, argv: list[str], code: str) -> None:
@@ -110,8 +110,9 @@ def test_cli_missing_projects_dir_surfaces_error_code(tmp_path, argv: list[str],
     proc = _run_cli([*argv, str(missing)])
     assert proc.returncode == 1
     assert code in proc.stderr
+    assert "Claude projects directory not found" in proc.stderr
     assert "Failed to export session" not in proc.stderr
-    assert "Command failed" in proc.stderr
+    assert "Command failed" not in proc.stderr
     assert "Traceback" not in proc.stderr
 
 
@@ -134,3 +135,18 @@ def test_cli_export_session_not_found_surfaces_code(tmp_path, capsys) -> None:
     assert exc_info.value.code == 1
     captured = capsys.readouterr()
     assert "SESSION_NOT_FOUND" in captured.err
+
+
+def test_cli_ambiguous_session_prefix_surfaces_code(tmp_path) -> None:
+    base = tmp_path / "projects"
+    project = base / "test-project"
+    project.mkdir(parents=True)
+    content = (FIXTURES / "session_minimal.jsonl").read_text(encoding="utf-8")
+    content = content.replace("demo-project", "test-project")
+    (project / "session_aaa111.jsonl").write_text(content, encoding="utf-8")
+    (project / "session_aaa222.jsonl").write_text(content, encoding="utf-8")
+
+    proc = _run_cli(["stats", "--base-dir", str(base), "--session", "session_aaa"])
+    assert proc.returncode == 1
+    assert "SESSION_AMBIGUOUS_PREFIX" in proc.stderr
+    assert "SESSION_NOT_FOUND" not in proc.stderr.split("SESSION_AMBIGUOUS_PREFIX")[0]

@@ -90,6 +90,10 @@ def failure_message_for_code(code: ErrorCode) -> str:
         return "Failed to export session"
     if code == ErrorCode.SESSION_NOT_FOUND:
         return "Session not found"
+    if code == ErrorCode.SESSION_AMBIGUOUS_PREFIX:
+        return "Session prefix matches more than one session"
+    if code == ErrorCode.PROJECTS_DIR_NOT_FOUND:
+        return "Claude projects directory not found"
     if code == ErrorCode.EXPORT_ALL_FAILED:
         return "All sessions failed to export"
     return "Export failed"
