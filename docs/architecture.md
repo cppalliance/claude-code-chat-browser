@@ -145,7 +145,7 @@ No bundler step — modern browsers load modules directly. Frontend unit tests u
 
 ## Search index (FTS5) — locks and threading
 
-`utils/search_index.py` maintains a local SQLite FTS5 index under `~/.claude-code-chat-browser/` (override with `CLAUDE_CODE_CHAT_BROWSER_SEARCH_INDEX_DIR`). Session JSONL on disk remains the source of truth; `GET /api/search` can fall back to a live scan when the index is missing, stale, or temporarily locked during rebuild.
+`utils/search_index.py` maintains a local SQLite FTS5 index under `~/.claude-code-chat-browser/` (override with `CLAUDE_CODE_CHAT_BROWSER_SEARCH_INDEX_DIR`). Session JSONL on disk remains the source of truth; `GET /api/search` can fall back to a live scan when the index is missing, stale, or when a query returns `index_locked` after `sqlite3.OperationalError`.
 
 ### Threading model
 
@@ -153,9 +153,9 @@ No bundler step — modern browsers load modules directly. Frontend unit tests u
 |------|-----|------|
 | **Readers** | Flask request threads (and synchronous callers such as `ensure_search_index` on the first request path) | Open the **active** index DB read-only via `_resolve_active_index_db_path()`; `query_index_hits` does not take any module `threading.Lock`. |
 | **Writer** | One daemon thread (`search-index-refresh`, started from `start_search_index_background` in `app.py`) | Periodically calls `ensure_search_index` → `build_search_index` when the projects fingerprint changes. |
-| **Publish** | Writer, at end of a successful rebuild | `_publish_active_index` writes a new `search_index.<id>.sqlite`, atomically replaces `search_index.active` (write temp + `Path.replace`), then prunes older DB files. Readers always open whichever DB name the pointer names — they see the **previous** or **new** index, never a half-written DB file. |
+| **Publish** | Writer, at end of a successful rebuild | `_publish_active_index` writes the new DB basename to `search_index.active.tmp`, then tries `Path.replace` onto `search_index.active`. On `OSError`, it falls back to `pointer.write_text` (not rename-atomic on every platform). Readers resolve the active **SQLite file** by name from the pointer; sidecar DB files are fully committed before publish. After a successful `replace`, readers see the previous or new complete DB, not a half-written SQLite file. The direct-write fallback can briefly expose a partially written pointer file, so treat `replace` as the normal path. |
 
-Rebuild work happens on a **new** SQLite file; the active pointer switches only after the new file is committed. Concurrent FTS reads against the old file may fail with `sqlite3.OperationalError` (for example database locked); `query_index_hits` surfaces that as `index_locked=True` so `/api/search` can degrade to live scan instead of returning a silent empty success.
+Rebuild work happens on a **new** SQLite file while the prior active DB file stays on disk until publish; that isolation does **not** by itself lock the old database or force readers onto the in-progress file. Separately, `query_index_hits` maps `sqlite3.OperationalError` from the FTS query (for example `database is locked` on the DB it opened) to `index_locked=True` so `/api/search` can degrade to live scan — that flag is a **query-time classification** for fallback, not proof that a rebuild is in progress. Concurrency tests should assert both behaviors without conflating them.
 
 ### Lock inventory
 
@@ -174,7 +174,7 @@ Four module-level synchronization primitives guard index lifecycle and caches (`
 - `_index_lock` — held briefly while deciding whether to start the daemon and while resetting test state; may call `_try_acquire_cross_process_background_lock` while held.
 - `_background_lock_fd` — non-blocking exclusive flock/msvcrt lock; failure means another process already owns background refresh for this cache dir.
 - `_usability_cache_lock` — `index_is_usable` and `_clear_usability_cache`.
-- `_publish_active_index` — pointer swap + `_prune_stale_index_files` (no module lock; relies on atomic pointer replace and build serialization).
+- `_publish_active_index` — pointer update (`replace` with `write_text` fallback) + `_prune_stale_index_files` (no module lock; build serialization via `_index_build_lock`).
 
 ### Lock-acquisition contract (must stay so)
 
