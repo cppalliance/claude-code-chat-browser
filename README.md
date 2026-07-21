@@ -81,7 +81,7 @@ The FTS search index (`utils/search_index.py`) assumes **a single Python process
 
 **Do not run multiple Gunicorn/uWSGI workers** (`gunicorn -w 2`, etc.) against one operator-facing deployment. Requests will hit different processes with divergent cache state; only one worker runs background refresh; index freshness and `index_locked` / live-scan fallback become nondeterministic. Use **`--workers 1`** (or run `python app.py`) for supported behavior. For horizontal scale, run separate single-worker instances with disjoint `CLAUDE_CODE_CHAT_BROWSER_SEARCH_INDEX_DIR` and workspace paths — not multiple workers behind one load balancer on the same paths.
 
-Disable the index entirely with `CLAUDE_CODE_CHAT_BROWSER_NO_SEARCH_INDEX=1` if you only need live JSONL scan (slower, but avoids index files).
+Set `CLAUDE_CODE_CHAT_BROWSER_NO_SEARCH_INDEX=1` to skip building and querying the FTS index (live JSONL scan only; slower). Existing files under the search index directory are left on disk.
 
 ### CLI Export
 
