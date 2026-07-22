@@ -15,6 +15,7 @@ import pytest
 from api.search import _resolve_search_results, _search_via_index
 from tests.test_search_index import _index_patches, _write_session
 from utils.search_index import (
+    IndexQueryResult,
     build_search_index,
     query_index_hits,
     reset_background_for_tests,
@@ -59,7 +60,7 @@ def indexed_tree(tmp_path, monkeypatch):
         }
 
 
-def _assert_sentinel_reader_result(term: str, result: dict[str, object]) -> None:
+def _assert_sentinel_reader_result(term: str, result: IndexQueryResult) -> None:
     if result["index_locked"]:
         return
     if not result["query_ok"]:
@@ -95,7 +96,7 @@ def _lock_events_satisfy_documented_contract(
 
 
 def _record_lock_events_during_build(
-    cache_root,
+    cache_root: Path,
     projects: str,
 ) -> list[tuple[str, str]]:
     import utils.search_index as si
@@ -168,8 +169,7 @@ class TestSearchIndexConcurrency:
 
         with patches[0]:
             threads = [
-                threading.Thread(target=reader, name=f"reader-{i}")
-                for i in range(_READER_THREADS)
+                threading.Thread(target=reader, name=f"reader-{i}") for i in range(_READER_THREADS)
             ]
             threads.append(threading.Thread(target=writer, name="writer"))
             for thread in threads:
@@ -203,9 +203,7 @@ class TestSearchIndexConcurrency:
                 for i in range(5):
                     if stop.is_set():
                         break
-                    session_path = (
-                        Path(projects) / "demo-proj" / f"session_bg_{i}.jsonl"
-                    )
+                    session_path = Path(projects) / "demo-proj" / f"session_bg_{i}.jsonl"
                     _write_session(
                         session_path,
                         [
@@ -309,7 +307,9 @@ class TestSearchIndexConcurrency:
             )
         assert len(hits) >= 1
 
-    def test_search_via_index_returns_partial_hits_when_locked_after_batch(self, indexed_tree) -> None:
+    def test_search_via_index_returns_partial_hits_when_locked_after_batch(
+        self, indexed_tree
+    ) -> None:
         patches = _index_patches(indexed_tree["cache_root"])
         fake_hit = {
             "session_id": "session_alpha",
