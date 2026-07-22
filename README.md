@@ -71,7 +71,7 @@ python app.py --base-dir /path/to/claude/projects
 > The server **refuses to start** if `--debug` is combined with a non-loopback `--host` (e.g. `0.0.0.0`).
 > That check runs only when you start the app with **`python app.py`** (not via `flask run` or other WSGI entrypoints).
 
-#### Deployment — WSGI workers
+#### Deployment: WSGI workers
 
 The FTS search index (`utils/search_index.py`) assumes **a single Python process** serves the app:
 

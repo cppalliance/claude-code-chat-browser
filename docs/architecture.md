@@ -191,7 +191,7 @@ The four primitives are **not nested arbitrarily**. New code must preserve this 
 
 The design targets **one WSGI worker process** (for example `python app.py` or `gunicorn --workers 1`). That gives one in-process writer thread, one advisory-lock owner, and consistent in-memory usability cache per operator session.
 
-See [Deployment — WSGI workers](../README.md#deployment-wsgi-workers) in the README for multi-worker warnings.
+See [Deployment: WSGI workers](../README.md#deployment-wsgi-workers) in the README for multi-worker warnings.
 
 ## What this codebase is not
 
