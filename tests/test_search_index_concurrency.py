@@ -13,10 +13,11 @@ from unittest.mock import patch
 import pytest
 
 from api.search import _resolve_search_results, _search_via_index
-from tests.test_search_index import _index_patches, _write_session
+from tests.conftest import index_patches as _index_patches, write_session as _write_session
 from utils.search_index import (
     IndexQueryResult,
     build_search_index,
+    ensure_search_index,
     query_index_hits,
     reset_background_for_tests,
     start_search_index_background,
@@ -27,6 +28,28 @@ _READER_THREADS = 4
 _BARRIER_TIMEOUT_S = 45.0
 _ABSENT_TERM = "concurrency-absent-token-xyzzy-999"
 _BACKGROUND_POLL_S = 1
+_BACKGROUND_MUTATOR_ITERATIONS = 12
+_BACKGROUND_MUTATOR_SLEEP_S = 0.25
+_BACKGROUND_THREAD_JOIN_TIMEOUT_S = 12.0
+_BACKGROUND_REFRESH_WAIT_S = 8.0
+_MIN_BACKGROUND_REFRESHES = 2
+
+# A locked index reports no hits with query_ok False; used to drive the
+# live-scan fallback paths in api.search.
+_LOCKED_PAYLOAD: IndexQueryResult = {
+    "hits": [],
+    "query_ok": False,
+    "sql_rows_fetched": 0,
+    "sql_exhausted": True,
+    "index_locked": True,
+}
+
+
+@pytest.fixture(autouse=True)
+def _isolate_search_index_background_worker():
+    reset_background_for_tests()
+    yield
+    reset_background_for_tests()
 
 
 @pytest.fixture
@@ -185,6 +208,15 @@ class TestSearchIndexConcurrency:
         projects = indexed_tree["projects"]
         patches = _index_patches(indexed_tree["cache_root"])
 
+        refresh_lock = threading.Lock()
+        refresh_count = 0
+
+        def _counting_ensure(*args: object, **kwargs: object) -> None:
+            nonlocal refresh_count
+            with refresh_lock:
+                refresh_count += 1
+            ensure_search_index(*args, **kwargs)  # type: ignore[arg-type]
+
         def reader() -> None:
             try:
                 while not stop.is_set():
@@ -200,7 +232,7 @@ class TestSearchIndexConcurrency:
 
         def mutator() -> None:
             try:
-                for i in range(5):
+                for i in range(_BACKGROUND_MUTATOR_ITERATIONS):
                     if stop.is_set():
                         break
                     session_path = Path(projects) / "demo-proj" / f"session_bg_{i}.jsonl"
@@ -221,25 +253,57 @@ class TestSearchIndexConcurrency:
                             },
                         ],
                     )
-                    time.sleep(0.15)
+                    time.sleep(_BACKGROUND_MUTATOR_SLEEP_S)
             except BaseException as exc:
                 errors.append(exc)
             finally:
                 stop.set()
 
+        def _bg_term_visible() -> bool:
+            # A term only present in a mutator-written session becomes queryable
+            # once the background worker rebuilds the index and swaps the pointer.
+            result = query_index_hits(
+                f"{indexed_tree['term']} bg0",
+                since_ms=None,
+                max_results=10,
+            )
+            return result["query_ok"] and bool(result["hits"])
+
         with patches[0]:
-            reset_background_for_tests()
-            start_search_index_background(projects, [], poll_seconds=_BACKGROUND_POLL_S)
-            threads = [
-                threading.Thread(target=reader, name="reader"),
-                threading.Thread(target=mutator, name="mutator"),
-            ]
-            for thread in threads:
-                thread.start()
-            for thread in threads:
-                thread.join(timeout=8.0)
-                assert not thread.is_alive()
-            reset_background_for_tests()
+            try:
+                reset_background_for_tests()
+                with patch(
+                    "utils.search_index.ensure_search_index",
+                    side_effect=_counting_ensure,
+                ):
+                    start_search_index_background(projects, [], poll_seconds=_BACKGROUND_POLL_S)
+                    threads = [
+                        threading.Thread(target=reader, name="reader"),
+                        threading.Thread(target=mutator, name="mutator"),
+                    ]
+                    for thread in threads:
+                        thread.start()
+                    for thread in threads:
+                        thread.join(timeout=_BACKGROUND_THREAD_JOIN_TIMEOUT_S)
+                        assert not thread.is_alive()
+
+                    deadline = time.monotonic() + _BACKGROUND_REFRESH_WAIT_S
+                    bg_visible = False
+                    while time.monotonic() < deadline:
+                        if _bg_term_visible():
+                            bg_visible = True
+                            break
+                        time.sleep(0.05)
+
+                assert bg_visible, "background worker never rebuilt index with new sessions"
+                with refresh_lock:
+                    observed = refresh_count
+                assert observed >= _MIN_BACKGROUND_REFRESHES, (
+                    f"expected at least {_MIN_BACKGROUND_REFRESHES} background "
+                    f"refreshes, observed {observed}"
+                )
+            finally:
+                reset_background_for_tests()
         assert not errors, errors
 
     def test_documented_lock_order_during_build(self, indexed_tree) -> None:
@@ -286,16 +350,9 @@ class TestSearchIndexConcurrency:
 
     def test_index_locked_without_hits_falls_back_to_live_scan(self, indexed_tree) -> None:
         patches = _index_patches(indexed_tree["cache_root"])
-        locked_payload = {
-            "hits": [],
-            "query_ok": False,
-            "sql_rows_fetched": 0,
-            "sql_exhausted": True,
-            "index_locked": True,
-        }
         with (
             patches[0],
-            patch("api.search.query_index_hits", return_value=locked_payload),
+            patch("api.search.query_index_hits", return_value=_LOCKED_PAYLOAD),
         ):
             hits = _resolve_search_results(
                 indexed_tree["projects"],
@@ -333,13 +390,7 @@ class TestSearchIndexConcurrency:
                     "sql_exhausted": False,
                     "index_locked": False,
                 }
-            return {
-                "hits": [],
-                "query_ok": False,
-                "sql_rows_fetched": 0,
-                "sql_exhausted": True,
-                "index_locked": True,
-            }
+            return dict(_LOCKED_PAYLOAD)
 
         with (
             patches[0],

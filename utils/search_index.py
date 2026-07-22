@@ -58,10 +58,15 @@ _index_lock = threading.Lock()
 _index_build_lock = threading.Lock()
 _background_started = False
 _background_lock_fd: int | None = None
+_background_stop = threading.Event()
+_background_thread: threading.Thread | None = None
 _usability_cache: dict[tuple[str, str], tuple[bool, float]] = {}
 _usability_cache_lock = threading.Lock()
 _USABILITY_CACHE_TTL_SECONDS = 30.0
 _FTS_BATCH_SIZE = 200
+_DEFAULT_TITLE = "Untitled Session"
+_ACTIVE_POINTER_NAME = "search_index.active"
+_BACKGROUND_JOIN_TIMEOUT_S = 10.0
 
 
 class IndexMessageHitDict(TypedDict):
@@ -81,6 +86,17 @@ class IndexQueryResult(TypedDict):
     sql_rows_fetched: int
     sql_exhausted: bool
     index_locked: bool
+
+
+def _empty_query_result(*, index_locked: bool = False) -> IndexQueryResult:
+    """Return a no-hits query result; ``index_locked`` distinguishes lock from empty."""
+    return {
+        "hits": [],
+        "query_ok": False,
+        "sql_rows_fetched": 0,
+        "sql_exhausted": True,
+        "index_locked": index_locked,
+    }
 
 
 def cache_dir() -> Path:
@@ -168,7 +184,7 @@ def search_snippet(text: str, query: str, *, context: int = 80) -> str:
 
 
 def _resolve_active_index_db_path() -> Path | None:
-    pointer = cache_dir() / "search_index.active"
+    pointer = cache_dir() / _ACTIVE_POINTER_NAME
     legacy = cache_dir() / "search_index.sqlite"
     if pointer.is_file():
         try:
@@ -187,7 +203,7 @@ def _resolve_active_index_db_path() -> Path | None:
 def _publish_active_index(new_db_path: Path) -> None:
     root = cache_dir()
     root.mkdir(parents=True, exist_ok=True)
-    pointer = root / "search_index.active"
+    pointer = root / _ACTIVE_POINTER_NAME
     pointer_tmp = pointer.with_suffix(".active.tmp")
     pointer_tmp.write_text(new_db_path.name, encoding="utf-8")
     try:
@@ -465,7 +481,7 @@ def _scan_session_file(
     filepath: str,
 ) -> tuple[str, str, int, int, float, list[tuple[str, str | None, RoleLiteral]]]:
     session_id = os.path.basename(filepath).replace(".jsonl", "")
-    title = "Untitled Session"
+    title = _DEFAULT_TITLE
     first_ms = 0
     last_ms = 0
     messages: list[tuple[str, str | None, RoleLiteral]] = []
@@ -491,7 +507,7 @@ def _scan_session_file(
                         first_ms = ms
                     last_ms = ms
 
-            if title == "Untitled Session" and entry.get("type") == "user":
+            if title == _DEFAULT_TITLE and entry.get("type") == "user":
                 msg = entry_message(entry)
                 text = extract_text(msg.get("content", []))
                 if text:
@@ -670,25 +686,28 @@ def start_search_index_background(
     poll_seconds: int = 60,
 ) -> None:
     """Kick off initial + periodic index refresh in a daemon thread."""
-    global _background_started
+    global _background_started, _background_thread
     if not index_search_enabled():
         return
+
+    def _worker() -> None:
+        while not _background_stop.is_set():
+            try:
+                ensure_search_index(projects_dir, rules)
+            except Exception:
+                _logger.exception("Background search index refresh failed")
+            if _background_stop.wait(timeout=poll_seconds):
+                break
+
     with _index_lock:
         if _background_started:
             return
         if not _try_acquire_cross_process_background_lock():
             return
         _background_started = True
-
-    def _worker() -> None:
-        while True:
-            try:
-                ensure_search_index(projects_dir, rules)
-            except Exception:
-                _logger.exception("Background search index refresh failed")
-            time.sleep(poll_seconds)
-
-    thread = threading.Thread(target=_worker, name="search-index-refresh", daemon=True)
+        _background_stop.clear()
+        thread = threading.Thread(target=_worker, name="search-index-refresh", daemon=True)
+        _background_thread = thread
     thread.start()
 
 
@@ -726,34 +745,16 @@ def query_index_hits(
 ) -> IndexQueryResult:
     """Return message hits from the FTS index (pre-exclusion, pre-snippet)."""
     if not query_lower or not index_search_enabled():
-        return {
-            "hits": [],
-            "query_ok": False,
-            "sql_rows_fetched": 0,
-            "sql_exhausted": True,
-            "index_locked": False,
-        }
+        return _empty_query_result()
 
     fts_q = _fts_match_query(query_lower)
     if not fts_q:
-        return {
-            "hits": [],
-            "query_ok": False,
-            "sql_rows_fetched": 0,
-            "sql_exhausted": True,
-            "index_locked": False,
-        }
+        return _empty_query_result()
 
     sql_limit = max(max_results, _FTS_BATCH_SIZE)
     with _index_db_conn(readonly=True) as conn:
         if conn is None:
-            return {
-                "hits": [],
-                "query_ok": False,
-                "sql_rows_fetched": 0,
-                "sql_exhausted": True,
-                "index_locked": False,
-            }
+            return _empty_query_result()
         try:
             rows = conn.execute(
                 "SELECT m.session_id, m.project_name, m.role, m.timestamp_ms, m.text,"
@@ -768,22 +769,10 @@ def query_index_hits(
             ).fetchall()
         except sqlite3.OperationalError as exc:
             _logger.debug("FTS query locked (%s); index may be rebuilding", exc)
-            return {
-                "hits": [],
-                "query_ok": False,
-                "sql_rows_fetched": 0,
-                "sql_exhausted": True,
-                "index_locked": True,
-            }
+            return _empty_query_result(index_locked=True)
         except sqlite3.Error as exc:
             _logger.debug("FTS query failed (%s); index may be rebuilding", exc)
-            return {
-                "hits": [],
-                "query_ok": False,
-                "sql_rows_fetched": 0,
-                "sql_exhausted": True,
-                "index_locked": False,
-            }
+            return _empty_query_result()
 
     hits: list[IndexMessageHitDict] = []
     rows_scanned = 0
@@ -799,7 +788,7 @@ def query_index_hits(
             IndexMessageHitDict(
                 session_id=row["session_id"],
                 project_name=row["project_name"],
-                title=row["title"] or "Untitled Session",
+                title=row["title"] or _DEFAULT_TITLE,
                 role=row["role"],
                 timestamp=ms_to_timestamp(ts_ms),
                 text=text,
@@ -820,14 +809,30 @@ def query_index_hits(
 
 
 def reset_background_for_tests() -> None:
-    """Allow tests to restart the background worker."""
-    global _background_started, _background_lock_fd
+    """Stop the background worker and allow tests to restart it."""
+    global _background_started, _background_lock_fd, _background_thread
+    _background_stop.set()
+    thread = _background_thread
+    worker_stopped = True
+    if thread is not None and thread.is_alive():
+        thread.join(timeout=_BACKGROUND_JOIN_TIMEOUT_S)
+        worker_stopped = not thread.is_alive()
+        if not worker_stopped:
+            _logger.warning(
+                "background search-index worker did not stop within %.0fs",
+                _BACKGROUND_JOIN_TIMEOUT_S,
+            )
     with _index_lock:
         _background_started = False
+        _background_thread = None
         if _background_lock_fd is not None:
             try:
                 os.close(_background_lock_fd)
             except OSError:
                 pass
             _background_lock_fd = None
+    # Leave the stop event set when the worker never terminated so it exits on
+    # its next loop check and no second worker races it; start() re-clears it.
+    if worker_stopped:
+        _background_stop.clear()
     _clear_usability_cache()

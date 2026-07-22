@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from contextlib import closing, contextmanager
 from datetime import UTC, datetime, timedelta
@@ -12,6 +11,7 @@ from unittest.mock import patch
 import pytest
 
 from api.search import _resolve_search_results, _search_via_index
+from tests.conftest import index_patches as _index_patches, write_session as _write_session
 from utils.exclusion_rules import load_rules
 from utils.search_index import (
     build_search_index,
@@ -24,17 +24,6 @@ from utils.search_index import (
     timestamp_to_ms,
     tool_result_searchable_text,
 )
-
-
-def _write_session(path: Path, lines: list[dict[str, object]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        for line in lines:
-            handle.write(json.dumps(line, ensure_ascii=False) + "\n")
-
-
-def _index_patches(cache_root: Path):
-    return (patch("utils.search_index.cache_dir", return_value=cache_root),)
 
 
 @pytest.fixture
@@ -381,11 +370,15 @@ class TestBypassAndBackground:
             patches[0],
             patch("utils.search_index.threading.Thread") as mock_thread,
         ):
+            # The mock worker is not a real thread; report it as stopped so the
+            # teardown reset does not treat it as a live worker that won't join.
+            mock_thread.return_value.is_alive.return_value = False
             start_search_index_background(indexed_tree["projects"], [])
             start_search_index_background(indexed_tree["projects"], [])
             assert mock_thread.call_count == 1
             assert mock_thread.call_args.kwargs.get("daemon") is True
             assert mock_thread.return_value.start.call_count == 1
+        reset_background_for_tests()
 
 
 class TestIndexSearchCompleteness:
