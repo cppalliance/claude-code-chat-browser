@@ -66,7 +66,7 @@
 3. User opens a project → `GET /api/projects/<name>/sessions` → full `parse_session()` per file, exclusion filter, summary rows.
 4. User opens a session → `GET /api/sessions/<project>/<id>` → full session JSON for the message panel.
 5. Optional: `GET /api/sessions/.../stats` for sidebar metrics without loading all messages.
-6. Search: `GET /api/search?q=...` scans all projects (brute force).
+6. Search: `GET /api/search?q=...` queries the local FTS index when usable, with live JSONL scan fallback (see [Search index](#search-index-fts5--locks-and-threading)).
 7. Export: `POST /api/export` or `GET /api/export/session/...` → Markdown/zip via exporters; state file updated on successful bulk export.
 
 ## Dispatch table
@@ -142,6 +142,56 @@ No bundler step — modern browsers load modules directly. Frontend unit tests u
 - `pytest` — full Python suite with coverage gate on `api/` + `utils/`
 - `integration-tests` — API integration subset + coverage artifact
 - `js-tests` — `npm ci` + vitest
+
+## Search index (FTS5) — locks and threading
+
+`utils/search_index.py` maintains a local SQLite FTS5 index under `~/.claude-code-chat-browser/` (override with `CLAUDE_CODE_CHAT_BROWSER_SEARCH_INDEX_DIR`). Session JSONL on disk remains the source of truth; `GET /api/search` can fall back to a live scan when the index is missing, stale, or when a query returns `index_locked` after `sqlite3.OperationalError`.
+
+### Threading model
+
+| Role | Who | What |
+|------|-----|------|
+| **Readers** | Flask request threads (`GET /api/search` via `query_index_hits`; `index_is_usable` for whether to use the index) | Open the **active** index DB read-only via `_resolve_active_index_db_path()`; `query_index_hits` does not take any module `threading.Lock`. No request handler calls `ensure_search_index` or `build_search_index`. |
+| **Writer** | One daemon thread (`search-index-refresh`, started from `start_search_index_background` in `app.py`) | Periodically calls `ensure_search_index` → `build_search_index` when the projects fingerprint changes. |
+| **Publish** | Writer, at end of a successful rebuild | `_publish_active_index` writes the new DB basename to `search_index.active.tmp`, then tries `Path.replace` onto `search_index.active`. On `OSError`, it falls back to `pointer.write_text` (not rename-atomic on every platform). Readers resolve the active **SQLite file** by name from the pointer; sidecar DB files are fully committed before publish. After a successful `replace`, readers see the previous or new complete DB, not a half-written SQLite file. The direct-write fallback can briefly expose a partially written pointer file, so treat `replace` as the normal path. |
+
+Rebuild work happens on a **new** SQLite file while the prior active DB file stays on disk until publish; that isolation does **not** by itself lock the old database or force readers onto the in-progress file. Separately, `query_index_hits` maps `sqlite3.OperationalError` from the FTS query (for example `database is locked` on the DB it opened) to `index_locked=True` so `/api/search` can degrade to live scan — that flag is a **query-time classification** for fallback, not proof that a rebuild is in progress. Concurrency tests should assert both behaviors without conflating them.
+
+### Lock inventory
+
+Four module-level synchronization primitives guard index lifecycle and caches (`utils/search_index.py`):
+
+| Primitive | Type | Guards |
+|-----------|------|--------|
+| `_index_lock` | `threading.Lock` | `_background_started` and startup/teardown of the background worker (`start_search_index_background`, `reset_background_for_tests`). |
+| `_index_build_lock` | `threading.Lock` | Entire `build_search_index` body — at most one rebuild at a time **in this process**. |
+| `_background_lock_fd` | OS advisory lock on `search_index.background.lock` | Cross-process **single background owner** for a shared index directory (`_try_acquire_cross_process_background_lock`). |
+| `_usability_cache_lock` | `threading.Lock` | In-memory `_usability_cache` used by `index_is_usable` and cleared after rebuild (`_clear_usability_cache`). |
+
+**Usage map (current code):**
+
+- `_index_build_lock` — wraps `build_search_index` (serializes rebuild and fingerprint short-circuit reads).
+- `_index_lock` — held briefly while deciding whether to start the daemon and while resetting test state; may call `_try_acquire_cross_process_background_lock` while held.
+- `_background_lock_fd` — non-blocking exclusive flock/msvcrt lock; failure means another process already owns background refresh for this cache dir.
+- `_usability_cache_lock` — `index_is_usable` and `_clear_usability_cache`.
+- `_publish_active_index` — pointer update (`replace` with `write_text` fallback) + `_prune_stale_index_files` (no module lock; build serialization via `_index_build_lock`).
+
+### Lock-acquisition contract (must stay so)
+
+The four primitives are **not nested arbitrarily**. New code must preserve this contract; the planned Week 30 concurrency suite (`tests/test_search_index_concurrency.py`, PR after this doc) will assert it and fail if lock order regresses.
+
+1. **`_index_lock`** may be taken alone, or together with acquiring the advisory background lock during `start_search_index_background`. Do **not** call `build_search_index` while holding `_index_lock`.
+2. **`_index_build_lock`** is taken only inside `build_search_index`. While held, code may open the active DB read-only and write a **new** sidecar SQLite file. The only permitted nested module lock is **`_usability_cache_lock`** via `_clear_usability_cache` at the end of a successful rebuild (`_index_build_lock` → `_usability_cache_lock`).
+3. **`_usability_cache_lock`** must never be held while waiting on `_index_build_lock` or `_index_lock`. Typical pattern: short cache read/update in `index_is_usable` without holding the build lock.
+4. **`_background_lock_fd`** is independent of the three `threading.Lock` instances except at startup: acquire the advisory lock only from `_try_acquire_cross_process_background_lock`, which is called under `_index_lock` once per process.
+
+**Forbidden:** holding `_usability_cache_lock` and then acquiring `_index_build_lock` or `_index_lock`; holding `_index_lock` across `build_search_index`; taking `_index_build_lock` from multiple threads without going through the existing `build_search_index` entry point.
+
+### Deployment assumptions
+
+The design targets **one WSGI worker process** (for example `python app.py` or `gunicorn --workers 1`). That gives one in-process writer thread, one advisory-lock owner, and consistent in-memory usability cache per operator session.
+
+See [Deployment: WSGI workers](../README.md#deployment-wsgi-workers) in the README for multi-worker warnings.
 
 ## What this codebase is not
 

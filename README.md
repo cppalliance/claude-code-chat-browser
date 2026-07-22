@@ -71,6 +71,18 @@ python app.py --base-dir /path/to/claude/projects
 > The server **refuses to start** if `--debug` is combined with a non-loopback `--host` (e.g. `0.0.0.0`).
 > That check runs only when you start the app with **`python app.py`** (not via `flask run` or other WSGI entrypoints).
 
+#### Deployment: WSGI workers
+
+The FTS search index (`utils/search_index.py`) assumes **a single Python process** serves the app:
+
+- One daemon thread rebuilds the index and publishes it by atomically swapping `search_index.active` (see [Search index — locks and threading](docs/architecture.md#search-index-fts5--locks-and-threading)).
+- Module-level locks and the in-memory usability cache are **per process**, not shared across workers.
+- A cross-process advisory lock (`search_index.background.lock`) ensures at most **one** background refresher per index directory on a host, but **does not** coordinate search reads or caches across workers.
+
+**Do not run multiple Gunicorn/uWSGI workers** (`gunicorn -w 2`, etc.) against one operator-facing deployment. Requests will hit different processes with divergent cache state; only one worker runs background refresh; index freshness and `index_locked` / live-scan fallback become nondeterministic. Use **`--workers 1`** (or run `python app.py`) for supported behavior. For horizontal scale, run separate single-worker instances with disjoint `CLAUDE_CODE_CHAT_BROWSER_SEARCH_INDEX_DIR` and workspace paths — not multiple workers behind one load balancer on the same paths.
+
+Set `CLAUDE_CODE_CHAT_BROWSER_NO_SEARCH_INDEX=1` to skip building and querying the FTS index (live JSONL scan only; slower). Existing files under the search index directory are left on disk.
+
 ### CLI Export
 
 ```bash
