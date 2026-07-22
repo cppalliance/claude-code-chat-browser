@@ -151,7 +151,7 @@ No bundler step — modern browsers load modules directly. Frontend unit tests u
 
 | Role | Who | What |
 |------|-----|------|
-| **Readers** | Flask request threads (and synchronous callers such as `ensure_search_index` on the first request path) | Open the **active** index DB read-only via `_resolve_active_index_db_path()`; `query_index_hits` does not take any module `threading.Lock`. |
+| **Readers** | Flask request threads (`GET /api/search` via `query_index_hits`; `index_is_usable` for whether to use the index) | Open the **active** index DB read-only via `_resolve_active_index_db_path()`; `query_index_hits` does not take any module `threading.Lock`. No request handler calls `ensure_search_index` or `build_search_index`. |
 | **Writer** | One daemon thread (`search-index-refresh`, started from `start_search_index_background` in `app.py`) | Periodically calls `ensure_search_index` → `build_search_index` when the projects fingerprint changes. |
 | **Publish** | Writer, at end of a successful rebuild | `_publish_active_index` writes the new DB basename to `search_index.active.tmp`, then tries `Path.replace` onto `search_index.active`. On `OSError`, it falls back to `pointer.write_text` (not rename-atomic on every platform). Readers resolve the active **SQLite file** by name from the pointer; sidecar DB files are fully committed before publish. After a successful `replace`, readers see the previous or new complete DB, not a half-written SQLite file. The direct-write fallback can briefly expose a partially written pointer file, so treat `replace` as the normal path. |
 
