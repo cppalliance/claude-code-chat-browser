@@ -708,7 +708,7 @@ def start_search_index_background(
         _background_stop.clear()
         thread = threading.Thread(target=_worker, name="search-index-refresh", daemon=True)
         _background_thread = thread
-    thread.start()
+        thread.start()
 
 
 def index_is_usable(projects_dir: str, rules: list[Any]) -> bool:
@@ -822,6 +822,9 @@ def reset_background_for_tests() -> None:
                 "background search-index worker did not stop within %.0fs",
                 _BACKGROUND_JOIN_TIMEOUT_S,
             )
+    if not worker_stopped:
+        _clear_usability_cache()
+        return
     with _index_lock:
         _background_started = False
         _background_thread = None
@@ -831,8 +834,5 @@ def reset_background_for_tests() -> None:
             except OSError:
                 pass
             _background_lock_fd = None
-    # Leave the stop event set when the worker never terminated so it exits on
-    # its next loop check and no second worker races it; start() re-clears it.
-    if worker_stopped:
-        _background_stop.clear()
+    _background_stop.clear()
     _clear_usability_cache()
