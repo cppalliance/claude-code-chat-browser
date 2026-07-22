@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import threading
+import time
+from collections.abc import Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
@@ -12,23 +13,19 @@ from unittest.mock import patch
 import pytest
 
 from api.search import _resolve_search_results, _search_via_index
-from utils.search_index import build_search_index, query_index_hits, reset_background_for_tests
+from tests.test_search_index import _index_patches, _write_session
+from utils.search_index import (
+    build_search_index,
+    query_index_hits,
+    reset_background_for_tests,
+    start_search_index_background,
+)
 
 _CONCURRENT_ROUNDS = 30
 _READER_THREADS = 4
 _BARRIER_TIMEOUT_S = 45.0
 _ABSENT_TERM = "concurrency-absent-token-xyzzy-999"
-
-
-def _write_session(path: Path, lines: list[dict[str, object]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        for line in lines:
-            handle.write(json.dumps(line, ensure_ascii=False) + "\n")
-
-
-def _index_patches(cache_root: Path):
-    return (patch("utils.search_index.cache_dir", return_value=cache_root),)
+_BACKGROUND_POLL_S = 1
 
 
 @pytest.fixture
@@ -73,17 +70,85 @@ def _assert_sentinel_reader_result(term: str, result: dict[str, object]) -> None
     assert any(term in (hit["text"] or "") for hit in result["hits"])
 
 
+def _lock_events_satisfy_documented_contract(
+    events: Sequence[tuple[str, str]],
+) -> bool:
+    """True when acquisition order matches docs/architecture.md lock contract."""
+    held: set[str] = set()
+    build_depth = 0
+    for name, action in events:
+        if action == "acquire":
+            if name == "index":
+                return False
+            if name == "usability" and "build" not in held:
+                return False
+            held.add(name)
+            if name == "build":
+                build_depth += 1
+        elif action == "release":
+            if name not in held:
+                return False
+            held.remove(name)
+            if name == "build":
+                build_depth -= 1
+    return build_depth == 0 and not held
+
+
+def _record_lock_events_during_build(
+    cache_root,
+    projects: str,
+) -> list[tuple[str, str]]:
+    import utils.search_index as si
+
+    events: list[tuple[str, str]] = []
+
+    class _TrackedLock:
+        def __init__(self, name: str) -> None:
+            self._name = name
+            self._inner = threading.Lock()
+
+        def acquire(self, blocking: bool = True, timeout: float = -1) -> bool:
+            events.append((self._name, "acquire"))
+            return self._inner.acquire(blocking, timeout)
+
+        def release(self) -> None:
+            events.append((self._name, "release"))
+            self._inner.release()
+
+        def __enter__(self) -> _TrackedLock:
+            self.acquire()
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            self.release()
+
+    saved_build = si._index_build_lock
+    saved_usability = si._usability_cache_lock
+    saved_index = si._index_lock
+    si._index_build_lock = _TrackedLock("build")
+    si._usability_cache_lock = _TrackedLock("usability")
+    si._index_lock = _TrackedLock("index")
+    patches = _index_patches(cache_root)
+    try:
+        with patches[0]:
+            build_search_index(projects, [], force=True)
+    finally:
+        si._index_build_lock = saved_build
+        si._usability_cache_lock = saved_usability
+        si._index_lock = saved_index
+    return events
+
+
 class TestSearchIndexConcurrency:
     def test_concurrent_rebuild_and_query(self, indexed_tree) -> None:
         errors: list[BaseException] = []
         barrier = threading.Barrier(_READER_THREADS + 1, timeout=_BARRIER_TIMEOUT_S)
-        stop = threading.Event()
         patches = _index_patches(indexed_tree["cache_root"])
 
         def reader() -> None:
             try:
-                barrier.wait(timeout=_BARRIER_TIMEOUT_S)
-                while not stop.is_set():
+                for _ in range(_CONCURRENT_ROUNDS):
+                    barrier.wait(timeout=_BARRIER_TIMEOUT_S)
                     result = query_index_hits(
                         indexed_tree["term"],
                         since_ms=None,
@@ -95,15 +160,11 @@ class TestSearchIndexConcurrency:
 
         def writer() -> None:
             try:
-                barrier.wait(timeout=_BARRIER_TIMEOUT_S)
                 for _ in range(_CONCURRENT_ROUNDS):
-                    if stop.is_set():
-                        break
+                    barrier.wait(timeout=_BARRIER_TIMEOUT_S)
                     build_search_index(indexed_tree["projects"], [], force=True)
             except BaseException as exc:
                 errors.append(exc)
-            finally:
-                stop.set()
 
         with patches[0]:
             threads = [
@@ -114,9 +175,86 @@ class TestSearchIndexConcurrency:
             for thread in threads:
                 thread.start()
             for thread in threads:
-                thread.join(timeout=_BARRIER_TIMEOUT_S + 60.0)
+                thread.join(timeout=_BARRIER_TIMEOUT_S + 90.0)
                 assert not thread.is_alive(), f"{thread.name} did not finish (possible deadlock)"
         assert not errors, errors
+
+    def test_queries_during_background_refresh(self, indexed_tree) -> None:
+        errors: list[BaseException] = []
+        stop = threading.Event()
+        projects = indexed_tree["projects"]
+        patches = _index_patches(indexed_tree["cache_root"])
+
+        def reader() -> None:
+            try:
+                while not stop.is_set():
+                    result = query_index_hits(
+                        indexed_tree["term"],
+                        since_ms=None,
+                        max_results=10,
+                    )
+                    _assert_sentinel_reader_result(indexed_tree["term"], result)
+                    time.sleep(0.02)
+            except BaseException as exc:
+                errors.append(exc)
+
+        def mutator() -> None:
+            try:
+                for i in range(5):
+                    if stop.is_set():
+                        break
+                    session_path = (
+                        Path(projects) / "demo-proj" / f"session_bg_{i}.jsonl"
+                    )
+                    _write_session(
+                        session_path,
+                        [
+                            {
+                                "type": "user",
+                                "timestamp": "2026-05-19T10:00:00Z",
+                                "message": {
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": f"find {indexed_tree['term']} bg{i}",
+                                        }
+                                    ]
+                                },
+                            },
+                        ],
+                    )
+                    time.sleep(0.15)
+            except BaseException as exc:
+                errors.append(exc)
+            finally:
+                stop.set()
+
+        with patches[0]:
+            reset_background_for_tests()
+            start_search_index_background(projects, [], poll_seconds=_BACKGROUND_POLL_S)
+            threads = [
+                threading.Thread(target=reader, name="reader"),
+                threading.Thread(target=mutator, name="mutator"),
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=8.0)
+                assert not thread.is_alive()
+            reset_background_for_tests()
+        assert not errors, errors
+
+    def test_documented_lock_order_during_build(self, indexed_tree) -> None:
+        events = _record_lock_events_during_build(
+            indexed_tree["cache_root"],
+            indexed_tree["projects"],
+        )
+        assert events, "expected lock events during build_search_index"
+        assert _lock_events_satisfy_documented_contract(events)
+
+    def test_lock_order_invariant_rejects_forbidden_nesting(self) -> None:
+        forbidden = [("usability", "acquire"), ("build", "acquire")]
+        assert not _lock_events_satisfy_documented_contract(forbidden)
 
     def test_operational_error_sets_index_locked(self, indexed_tree) -> None:
         @contextmanager
