@@ -813,18 +813,13 @@ def reset_background_for_tests() -> None:
     global _background_started, _background_lock_fd, _background_thread
     _background_stop.set()
     thread = _background_thread
-    worker_stopped = True
     if thread is not None and thread.is_alive():
         thread.join(timeout=_BACKGROUND_JOIN_TIMEOUT_S)
-        worker_stopped = not thread.is_alive()
-        if not worker_stopped:
+        if thread.is_alive():
             _logger.warning(
                 "background search-index worker did not stop within %.0fs",
                 _BACKGROUND_JOIN_TIMEOUT_S,
             )
-    if not worker_stopped:
-        _clear_usability_cache()
-        return
     with _index_lock:
         _background_started = False
         _background_thread = None

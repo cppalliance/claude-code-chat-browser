@@ -83,6 +83,14 @@ def indexed_tree(tmp_path, monkeypatch):
         }
 
 
+def _sentinel_hit_observed(term: str, result: IndexQueryResult) -> bool:
+    if result["index_locked"] or not result["query_ok"]:
+        return False
+    if not result["hits"]:
+        return False
+    return any(term in (hit["text"] or "") for hit in result["hits"])
+
+
 def _assert_sentinel_reader_result(term: str, result: IndexQueryResult) -> None:
     if result["index_locked"]:
         return
@@ -168,8 +176,11 @@ class TestSearchIndexConcurrency:
         errors: list[BaseException] = []
         barrier = threading.Barrier(_READER_THREADS + 1, timeout=_BARRIER_TIMEOUT_S)
         patches = _index_patches(indexed_tree["cache_root"])
+        hits_lock = threading.Lock()
+        sentinel_hits_observed = 0
 
         def reader() -> None:
+            nonlocal sentinel_hits_observed
             try:
                 for _ in range(_CONCURRENT_ROUNDS):
                     barrier.wait(timeout=_BARRIER_TIMEOUT_S)
@@ -179,6 +190,9 @@ class TestSearchIndexConcurrency:
                         max_results=10,
                     )
                     _assert_sentinel_reader_result(indexed_tree["term"], result)
+                    if _sentinel_hit_observed(indexed_tree["term"], result):
+                        with hits_lock:
+                            sentinel_hits_observed += 1
             except BaseException as exc:
                 errors.append(exc)
 
@@ -201,6 +215,9 @@ class TestSearchIndexConcurrency:
                 thread.join(timeout=_BARRIER_TIMEOUT_S + 90.0)
                 assert not thread.is_alive(), f"{thread.name} did not finish (possible deadlock)"
         assert not errors, errors
+        assert sentinel_hits_observed > 0, (
+            "no reader round observed sentinel hits during concurrent rebuild"
+        )
 
     def test_queries_during_background_refresh(self, indexed_tree) -> None:
         errors: list[BaseException] = []
