@@ -116,8 +116,7 @@ def test_adversarial_bash_result_python_path_wraps_in_code_fence() -> None:
     code fence, neutralising the XSS vector as inert literal text.
 
     Negative control: if the code fence were removed from ``_render_tool_result``
-    (renderer regressed to raw prose), ``opening_fence`` below would be None and
-    the assertion would fail — a diverging renderer cannot pass this test.
+    (renderer regressed to raw prose), the odd-fence check below would fail.
     """
     parsed = _parse_tool_result(_adversarial_bash_tr())
     assert parsed is not None
@@ -140,13 +139,13 @@ def test_adversarial_bash_result_python_path_wraps_in_code_fence() -> None:
     assert payload_indices, "adversarial payload must appear in at least one output line"
 
     payload_idx = payload_indices[0]
-    opening_fence = next((i for i in fence_indices if i < payload_idx), None)
-    closing_fence = next((i for i in fence_indices if i > payload_idx), None)
-
-    assert opening_fence is not None, (
-        f"no opening code fence before payload at line {payload_idx}; "
-        "payload is exposed in bare Markdown prose — Python renderer diverged"
+    fences_before = [i for i in fence_indices if i < payload_idx]
+    assert len(fences_before) % 2 == 1, (
+        f"payload at line {payload_idx} must sit inside an open code fence "
+        f"({len(fences_before)} fence marker(s) before it); "
+        "bare prose between fenced blocks would still pass a naive before/after check"
     )
+    closing_fence = next((i for i in fence_indices if i > payload_idx), None)
     assert closing_fence is not None, (
         f"no closing code fence after payload at line {payload_idx}; "
         "code fence is unclosed — Python renderer diverged"

@@ -22,8 +22,9 @@ import { renderBashResult } from './bash.js';
 // tests/test_dual_path_parity_oracle.py.
 const PAYLOAD = '<img src=x onerror=alert(1)>';
 
-// Parsed bash dict that mirrors what ``_parse_tool_result`` / ``_tool_result_build_bash``
-// would produce for the adversarial blob.
+// Hand-built parsed shape for the JS renderer only. Classification and fields from
+// ``_parse_tool_result`` are asserted in tests/test_dual_path_parity_oracle.py;
+// this file will not catch drift if the Python bash builder changes key names.
 const ADVERSARIAL_PARSED = {
     result_type: 'bash',
     slug: null,
