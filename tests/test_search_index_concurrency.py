@@ -12,7 +12,12 @@ from unittest.mock import patch
 
 import pytest
 
-from api.search import _resolve_search_results, _search_via_index
+from api.search import (
+    _live_scan_with_index_lock_fallback,
+    _merge_search_hits,
+    _resolve_search_results,
+    _search_via_index,
+)
 from tests.conftest import index_patches as _index_patches, write_session as _write_session
 from utils.search_index import (
     IndexQueryResult,
@@ -371,7 +376,7 @@ class TestSearchIndexConcurrency:
             patches[0],
             patch("api.search.query_index_hits", return_value=_LOCKED_PAYLOAD),
         ):
-            hits = _resolve_search_results(
+            outcome = _search_via_index(
                 indexed_tree["projects"],
                 [],
                 indexed_tree["term"],
@@ -379,6 +384,33 @@ class TestSearchIndexConcurrency:
                 since_ms=None,
                 max_results=50,
             )
+            assert outcome.hits is None
+            assert outcome.index_locked_without_hits is True
+
+            lock_fallback_flags: list[bool] = []
+
+            def _record_lock_fallback(*args: object, **kwargs: object) -> list[object]:
+                lock_fallback_flags.append(bool(kwargs["index_locked_without_hits"]))
+                return _live_scan_with_index_lock_fallback(*args, **kwargs)
+
+            with (
+                patch(
+                    "api.search._live_scan_with_index_lock_fallback",
+                    side_effect=_record_lock_fallback,
+                ),
+                patch("api.search._merge_search_hits", wraps=_merge_search_hits) as merge_mock,
+            ):
+                hits = _resolve_search_results(
+                    indexed_tree["projects"],
+                    [],
+                    indexed_tree["term"],
+                    indexed_tree["term"],
+                    since_ms=None,
+                    max_results=50,
+                )
+
+        assert lock_fallback_flags == [True]
+        merge_mock.assert_not_called()
         assert len(hits) >= 1
 
     def test_search_via_index_returns_partial_hits_when_locked_after_batch(
