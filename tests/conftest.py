@@ -2,15 +2,31 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from collections.abc import Mapping
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from hypothesis import settings
 
 from app import create_app
+
+
+def write_session(path: Path, lines: list[dict[str, object]]) -> None:
+    """Write JSONL session *lines* to *path*, creating parent directories."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        for line in lines:
+            handle.write(json.dumps(line, ensure_ascii=False) + "\n")
+
+
+def index_patches(cache_root: Path):
+    """Return the patch context managers that point the index at *cache_root*."""
+    return (patch("utils.search_index.cache_dir", return_value=cache_root),)
+
 
 # Hypothesis profiles drive fuzz example counts/deadlines (deadline disabled to
 # avoid timing flakiness on slow/CI runners). CI runs fewer examples for speed.
@@ -67,7 +83,7 @@ def client(tmp_path, export_state_file):
 
 @pytest.fixture
 def client_single(tmp_path, export_state_file):
-    """Flask test client with one seeded session ? for search/limit tests."""
+    """Flask test client with one seeded session for search/limit tests."""
     return _make_test_client(tmp_path, {"session_abc123.jsonl": "session_minimal.jsonl"})
 
 
