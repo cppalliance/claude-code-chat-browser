@@ -39,6 +39,17 @@ from utils.tool_dispatch import _parse_tool_result
 ADVERSARIAL_PAYLOAD: str = "<img src=x onerror=alert(1)>"
 
 
+def _adversarial_bash_tr() -> dict[str, object]:
+    """toolUseResult-shaped blob used by Part A parity tests."""
+    return {
+        "stdout": ADVERSARIAL_PAYLOAD,
+        "exitCode": 0,
+        "stderr": "",
+        "interrupted": False,
+        "is_error": False,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -89,14 +100,7 @@ def test_adversarial_bash_blob_dispatches_to_bash() -> None:
     This drives the real ``_parse_tool_result`` dispatch path; a registry miss
     would produce result_type='unknown' and the assertion would fail.
     """
-    tr: dict[str, object] = {
-        "stdout": ADVERSARIAL_PAYLOAD,
-        "exitCode": 0,
-        "stderr": "",
-        "interrupted": False,
-        "is_error": False,
-    }
-    parsed = _parse_tool_result(tr)
+    parsed = _parse_tool_result(_adversarial_bash_tr())
 
     assert parsed is not None
     assert parsed["result_type"] == "bash", (
@@ -115,14 +119,7 @@ def test_adversarial_bash_result_python_path_wraps_in_code_fence() -> None:
     (renderer regressed to raw prose), ``opening_fence`` below would be None and
     the assertion would fail — a diverging renderer cannot pass this test.
     """
-    tr: dict[str, object] = {
-        "stdout": ADVERSARIAL_PAYLOAD,
-        "exitCode": 0,
-        "stderr": "",
-        "interrupted": False,
-        "is_error": False,
-    }
-    parsed = _parse_tool_result(tr)
+    parsed = _parse_tool_result(_adversarial_bash_tr())
     assert parsed is not None
 
     md = _render_tool_result(parsed)
