@@ -20,7 +20,6 @@ Oracle discipline (test-review C3/C8/C9):
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -239,7 +238,8 @@ def test_nul_bytes_in_line_dropped_valid_lines_recovered(tmp_path: Path) -> None
     Oracle: exactly 1 message is recovered and its ``text`` equals the string
     from the valid line.  Not a silent empty (which would be 0 messages).
     """
-    nul_line = b'\x00{"type":"user","uuid":"bad","message":{"content":[{"type":"text","text":"gone"}]}}\x00'
+    bad_user = b'{"type":"user","uuid":"bad","message":{"content":[{"type":"text","text":"gone"}]}}'
+    nul_line = b"\x00" + bad_user + b"\x00"
     valid_line = _user_entry("u-recovered", text="recovered-after-nul")
 
     path = tmp_path / "nuls.jsonl"
@@ -320,6 +320,4 @@ def test_tool_result_with_no_matching_tool_use_yields_specific_result_type(
         "stdout must be preserved even without a matching tool_use"
     )
     # slug stored on the message (not on tool_result_parsed)
-    assert msg.get("slug") == "orphaned-slug", (
-        "slug must be stored verbatim on the user message"
-    )
+    assert msg.get("slug") == "orphaned-slug", "slug must be stored verbatim on the user message"
