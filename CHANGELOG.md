@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-30
+
+### Added
+
+- `docs/architecture.md` (#138): FTS5 search-index lock order, threading model, and forbidden nesting rules
+- `tests/test_search_index_concurrency.py` (#139): concurrent rebuild and query, background refresh under load, lock-order assertions, `index_locked` live-scan fallback
+- Dual-path parity oracles (#140): `tests/test_dual_path_parity_oracle.py` and `static/js/render/tool_result/dual_path_parity_oracle.test.js` run the same XSS payload through Python (`utils/md_exporter.py`, `utils/tool_dispatch.py`) and JS `renderToolResult`; malformed-input cases for truncated JSONL, broken parent UUIDs, and NUL bytes
+
 ## [0.1.0] - 2026-06-18
 
 ### Added
@@ -29,5 +37,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `export_count` on `GET /api/export/state` — use `last_export_session_count` (deprecated in PR #60; removed before `v0.1.0` per [deprecation policy](docs/deprecation-policy.md) bundled SPA path; SPA updated in same release cut)
 
-[Unreleased]: https://github.com/cppalliance/claude-code-chat-browser/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/cppalliance/claude-code-chat-browser/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/cppalliance/claude-code-chat-browser/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/cppalliance/claude-code-chat-browser/commits/v0.1.0
