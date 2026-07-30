@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-This project is pre-release. Security fixes are applied to the **latest `master` branch only** (currently `0.1.0.dev0`).
+This project is pre-release. Security fixes are applied to the **latest `master` branch only** (currently `0.2.0`).
 
 | Version        | Supported |
 | -------------- | --------- |
