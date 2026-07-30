@@ -26,26 +26,30 @@ Do the changelog in one PR and the version bump in a second PR, or combine them 
    - Update the footer compare links: `[Unreleased]` → `vX.Y.Z...HEAD`, add `[X.Y.Z]` → `vPREVIOUS...vX.Y.Z`.
 2. **Version bump** — on a branch from current `master`, set `app.py` line 3 to the release version without `.dev0` (for example `"0.2.0"`).
 3. **Stale references** — from the repo root, grep for the old `.dev0` suffix you are replacing:
-   ```powershell
+   ```sh
    git grep -n "\.dev0"
    ```
    Update any documentation that still names the previous dev version (for example `docs/deprecation-policy.md`).
 4. **Open a PR**, get review, merge to `master`.
 5. **Tag** on the merge commit:
-   ```powershell
+   ```sh
    git checkout master
    git pull
    git tag -a vX.Y.Z -m "vX.Y.Z"
    git push origin vX.Y.Z
    ```
    Tag format: `vMAJOR.MINOR.PATCH` (for example `v0.2.0`).
-6. **GitHub Release** — publish a Release object, not just the tag. Copy the `## [X.Y.Z]` section from `CHANGELOG.md` into a scratch file, then:
-   ```powershell
-   # paste the ## [X.Y.Z] section into this file first
-   notepad $env:TEMP\release-notes.md
-   gh release create vX.Y.Z --title "vX.Y.Z" --notes-file $env:TEMP\release-notes.md
+6. **GitHub Release** — publish a Release object, not just the tag. Pull the `## [X.Y.Z]` section from `CHANGELOG.md` and pass it to `gh`:
+   ```sh
+   VERSION=X.Y.Z
+   awk -v ver="$VERSION" '
+     $0 ~ "^## \\[" ver "\\]" {found=1}
+     found && $0 ~ "^## \\[" && $0 !~ "^## \\[" ver "\\]" {exit}
+     found {print}
+   ' CHANGELOG.md > /tmp/release-notes.md
+   gh release create "v${VERSION}" --title "v${VERSION}" --notes-file /tmp/release-notes.md
    ```
-   Or create the release in the GitHub UI and paste the section there.
+   On macOS/Linux and Git Bash, `/tmp/release-notes.md` is fine. Or create the release in the GitHub UI and paste the section there.
 7. **Optional** — if the project later adds an explicit supported-version table in [SECURITY.md](SECURITY.md), update it when you cut a release. Today `SECURITY.md` only states that fixes land on latest `master`.
 
 ## After release
