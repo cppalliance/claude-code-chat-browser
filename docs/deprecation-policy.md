@@ -43,7 +43,7 @@ For fields **only read by the bundled SPA** (no external integrators on a tagged
 
 ## Versioning
 
-Release versions follow `MAJOR.MINOR.PATCH` in `app.__version__` and [CHANGELOG](../CHANGELOG.md). Shipped tags include [`v0.1.0`](https://github.com/cppalliance/claude-code-chat-browser/releases/tag/v0.1.0) and [`v0.2.0`](https://github.com/cppalliance/claude-code-chat-browser/releases/tag/v0.2.0). Between releases, `main` may carry a `.dev0` suffix in `app.__version__` while developing the next version. The CHANGELOG `[Unreleased]` section is the source of truth for changes not yet tagged.
+Release versions follow `MAJOR.MINOR.PATCH` in `app.__version__` and [CHANGELOG](../CHANGELOG.md). Shipped tags include [`v0.1.0`](https://github.com/cppalliance/claude-code-chat-browser/releases/tag/v0.1.0) and [`v0.2.0`](https://github.com/cppalliance/claude-code-chat-browser/releases/tag/v0.2.0). Between releases, `master` may carry a `.dev0` suffix in `app.__version__` while developing the next version. The CHANGELOG `[Unreleased]` section is the source of truth for changes not yet tagged.
 
 | Bump | Pre-1.0 meaning |
 |------|-----------------|

@@ -8,7 +8,7 @@ Manual release flow for claude-code-chat-browser. A release is a git tag plus a 
 
 The release version is `__version__` in `app.py` line 3. There is no `pyproject.toml` version field.
 
-`SECURITY.md` line 5 repeats that version in the supported-versions blurb. Update it whenever you bump `app.py`. `README.md` points readers at that page.
+`SECURITY.md` line 5 names the latest shipped release in its supported-versions blurb, so update it when a tag ships, not on the `.dev0` bumps in between. `README.md` points readers at that page.
 
 Between tagged releases, `master` may use a `.dev0` suffix (for example `0.3.0.dev0` while the next release is in flight). The shipped tag drops `.dev0`.
 
@@ -27,12 +27,12 @@ Do the changelog in one PR and the version bump in a second PR, or combine them 
    - Leave `## [Unreleased]` empty.
    - Update the footer compare links: `[Unreleased]` → `vX.Y.Z...HEAD`, add `[X.Y.Z]` → `vPREVIOUS...vX.Y.Z`.
 2. On a branch from current `master`, set `app.py` line 3 to the release version without `.dev0` (for example `"0.2.0"`).
-3. Update [SECURITY.md](SECURITY.md) line 5 so the "(currently ...)" parenthetical matches that version (for example `(currently 0.2.0)`). Leave the table at lines 7-10 unchanged.
+3. Update [SECURITY.md](SECURITY.md) line 5 so the version inside its "(currently ...)" parenthetical is the one you are shipping. Keep the surrounding formatting and leave the table at lines 7-10 unchanged.
 4. From the repo root, grep for stale version strings (`.dev0` suffixes, the old SECURITY.md parenthetical, or the previous shipped release):
    ```sh
    PREVIOUS=0.2.0
    PREVIOUS_ESC=$(echo "$PREVIOUS" | sed 's/[.]/\\&/g')
-   git grep -nE "\.dev0|\(currently \`|${PREVIOUS_ESC}"
+   git grep -nE "\.dev0|\(currently |${PREVIOUS_ESC}"
    ```
    Point `PREVIOUS` at the release you are replacing (no `v` prefix). Fix any hits that should name the new version (for example `docs/deprecation-policy.md`).
 5. Open a PR, get review, merge to `master`.
@@ -68,11 +68,10 @@ Do the changelog in one PR and the version bump in a second PR, or combine them 
      found { print }
    ' CHANGELOG.md >"$NOTES"
    grep -q '[^[:space:]]' "$NOTES" || { echo "error: no CHANGELOG.md section for $VERSION" >&2; exit 1; }
+   printf '\n**Full changelog:** https://github.com/cppalliance/claude-code-chat-browser/blob/v%s/CHANGELOG.md\n' "$VERSION" >>"$NOTES"
    gh release create "v${VERSION}" --title "v${VERSION}" --verify-tag --notes-file "$NOTES"
    ```
-   Append a footer line after extraction, matching prior releases:
-   `**Full changelog:** https://github.com/cppalliance/claude-code-chat-browser/blob/vX.Y.Z/CHANGELOG.md`
-   On macOS, Linux, and Git Bash, `mktemp` works. Or paste the `[X.Y.Z]` section in the GitHub UI and add the same footer link.
+   The `printf` adds the same "Full changelog" footer that `v0.1.0` and `v0.2.0` carry. On macOS, Linux, and Git Bash, `mktemp` works. Or paste the `[X.Y.Z]` section in the GitHub UI and add that footer line by hand.
 
 ## After release
 
