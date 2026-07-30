@@ -49,13 +49,17 @@ Do the changelog in one PR and the version bump in a second PR, or combine them 
    cd "$(git rev-parse --show-toplevel)"
    VERSION=0.2.0   # no leading v; not the literal X.Y.Z placeholder
    VERSION="${VERSION#v}"
-   case "$VERSION" in
-     *[!0-9.]*|'') echo "error: VERSION must look like 0.2.0" >&2; exit 1 ;;
-     *..*|.*|*.) echo "error: VERSION must look like 0.2.0" >&2; exit 1 ;;
-     *.*.*.*) echo "error: VERSION must look like 0.2.0" >&2; exit 1 ;;
-     *.*.*) ;;
-     *) echo "error: VERSION must look like 0.2.0" >&2; exit 1 ;;
-   esac
+  case "$VERSION" in
+    *[!0-9.]*|'') echo "error: VERSION must look like 0.2.0" >&2; exit 1 ;;
+    *..*|.*|*.) echo "error: VERSION must look like 0.2.0" >&2; exit 1 ;;
+    *.*.*.*) echo "error: VERSION must look like 0.2.0" >&2; exit 1 ;;
+    *.*.*) ;;
+    *) echo "error: VERSION must look like 0.2.0" >&2; exit 1 ;;
+  esac
+  case "$VERSION" in
+    0[0-9]*.*.*|*.[0][0-9]*.*|*.*.[0][0-9]*)
+      echo "error: VERSION components must not have leading zeros" >&2; exit 1 ;;
+  esac
    NOTES="$(mktemp)"
    trap 'rm -f "$NOTES"' EXIT
    awk -v ver="$VERSION" '
@@ -67,8 +71,8 @@ Do the changelog in one PR and the version bump in a second PR, or combine them 
      /^\[[^]]+\]:/ { if (found) exit }
      found { print }
    ' CHANGELOG.md >"$NOTES"
-   grep -q '[^[:space:]]' "$NOTES" || { echo "error: no CHANGELOG.md section for $VERSION" >&2; exit 1; }
-   printf '\n**Full changelog:** https://github.com/cppalliance/claude-code-chat-browser/blob/v%s/CHANGELOG.md\n' "$VERSION" >>"$NOTES"
+   grep -v '^## \[' "$NOTES" | grep -q '[^[:space:]]' || { echo "error: no CHANGELOG.md section for $VERSION" >&2; exit 1; }
+   printf '\n\n**Full changelog:** https://github.com/cppalliance/claude-code-chat-browser/blob/v%s/CHANGELOG.md\n' "$VERSION" >>"$NOTES"
    gh release create "v${VERSION}" --title "v${VERSION}" --verify-tag --notes-file "$NOTES"
    ```
    The `printf` adds the same "Full changelog" footer that `v0.1.0` and `v0.2.0` carry. On macOS, Linux, and Git Bash, `mktemp` works. Or paste the `[X.Y.Z]` section in the GitHub UI and add that footer line by hand.
@@ -87,4 +91,4 @@ Do the changelog in one PR and the version bump in a second PR, or combine them 
 | Supported versions blurb | `SECURITY.md` line 5 |
 | Deprecation / semver | [docs/deprecation-policy.md](docs/deprecation-policy.md) |
 | Security reporting | [SECURITY.md](SECURITY.md) |
-| CI gates | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| CI gates | [`.github/workflows/ci.yml`](.github/workflows/ci.yml), [CONTRIBUTING.md](CONTRIBUTING.md) |
